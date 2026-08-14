@@ -154,6 +154,19 @@ const Api = {
 };
 
 // ---------------------------------------------------------
+// 2b. HTML ESCAPING
+// Any user-entered value (employee name, audit details, etc.) that
+// gets inserted via innerHTML/template strings MUST go through this
+// first, or a value like <img src=x onerror=...> in a name field
+// would execute as script instead of displaying as text.
+// ---------------------------------------------------------
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+// ---------------------------------------------------------
 // 3. SCREEN ROUTER
 // Only one of these top-level screens is visible at a time.
 // ---------------------------------------------------------
@@ -171,7 +184,7 @@ function mapAuthError(err) {
   const map = {
     'auth/email-already-in-use': 'This email is already registered. Try signing in instead.',
     'auth/invalid-email': 'Please enter a valid email address.',
-    'auth/weak-password': 'Password should be at least 6 characters.',
+    'auth/weak-password': 'Password should be at least 8 characters.',
     'auth/wrong-password': 'Incorrect email or password.',
     'auth/invalid-credential': 'Incorrect email or password.',
     'auth/user-not-found': 'No account found with this email.',
@@ -237,6 +250,7 @@ function goToAuthScreen() {
   clearAuthSuccess();
   document.getElementById('signupForm').classList.add('hidden');
   document.getElementById('forgotPasswordForm').classList.add('hidden');
+  document.getElementById('forgotPwInstructions').classList.remove('hidden');
   document.getElementById('forgotEmailField').classList.remove('hidden');
   document.getElementById('forgotSubmitBtn').classList.remove('hidden');
   document.getElementById('forgotSendAgainRow').classList.add('hidden');
@@ -276,9 +290,16 @@ function wireAuthForms() {
   // ---- Forgot password ----
   const forgotForm = document.getElementById('forgotPasswordForm');
   function resetForgotFormVisibility() {
+    document.getElementById('forgotPwInstructions').classList.remove('hidden');
     document.getElementById('forgotEmailField').classList.remove('hidden');
     document.getElementById('forgotSubmitBtn').classList.remove('hidden');
     document.getElementById('forgotSendAgainRow').classList.add('hidden');
+  }
+  function hideForgotFormAfterSend() {
+    document.getElementById('forgotPwInstructions').classList.add('hidden');
+    document.getElementById('forgotEmailField').classList.add('hidden');
+    document.getElementById('forgotSubmitBtn').classList.add('hidden');
+    document.getElementById('forgotSendAgainRow').classList.remove('hidden');
   }
   document.getElementById('forgotPasswordLink').onclick = () => {
     clearAuthError(); clearAuthSuccess();
@@ -317,9 +338,7 @@ function wireAuthForms() {
       // leaking which emails are registered.
       showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
       forgotForm.reset();
-      document.getElementById('forgotEmailField').classList.add('hidden');
-      document.getElementById('forgotSubmitBtn').classList.add('hidden');
-      document.getElementById('forgotSendAgainRow').classList.remove('hidden');
+      hideForgotFormAfterSend();
     } catch (err) {
       if (err.code === 'auth/invalid-email') {
         showAuthError(mapAuthError(err));
@@ -328,9 +347,7 @@ function wireAuthForms() {
         // (e.g. user-not-found) so we don't reveal account existence.
         showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
         forgotForm.reset();
-        document.getElementById('forgotEmailField').classList.add('hidden');
-        document.getElementById('forgotSubmitBtn').classList.add('hidden');
-        document.getElementById('forgotSendAgainRow').classList.remove('hidden');
+        hideForgotFormAfterSend();
       }
     } finally {
       btn.disabled = false; btn.textContent = 'Send Reset Link';
@@ -363,6 +380,12 @@ function wireAuthForms() {
       const name = document.getElementById('signupName').value.trim();
       const email = document.getElementById('signupEmail').value.trim();
       const password = document.getElementById('signupPassword').value;
+      const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+
+      if (password !== passwordConfirm) {
+        showAuthError('Passwords do not match.');
+        return;
+      }
 
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       await cred.user.updateProfile({ displayName: name });
@@ -674,7 +697,7 @@ async function loadEmployees() {
   try {
     employees = await Api.getEmployees();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);">Could not load employees: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);">Could not load employees: ${escapeHtml(err.message)}</td></tr>`;
     return;
   }
   renderEmployeeTable();
@@ -717,14 +740,14 @@ function renderEmployeeTable() {
   filtered.forEach(emp => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${emp.name}</td>
-      <td><span class="masked-acc"><span data-full="${emp.accountNumber}" data-revealed="0">${maskAccount(emp.accountNumber)}</span><button type="button">Show</button></span></td>
-      <td>${emp.ifsc}</td>
-      <td>${emp.transferType}</td>
-      <td>${emp.empCode}</td>
+      <td>${escapeHtml(emp.name)}</td>
+      <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
+      <td>${escapeHtml(emp.ifsc)}</td>
+      <td>${escapeHtml(emp.transferType)}</td>
+      <td>${escapeHtml(emp.empCode)}</td>
       <td class="row-actions">
-        <button data-edit="${emp.id}">Edit</button>
-        <button data-delete="${emp.id}" class="danger">Delete</button>
+        <button data-edit="${escapeHtml(emp.id)}">Edit</button>
+        <button data-delete="${escapeHtml(emp.id)}" class="danger">Delete</button>
       </td>`;
     tbody.appendChild(tr);
   });
@@ -880,11 +903,11 @@ function renderDisbursementList() {
   filtered.forEach(emp => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${emp.empCode}</td>
-      <td>${emp.name}</td>
-      <td><span class="masked-acc"><span data-full="${emp.accountNumber}" data-revealed="0">${maskAccount(emp.accountNumber)}</span><button type="button">Show</button></span></td>
+      <td>${escapeHtml(emp.empCode)}</td>
+      <td>${escapeHtml(emp.name)}</td>
+      <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
       <td style="text-align:right;">
-        <input type="text" data-acc="${emp.accountNumber}" placeholder="0.00"
+        <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00"
           style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); color:var(--success); padding:6px 8px;">
       </td>`;
     tbody.appendChild(tr);
@@ -945,8 +968,8 @@ function openExportPreview() {
   const year = document.getElementById('disbYear').value;
 
   document.getElementById('exportPreviewBody').innerHTML = `
-    <p><strong>Transfer Type:</strong> ${tft}</p>
-    <p><strong>Payroll Cycle:</strong> ${monthName} ${year}</p>
+    <p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>
+    <p><strong>Payroll Cycle:</strong> ${escapeHtml(monthName)} ${escapeHtml(year)}</p>
     <p><strong>Employees:</strong> ${lines.length}</p>
     <p style="font-size:20px; color:var(--success); font-weight:700; margin-top:10px;">₹ ${total.toFixed(2)}</p>
   `;
@@ -1015,7 +1038,7 @@ async function loadAuditTrail() {
   try {
     auditRows = await Api.getAuditTrail();
   } catch (err) {
-    document.getElementById('auditTableBody').innerHTML = `<tr><td colspan="4" style="color:var(--danger);">${err.message}</td></tr>`;
+    document.getElementById('auditTableBody').innerHTML = `<tr><td colspan="4" style="color:var(--danger);">${escapeHtml(err.message)}</td></tr>`;
     return;
   }
   renderAuditTable();
@@ -1038,7 +1061,7 @@ function renderAuditTable() {
   filtered.forEach(r => {
     const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString() : '';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${ts}</td><td>${r.userName || r.userEmail}</td><td>${r.action}</td><td>${r.details || ''}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(ts)}</td><td>${escapeHtml(r.userName || r.userEmail)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.details || '')}</td>`;
     tbody.appendChild(tr);
   });
 }

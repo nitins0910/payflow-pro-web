@@ -51,7 +51,7 @@
 
         <!-- FORGOT PASSWORD FORM -->
         <form id="forgotPasswordForm" class="hidden">
-          <p style="color:var(--text2); font-size:13px; margin-bottom:18px;">
+          <p id="forgotPwInstructions" style="color:var(--text2); font-size:13px; margin-bottom:18px;">
             Enter the email on your account. We'll send a link to reset your password.
           </p>
           <div class="field" id="forgotEmailField">
@@ -77,8 +77,17 @@
           </div>
           <div class="field password-field">
             <label>Password</label>
-            <input type="password" id="signupPassword" required minlength="6" autocomplete="new-password">
+            <input type="password" id="signupPassword" required minlength="8" autocomplete="new-password">
             <button type="button" class="pw-toggle" data-target="signupPassword" aria-label="Show password">
+              <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+            <p class="field-hint">At least 8 characters.</p>
+          </div>
+          <div class="field password-field">
+            <label>Confirm Password</label>
+            <input type="password" id="signupPasswordConfirm" required minlength="8" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-target="signupPasswordConfirm" aria-label="Show password">
               <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             </button>
@@ -190,7 +199,7 @@
           </p>
           <div class="field password-field">
             <label>New Password</label>
-            <input type="password" id="resetPwNew" required minlength="6" autocomplete="new-password">
+            <input type="password" id="resetPwNew" required minlength="8" autocomplete="new-password">
             <button type="button" class="pw-toggle" data-target="resetPwNew" aria-label="Show password">
               <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -198,7 +207,7 @@
           </div>
           <div class="field password-field">
             <label>Confirm New Password</label>
-            <input type="password" id="resetPwConfirm" required minlength="6" autocomplete="new-password">
+            <input type="password" id="resetPwConfirm" required minlength="8" autocomplete="new-password">
             <button type="button" class="pw-toggle" data-target="resetPwConfirm" aria-label="Show password">
               <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -451,7 +460,7 @@
               </div>
               <div class="field password-field">
                 <label>New Password</label>
-                <input type="password" id="pwChangeNewPassword" required minlength="6" autocomplete="new-password">
+                <input type="password" id="pwChangeNewPassword" required minlength="8" autocomplete="new-password">
                 <button type="button" class="pw-toggle" data-target="pwChangeNewPassword" aria-label="Show password">
                   <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                   <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>

@@ -160,6 +160,22 @@ a{color:var(--cyan); text-decoration:none;}
 }
 .success-msg.show{ display:block; }
 
+/* ---------------- Employee form rows (Add/Edit modal) ---------------- */
+.field-row-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.field-row-3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+@media (max-width: 560px){
+  .field-row-2, .field-row-3{ grid-template-columns:1fr; }
+}
+.field-mismatch{
+  font-size:11px; font-weight:700; color:var(--danger); min-height:14px; margin-top:5px;
+}
+input.input-mismatch{
+  background:var(--danger-bg) !important; border-color:var(--danger) !important;
+}
+input.input-match{
+  background:var(--success-bg) !important; border-color:var(--success) !important;
+}
+
 /* ---------------- Settings page ---------------- */
 .settings-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
 @media (max-width: 900px){ .settings-grid{ grid-template-columns:1fr; } }

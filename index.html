@@ -501,32 +501,64 @@
   </div>
 
   <div id="employeeModal" class="modal-backdrop hidden">
-    <div class="modal">
+    <div class="modal" style="max-width:560px;">
       <h3 id="modalTitle">Add Employee</h3>
-      <form id="employeeForm">
-        <div class="field">
-          <label>Full Name</label>
-          <input type="text" id="empName" required>
+      <form id="employeeForm" autocomplete="off">
+        <div id="employeeFormError" class="error-msg"></div>
+
+        <div class="field-row-3">
+          <div class="field">
+            <label>First Name</label>
+            <input type="text" id="empFirstName" required>
+          </div>
+          <div class="field">
+            <label>Middle Name (Optional)</label>
+            <input type="text" id="empMiddleName">
+          </div>
+          <div class="field">
+            <label>Last Name</label>
+            <input type="text" id="empLastName" required>
+          </div>
         </div>
-        <div class="field">
-          <label>Account Number</label>
-          <input type="text" id="empAccount" required>
+
+        <div class="field-row-2">
+          <div class="field">
+            <label>Emp Code (e.g. 02)</label>
+            <input type="text" id="empCode" required>
+          </div>
+          <div class="field">
+            <label>Transfer Type</label>
+            <select id="empTransferType" required style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
+              <option value="Same Bank">Same Bank</option>
+              <option value="Other Bank">Other Bank</option>
+            </select>
+          </div>
         </div>
-        <div class="field">
-          <label>IFSC / Branch Code</label>
-          <input type="text" id="empIfsc" required>
+
+        <div class="field-row-2">
+          <div class="field">
+            <label>Account Number</label>
+            <input type="text" id="empAccount" required autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Confirm Account Number</label>
+            <input type="text" id="empAccountConfirm" required autocomplete="off">
+            <div class="field-hint field-mismatch" id="accMismatchLbl"></div>
+          </div>
         </div>
-        <div class="field">
-          <label>Employee Code</label>
-          <input type="text" id="empCode" required>
+
+        <div class="field-row-2">
+          <div class="field">
+            <label>IFSC Code</label>
+            <input type="text" id="empIfsc" required autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Confirm IFSC</label>
+            <input type="text" id="empIfscConfirm" required autocomplete="off">
+            <div class="field-hint field-mismatch" id="ifscMismatchLbl"></div>
+          </div>
         </div>
-        <div class="field">
-          <label>Transfer Type</label>
-          <select id="empTransferType" required style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
-            <option value="Same Bank">Same Bank</option>
-            <option value="Other Bank">Other Bank</option>
-          </select>
-        </div>
+
         <div class="modal-actions">
           <button type="button" class="btn-inline secondary" id="cancelModalBtn">Cancel</button>
           <button type="submit" class="btn-inline" id="saveEmployeeBtn" style="flex:1;">Save</button>

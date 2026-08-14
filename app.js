@@ -756,15 +756,133 @@ function renderEmployeeTable() {
   wireMaskedAccountToggles(tbody);
 }
 
+// ---------------------------------------------------------
+// Employee form helpers — mirror the desktop app's field-level
+// behaviour exactly: name parts are split/joined the same way,
+// account/IFSC fields block spaces & paste, name/IFSC fields
+// auto-uppercase as you type, and duplicate/mismatch checks are
+// evaluated live on every keystroke, not just on submit.
+// ---------------------------------------------------------
+function splitFullNameParts(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return ['', '', ''];
+  if (parts.length === 1) return [parts[0], '', ''];
+  if (parts.length === 2) return [parts[0], '', parts[1]];
+  return [parts[0], parts.slice(1, -1).join(' '), parts[parts.length - 1]];
+}
+
+function blockSpaceKey(el) {
+  el.addEventListener('keydown', (e) => { if (e.key === ' ') e.preventDefault(); });
+}
+function blockPasteAndRightClick(el) {
+  el.addEventListener('paste', (e) => e.preventDefault());
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+function autoUpperCaseLive(el) {
+  el.addEventListener('input', () => {
+    const pos = el.selectionStart;
+    const upper = el.value.toUpperCase();
+    if (upper !== el.value) {
+      el.value = upper;
+      try { el.setSelectionRange(pos, pos); } catch (_) {}
+    }
+  });
+}
+
 function wireEmployeeForm() {
   const modal = document.getElementById('employeeModal');
   const employeeForm = document.getElementById('employeeForm');
+  const errBox = document.getElementById('employeeFormError');
+
+  const fFirst  = document.getElementById('empFirstName');
+  const fMiddle = document.getElementById('empMiddleName');
+  const fLast   = document.getElementById('empLastName');
+  const fCode   = document.getElementById('empCode');
+  const fType   = document.getElementById('empTransferType');
+  const fAcc    = document.getElementById('empAccount');
+  const fAccC   = document.getElementById('empAccountConfirm');
+  const fIfsc   = document.getElementById('empIfsc');
+  const fIfscC  = document.getElementById('empIfscConfirm');
+  const accMismatchLbl  = document.getElementById('accMismatchLbl');
+  const ifscMismatchLbl = document.getElementById('ifscMismatchLbl');
+
+  // Name fields: no spaces within a single box, auto-uppercase as-you-type
+  [fFirst, fMiddle, fLast].forEach(el => { blockSpaceKey(el); autoUpperCaseLive(el); });
+  // Emp code: no spaces
+  blockSpaceKey(fCode);
+  // Account / IFSC pairs: no spaces, no paste/right-click paste
+  [fAcc, fAccC, fIfsc, fIfscC].forEach(el => { blockSpaceKey(el); blockPasteAndRightClick(el); });
+  // IFSC fields auto-uppercase as-you-type
+  [fIfsc, fIfscC].forEach(el => autoUpperCaseLive(el));
+
+  function clearMatchStyles(el) {
+    el.classList.remove('input-mismatch', 'input-match');
+  }
+
+  function showFieldError(msg) {
+    errBox.textContent = msg;
+    errBox.classList.add('show');
+  }
+  function clearFieldError() {
+    errBox.textContent = '';
+    errBox.classList.remove('show');
+  }
+
+  function existingAccountNumbers() {
+    return employees
+      .filter(e => e.id !== editingEmployeeId)
+      .map(e => String(e.accountNumber));
+  }
+
+  function validateLive() {
+    const accVal = fAcc.value.trim();
+    const isDuplicate = accVal && existingAccountNumbers().includes(accVal);
+
+    if (isDuplicate) {
+      clearMatchStyles(fAcc);
+      fAcc.classList.add('input-mismatch');
+      accMismatchLbl.textContent = '⚠ DUPLICATE ACC';
+    } else {
+      clearMatchStyles(fAcc);
+    }
+
+    function checkPair(primeEl, confEl, lbl, skip) {
+      if (skip) return;
+      const prime = primeEl.value.trim();
+      const conf = confEl.value.trim();
+      clearMatchStyles(confEl);
+      if (conf) {
+        if (prime !== conf) {
+          confEl.classList.add('input-mismatch');
+          lbl.textContent = 'MISMATCH';
+        } else {
+          confEl.classList.add('input-match');
+          lbl.textContent = '';
+        }
+      } else {
+        lbl.textContent = '';
+      }
+    }
+    checkPair(fAcc, fAccC, accMismatchLbl, isDuplicate);
+    checkPair(fIfsc, fIfscC, ifscMismatchLbl, false);
+  }
+  [fAcc, fAccC, fIfsc, fIfscC].forEach(el => el.addEventListener('input', validateLive));
+
+  function resetForm() {
+    employeeForm.reset();
+    [fAcc, fAccC, fIfsc, fIfscC].forEach(clearMatchStyles);
+    accMismatchLbl.textContent = '';
+    ifscMismatchLbl.textContent = '';
+    clearFieldError();
+    fType.value = 'Same Bank';
+  }
 
   document.getElementById('addEmployeeBtn').onclick = () => {
     editingEmployeeId = null;
     document.getElementById('modalTitle').textContent = 'Add Employee';
-    employeeForm.reset();
+    resetForm();
     modal.classList.remove('hidden');
+    fFirst.focus();
   };
   document.getElementById('cancelModalBtn').onclick = () => modal.classList.add('hidden');
 
@@ -772,40 +890,75 @@ function wireEmployeeForm() {
     const emp = employees.find(e => e.id === id);
     if (!emp) return;
     editingEmployeeId = id;
-    document.getElementById('modalTitle').textContent = 'Edit Employee';
-    document.getElementById('empName').value = emp.name;
-    document.getElementById('empAccount').value = emp.accountNumber;
-    document.getElementById('empIfsc').value = emp.ifsc;
-    document.getElementById('empCode').value = emp.empCode;
-    document.getElementById('empTransferType').value = emp.transferType;
+    document.getElementById('modalTitle').textContent = 'Edit Employee Record';
+    resetForm();
+    const [first, middle, last] = splitFullNameParts(emp.name);
+    fFirst.value = first;
+    fMiddle.value = middle;
+    fLast.value = last;
+    fAcc.value = emp.accountNumber;
+    fAccC.value = emp.accountNumber;
+    fIfsc.value = emp.ifsc;
+    fIfscC.value = emp.ifsc;
+    fCode.value = emp.empCode;
+    fType.value = emp.transferType;
     modal.classList.remove('hidden');
   };
 
   employeeForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    clearFieldError();
+
+    const fname  = fFirst.value.trim();
+    const mname  = fMiddle.value.trim();
+    const lname  = fLast.value.trim();
+    const acc    = fAcc.value.trim().replace(/\s+/g, '');
+    const accC   = fAccC.value.trim().replace(/\s+/g, '');
+    const ifsc   = fIfsc.value.trim().replace(/\s+/g, '').toUpperCase();
+    const ifscC  = fIfscC.value.trim().replace(/\s+/g, '').toUpperCase();
+    const empCode = fCode.value.trim().padStart(2, '0');
+    const transferType = fType.value;
+
+    // Required-field check — Middle Name is the sole optional field.
+    if (!(fname && lname && acc && accC && ifsc && ifscC && empCode)) {
+      showFieldError('Fill all database entry boxes completely before committing. (Middle Name is optional)');
+      return;
+    }
+    // Double-entry verification for Account Number and IFSC.
+    if (acc !== accC || ifsc !== ifscC) {
+      showFieldError('Verification Error: Double-entry field mismatch detected.');
+      return;
+    }
+
+    const nameParts = [fname];
+    if (mname) nameParts.push(mname);
+    nameParts.push(lname);
+    const fullName = nameParts.join(' ').toUpperCase();
+
+    // Duplicate account-number check, excluding the record currently being edited.
+    if (existingAccountNumbers().includes(acc)) {
+      showFieldError(`Duplicate Error: Account number ${acc} is already explicitly assigned inside ledger.`);
+      return;
+    }
+
+    const emp = { name: fullName, accountNumber: acc, ifsc, empCode, transferType };
+
     const btn = document.getElementById('saveEmployeeBtn');
     btn.disabled = true; btn.textContent = 'Saving...';
-
-    const emp = {
-      name: document.getElementById('empName').value.trim().toUpperCase(),
-      accountNumber: document.getElementById('empAccount').value.trim(),
-      ifsc: document.getElementById('empIfsc').value.trim().toUpperCase(),
-      empCode: document.getElementById('empCode').value.trim().padStart(2, '0'),
-      transferType: document.getElementById('empTransferType').value,
-    };
-
     try {
       if (editingEmployeeId) {
         await Api.updateEmployee(editingEmployeeId, emp);
-        await Api.logAudit(currentUser.email, currentUser.displayName, 'EDIT EMPLOYEE', `${emp.name} | Acc: ${emp.accountNumber}`);
+        await Api.logAudit(currentUser.email, currentUser.displayName, 'EDIT EMPLOYEE',
+          `${emp.name} | Acc: ${emp.accountNumber} | IFSC: ${emp.ifsc} | Type: ${emp.transferType}`);
       } else {
         await Api.addEmployee(emp);
-        await Api.logAudit(currentUser.email, currentUser.displayName, 'ADD EMPLOYEE', `${emp.name} | Acc: ${emp.accountNumber}`);
+        await Api.logAudit(currentUser.email, currentUser.displayName, 'ADD EMPLOYEE',
+          `${emp.name} | Acc: ${emp.accountNumber} | IFSC: ${emp.ifsc} | Type: ${emp.transferType}`);
       }
       modal.classList.add('hidden');
       await loadEmployees();
     } catch (err) {
-      alert('Save failed: ' + err.message);
+      showFieldError('Save failed: ' + err.message);
     } finally {
       btn.disabled = false; btn.textContent = 'Save';
     }
@@ -816,7 +969,8 @@ function wireEmployeeForm() {
     if (!confirm(`Delete ${emp ? emp.name : id}? This cannot be undone.`)) return;
     try {
       await Api.deleteEmployee(id);
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'DELETE EMPLOYEE', `${emp ? emp.name : ''} | Acc: ${emp ? emp.accountNumber : id}`);
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'DELETE EMPLOYEE',
+        `Deleted: ${emp ? emp.name : ''} | Acc: ${emp ? emp.accountNumber : id}`);
       await loadEmployees();
     } catch (err) {
       alert('Delete failed: ' + err.message);
@@ -881,6 +1035,38 @@ function populateMonthYear() {
   document.getElementById('disbDateDisplay').textContent = formatDateDDMMYYYY(now);
 }
 
+function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
+  const v = inputEl.value.trim();
+  warnEl.textContent = '';
+  inputEl.classList.remove('input-mismatch');
+  if (!v) {
+    lightEl.style.background = '#FF4757';
+    updateBatchTotal();
+    return;
+  }
+  // Only digits and at most one decimal point are allowed — mirrors the
+  // desktop app's character-by-character format check.
+  let ok = true, dots = 0;
+  for (const ch of v) {
+    if (ch === '.') { dots += 1; ok = dots <= 1; }
+    else if (!/[0-9]/.test(ch)) { ok = false; }
+    if (!ok) break;
+  }
+  if (!ok) {
+    lightEl.style.background = '#FF4757';
+    warnEl.textContent = '⚠ INVALID FORMAT';
+  } else {
+    const val = parseFloat(v);
+    if (!isNaN(val) && val > 0) {
+      lightEl.style.background = '#00E676';
+    } else {
+      lightEl.style.background = '#FF4757';
+      warnEl.textContent = '⚠ MUST BE > 0';
+    }
+  }
+  updateBatchTotal();
+}
+
 function renderDisbursementList() {
   const tbody = document.getElementById('disbTableBody');
   const emptyState = document.getElementById('disbEmptyState');
@@ -894,7 +1080,7 @@ function renderDisbursementList() {
 
   const filtered = employees.filter(e =>
     e.transferType === tft &&
-    (!query || e.name.toLowerCase().includes(query) || String(e.accountNumber).includes(query)));
+    (!query || e.name.toLowerCase().includes(query) || String(e.accountNumber).includes(query) || String(e.empCode).includes(query)));
 
   if (!filtered.length) { emptyState.classList.remove('hidden'); updateBatchTotal(); return; }
   emptyState.classList.add('hidden');
@@ -906,12 +1092,18 @@ function renderDisbursementList() {
       <td>${escapeHtml(emp.name)}</td>
       <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
       <td style="text-align:right;">
-        <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00"
-          style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); color:var(--success); padding:6px 8px;">
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+          <span style="font-size:10px; color:var(--danger); font-weight:700;" data-warn></span>
+          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#FF4757;" data-light></span>
+          <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00"
+            style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); color:var(--success); padding:6px 8px;">
+        </div>
       </td>`;
     tbody.appendChild(tr);
     const inputEl = tr.querySelector('input');
-    inputEl.addEventListener('input', updateBatchTotal);
+    const lightEl = tr.querySelector('[data-light]');
+    const warnEl  = tr.querySelector('[data-warn]');
+    inputEl.addEventListener('input', () => validateLiveAmountEntry(inputEl, lightEl, warnEl));
     salaryInputs[emp.accountNumber] = { inputEl, name: emp.name, ifsc: emp.ifsc, empCode: emp.empCode };
   });
   wireMaskedAccountToggles(tbody);
@@ -931,7 +1123,14 @@ function wireDisbursement() {
   document.getElementById('disbTransferType').addEventListener('change', renderDisbursementList);
   document.getElementById('disbSearch').addEventListener('input', renderDisbursementList);
   document.getElementById('disbClearBtn').addEventListener('click', () => {
-    Object.values(salaryInputs).forEach(md => md.inputEl.value = '');
+    document.querySelectorAll('#disbTableBody tr').forEach(tr => {
+      const inputEl = tr.querySelector('input');
+      const lightEl = tr.querySelector('[data-light]');
+      const warnEl  = tr.querySelector('[data-warn]');
+      if (inputEl) inputEl.value = '';
+      if (lightEl) lightEl.style.background = '#FF4757';
+      if (warnEl)  warnEl.textContent = '';
+    });
     updateBatchTotal();
   });
   document.getElementById('disbExportBtn').addEventListener('click', openExportPreview);
@@ -959,8 +1158,8 @@ function collectBatchLines() {
 
 function openExportPreview() {
   const { tft, lines, total, hasInvalid } = collectBatchLines();
-  if (hasInvalid) { alert('Some amounts are not valid numbers.'); return; }
-  if (!lines.length) { alert('No valid allocations to export.'); return; }
+  if (hasInvalid) { alert('Block Export Execution: Invalid amount format strings detected.'); return; }
+  if (!lines.length) { alert('Execution blocked: No valid allocations found to process.'); return; }
 
   const monthRaw = document.getElementById('disbMonth').value;
   const monthName = MONTHS[parseInt(monthRaw,10)-1];

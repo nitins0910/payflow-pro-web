@@ -14,7 +14,7 @@
 <!-- ============================================================
      SCREEN: AUTH (Sign in / Sign up)
      ============================================================ -->
-<div id="screen-auth" class="hidden">
+<div id="screen-auth">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
@@ -112,20 +112,16 @@
   </div>
 </div>
 
-<!-- ============================================================
-     SCREEN: VERIFY-PENDING (shown right after signup)
-     ============================================================ -->
+<!-- SCREEN: VERIFY-PENDING -->
 <div id="screen-verify-pending" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body" style="text-align:center;">
-
         <div class="brand" style="justify-content:center;">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
-
         <div style="font-size:40px; margin:24px 0 10px;">📧</div>
         <p style="color:var(--text); font-size:15px; font-weight:600; margin-bottom:6px;">Verify your email</p>
         <p style="color:var(--text2); font-size:13.5px; line-height:1.6; margin-bottom:6px;">
@@ -135,64 +131,46 @@
         <p style="color:var(--text3); font-size:12px; line-height:1.6; margin-bottom:24px;">
           Not in your inbox? Check your Spam / Promotions folder.
         </p>
-
         <button id="verifyPendingRefreshBtn" class="btn btn-primary" style="margin-bottom:10px;">I've verified — Continue</button>
         <button id="resendVerifyBtn" class="btn btn-google" style="margin-bottom:10px;">Resend verification email</button>
         <button id="verifyPendingLogoutBtn" class="btn btn-google">Use a different account</button>
-
       </div>
     </div>
   </div>
 </div>
 
-<!-- ============================================================
-     SCREEN: VERIFYING (handles the link clicked from the email)
-     ============================================================ -->
+<!-- SCREEN: VERIFYING -->
 <div id="screen-verifying" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body" style="text-align:center;">
-
         <div class="brand" style="justify-content:center;">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
-
         <div id="verifyIcon" style="font-size:40px; margin:24px 0 10px;">⏳</div>
-        <p id="verifyText" style="color:var(--text2); font-size:14px; line-height:1.6; margin-bottom:24px;">
-          Verifying your email...
-        </p>
-
+        <p id="verifyText" style="color:var(--text2); font-size:14px; line-height:1.6; margin-bottom:24px;">Verifying your email...</p>
         <button id="verifyContinueBtn" class="btn btn-primary hidden">Continue to Sign In</button>
-
       </div>
     </div>
   </div>
 </div>
 
-<!-- ============================================================
-     SCREEN: RESET PASSWORD (opened from the password-reset email link)
-     ============================================================ -->
+<!-- SCREEN: RESET PASSWORD -->
 <div id="screen-reset-password" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body">
-
         <div class="brand">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
         <p class="tagline">// choose a new password</p>
-
         <div id="resetPwErrorBox" class="error-msg"></div>
         <div id="resetPwSuccessBox" class="success-msg"></div>
-
-        <div id="resetPwCheckingMsg" style="color:var(--text2); font-size:13px; margin-bottom:16px;">
-          Checking your reset link...
-        </div>
-
+        <div id="resetPwCheckingMsg" style="color:var(--text2); font-size:13px; margin-bottom:16px;">Checking your reset link...</div>
         <form id="resetPasswordForm" class="hidden">
           <p style="color:var(--text2); font-size:13px; margin-bottom:16px;">
             Resetting password for <strong id="resetPwEmail" style="color:var(--cyan);">—</strong>
@@ -215,33 +193,24 @@
           </div>
           <button type="submit" class="btn btn-primary" id="resetPwSubmitBtn">Set New Password</button>
         </form>
-
         <button id="resetPwBackToSignInBtn" class="btn btn-google hidden" style="margin-top:12px;">Back to Sign In</button>
-
       </div>
     </div>
   </div>
 </div>
 
-<!-- ============================================================
-     SCREEN: COMPLETE PROFILE (new Google sign-ups confirm their name)
-     ============================================================ -->
+<!-- SCREEN: COMPLETE PROFILE -->
 <div id="screen-complete-profile" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body">
-
         <div class="brand">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
         <p class="tagline">// one last step</p>
-
-        <p style="color:var(--text2); font-size:13px; margin-bottom:20px;">
-          Welcome! Please confirm your full name for your account.
-        </p>
-
+        <p style="color:var(--text2); font-size:13px; margin-bottom:20px;">Welcome! Please confirm your full name for your account.</p>
         <form id="completeProfileForm">
           <div class="field">
             <label>Full Name</label>
@@ -249,7 +218,6 @@
           </div>
           <button type="submit" class="btn btn-primary" id="completeProfileBtn">Continue</button>
         </form>
-
       </div>
     </div>
   </div>
@@ -322,7 +290,7 @@
         <div class="page-head">
           <div>
             <h2>Disbursement</h2>
-            <p>Enter amounts and export the SBI bulk payment file.</p>
+            <p>Enter amounts and export bulk payment file.</p>
           </div>
         </div>
 
@@ -369,7 +337,7 @@
           </div>
           <div style="display:flex; gap:10px;">
             <button class="btn-inline secondary" id="disbClearBtn">Clear All</button>
-            <button class="btn-inline" id="disbExportBtn">Export .TXT File</button>
+            <button class="btn-inline" id="disbExportBtn">Export Bulk File</button>
           </div>
         </div>
       </section>
@@ -402,6 +370,24 @@
         </div>
         <div class="panel" style="max-width:480px;">
           <div class="field">
+            <label>Company Bank</label>
+            <select id="companyBankInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
+              <option value="SBI">State Bank of India (SBI)</option>
+              <option value="PNB">Punjab National Bank (PNB)</option>
+              <option value="BOB">Bank of Baroda (BOB)</option>
+              <option value="CNRB">Canara Bank</option>
+              <option value="UBI">Union Bank of India</option>
+              <option value="INDB">Indian Bank</option>
+              <option value="HDFC">HDFC Bank (Enet)</option>
+              <option value="ICICI">ICICI Bank (CIB / CMS)</option>
+              <option value="AXIS">Axis Bank (Corporate CMS)</option>
+              <option value="KOTAK">Kotak Mahindra Bank</option>
+              <option value="INDUSIND">IndusInd Bank</option>
+              <option value="YES">Yes Bank</option>
+              <option value="PAYMENTS_BANK">Payments Bank (Paytm / Airtel)</option>
+            </select>
+          </div>
+          <div class="field">
             <label>Company Name</label>
             <input type="text" id="companyNameInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
           </div>
@@ -410,7 +396,7 @@
             <input type="text" id="companyAccInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
           </div>
           <div class="field">
-            <label>Branch / Sys Code</label>
+            <label>Branch / Sys Code / Client Code</label>
             <input type="text" id="companySysInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
           </div>
           <button class="btn-inline" id="saveCompanyBtn">Save Company Profile</button>
@@ -441,7 +427,6 @@
             <span class="settings-list-item__chevron">›</span>
           </div>
         </div>
-
       </section>
 
       <!-- Change Email modal -->

@@ -1,12 +1,9 @@
 // ============================================================
-// PayFlow Pro — Single-file app
-// (Firebase config + Firestore API + Auth + Email Verification + Dashboard)
+// PayFlow Pro — Single-file app (Multi-Bank Edition)
 // ============================================================
 
 // ---------------------------------------------------------
 // 1. FIREBASE CONFIG
-// These values are PUBLIC and safe to have in client code —
-// real security is enforced by Firestore rules + Firebase Auth.
 // ---------------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyC17VDG73Klmg8IwCA_cTbtMdIG9trwd5k",
@@ -20,44 +17,29 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 // ---------------------------------------------------------
-// 1b. APP CHECK — blocks scripted / bot signups & requests
-// that don't come from this real web app, so someone can't
-// just hammer createUserWithEmailAndPassword in a loop and
-// burn through the free Firebase quota.
-//
-// SETUP REQUIRED (one-time, in Firebase Console):
-//   1. Console → Build → App Check → Apps → register this web app
-//      with the "reCAPTCHA v3" provider.
-//   2. Copy the site key it gives you and paste it below in place
-//      of "PASTE_YOUR_RECAPTCHA_V3_SITE_KEY_HERE".
-//   3. Console → App Check → APIs tab → mark "Firestore" and
-//      "Authentication" as Enforced (not just Monitored).
-// Until you do this, App Check runs in a harmless no-op state —
-// it does NOT block anything on its own.
+// 1b. APP CHECK
 // ---------------------------------------------------------
 const RECAPTCHA_V3_SITE_KEY = "6LcGm4UtAAAAAE6U6J4olvwUW4RDKVcJ0cHTMZ54";
 if (RECAPTCHA_V3_SITE_KEY && RECAPTCHA_V3_SITE_KEY.indexOf("PASTE_YOUR") !== 0) {
-  firebase.appCheck().activate(
-    new firebase.appCheck.ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
-    true // auto-refresh the token
-  );
-} else {
-  console.warn('[App Check] Not activated — RECAPTCHA_V3_SITE_KEY is still a placeholder. Signups are NOT yet protected from bot abuse. See comment above.');
+  try {
+    firebase.appCheck().activate(
+      new firebase.appCheck.ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
+      true
+    );
+  } catch (e) {
+    console.warn('[App Check] Init error:', e);
+  }
 }
 
 const auth = firebase.auth();
 const db = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-// IMPORTANT: this must be your real, live Firebase Hosting URL
-// (or custom domain once you attach one). It's what makes the
-// verification email link open THIS app instead of Firebase's
-// generic default page.
 const SITE_URL = "https://nitins0910.github.io/payflow-pro-web/";
 const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 
 // ---------------------------------------------------------
-// 2. FIRESTORE DATA LAYER (unchanged from firestore-api.js)
+// 2. FIRESTORE DATA LAYER
 // ---------------------------------------------------------
 let currentUserId = null;
 
@@ -109,14 +91,18 @@ const Api = {
     const doc = await userRef().get();
     const d = doc.exists ? doc.data() : {};
     return {
+      bankName: d.bankName || 'SBI',
       name: d.companyName || '',
       accountNumber: d.accountNumber || '',
       sysId: d.sysId || ''
     };
   },
-  async updateCompanyProfile({ name, accountNumber, sysId }) {
+  async updateCompanyProfile({ bankName, name, accountNumber, sysId }) {
     await userRef().set({
-      companyName: name, accountNumber, sysId,
+      bankName: bankName || 'SBI',
+      companyName: name,
+      accountNumber,
+      sysId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   },
@@ -155,10 +141,6 @@ const Api = {
 
 // ---------------------------------------------------------
 // 2b. HTML ESCAPING
-// Any user-entered value (employee name, audit details, etc.) that
-// gets inserted via innerHTML/template strings MUST go through this
-// first, or a value like <img src=x onerror=...> in a name field
-// would execute as script instead of displaying as text.
 // ---------------------------------------------------------
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
@@ -167,13 +149,176 @@ function escapeHtml(value) {
 }
 
 // ---------------------------------------------------------
+// 2c. MULTI-BANK FORMATTERS ENGINE
+// ---------------------------------------------------------
+function getTxnMode(ifsc, bankPrefix, amount) {
+  if (ifsc && bankPrefix && ifsc.toUpperCase().startsWith(bankPrefix.toUpperCase())) {
+    return 'FT';
+  }
+  return amount >= 200000 ? 'RTGS' : 'NEFT';
+}
+
+const BankFormatters = {
+  SBI: {
+    ext: 'txt',
+    mime: 'text/plain;charset=utf-8',
+    generate(company, lines, meta) {
+      const prefix = meta.tft === 'Same Bank' ? 'SBST' : 'OBST';
+      const batchId = `${prefix}${meta.shortYear}${meta.monthRaw}${meta.seq}`;
+      const header = `${company.accountNumber}#${company.sysId}#${meta.txnDate}#${meta.total.toFixed(2)}##${batchId}#${company.name}#SALARY OF ${meta.monthName} ${meta.year}#`;
+      
+      const empLines = lines.map(({ acc, empCode, name, ifsc, amount }) => {
+        const seqStr = `${prefix}${meta.shortYear}${meta.monthRaw}E${empCode}`;
+        return `${acc}#${ifsc}#${meta.txnDate}##${amount.toFixed(2)}#${seqStr}#${name}#SALARY OF ${meta.monthName} ${meta.year}#`;
+      });
+      return { content: [header, ...empLines].join('\n') + '\n', batchId, prefix };
+    }
+  },
+  PNB: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        const mode = getTxnMode(l.ifsc, 'PUNB', l.amount);
+        return `"${company.accountNumber}","${l.acc}","${l.amount.toFixed(2)}","${l.name}","${l.ifsc}","${mode}","${meta.txnDate}","SALARY ${meta.monthName} ${meta.year}"`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `PNB${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'PNB' };
+    }
+  },
+  BOB: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        const mode = l.ifsc.startsWith('BARB') ? 'BOB' : (l.amount >= 200000 ? 'RTGS' : 'NEFT');
+        return `"${mode}","${company.accountNumber}","${l.acc}","${l.name}","${l.amount.toFixed(2)}","${l.ifsc}","SALARY ${meta.monthName} ${meta.year}","${meta.txnDate}"`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `BOB${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'BOB' };
+    }
+  },
+  CNRB: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        return `"${company.accountNumber}","${l.acc}","${l.amount.toFixed(2)}","${l.ifsc}","${l.name}","SALARY ${meta.monthName} ${meta.year}","${company.name}"`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `CNRB${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'CNRB' };
+    }
+  },
+  UBI: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        const mode = getTxnMode(l.ifsc, 'UBIN', l.amount);
+        return `"${company.accountNumber}","${l.acc}","${l.name}","${l.amount.toFixed(2)}","${l.ifsc}","${mode}","SALARY ${meta.monthName}"`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `UBI${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'UBI' };
+    }
+  },
+  INDB: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        const mode = l.ifsc.startsWith('IDIB') ? 'I' : (l.amount >= 200000 ? 'R' : 'N');
+        return `"${mode}","${company.accountNumber}","${l.acc}","${l.amount.toFixed(2)}","${l.name}","${l.ifsc}","SALARY ${meta.monthName}"`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `INDB${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'INDB' };
+    }
+  },
+  HDFC: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        const mode = getTxnMode(l.ifsc, 'HDFC', l.amount);
+        return `"${mode}","${company.accountNumber}","${l.acc}","${l.name}","${l.amount.toFixed(2)}","${l.ifsc}","${meta.txnDate}","","SALARY ${meta.monthName} ${meta.year}"`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `HDFC${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'HDFC' };
+    }
+  },
+  ICICI: {
+    ext: 'txt',
+    mime: 'text/plain;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        const mode = getTxnMode(l.ifsc, 'ICIC', l.amount);
+        return `${mode}^${company.accountNumber}^${l.acc}^${l.amount.toFixed(2)}^${l.name}^${l.ifsc}^SALARY ${meta.monthName} ${meta.year}`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `ICIC${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'ICICI' };
+    }
+  },
+  AXIS: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const header = "PaymentType,DebitAcc,BenAcc,BenName,Amount,IFSC,Remarks,TxnDate";
+      const rows = lines.map(l => {
+        const mode = l.ifsc.startsWith('UTIB') ? 'PA' : (l.amount >= 200000 ? 'RT' : 'NE');
+        return `"${mode}","${company.accountNumber}","${l.acc}","${l.name}","${l.amount.toFixed(2)}","${l.ifsc}","SALARY ${meta.monthName}","${meta.txnDate}"`;
+      });
+      return { content: [header, ...rows].join('\n') + '\n', batchId: `AXIS${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'AXIS' };
+    }
+  },
+  KOTAK: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const clientCode = company.sysId || 'KOTAK';
+      const header = "ClientCode,DebitAcc,BenAcc,Amount,BenName,IFSC,ValueDate,Narration";
+      const rows = lines.map(l => {
+        return `"${clientCode}","${company.accountNumber}","${l.acc}","${l.amount.toFixed(2)}","${l.name}","${l.ifsc}","${meta.txnDate}","SALARY ${meta.monthName}"`;
+      });
+      return { content: [header, ...rows].join('\n') + '\n', batchId: `KOTAK${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'KOTAK' };
+    }
+  },
+  INDUSIND: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const header = "TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,Narration,Email";
+      const rows = lines.map(l => {
+        const mode = getTxnMode(l.ifsc, 'INDB', l.amount);
+        return `"${mode}","${company.accountNumber}","${l.acc}","${l.name}","${l.amount.toFixed(2)}","${l.ifsc}","SALARY ${meta.monthName}",""`;
+      });
+      return { content: [header, ...rows].join('\n') + '\n', batchId: `INDUS${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'INDUS' };
+    }
+  },
+  YES: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const rows = lines.map(l => {
+        const mode = getTxnMode(l.ifsc, 'YESB', l.amount);
+        return `"${mode}","${company.accountNumber}","${l.acc}","${l.amount.toFixed(2)}","${l.name}","${l.ifsc}","SALARY ${meta.monthName}"`;
+      });
+      return { content: rows.join('\n') + '\n', batchId: `YES${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'YES' };
+    }
+  },
+  PAYMENTS_BANK: {
+    ext: 'csv',
+    mime: 'text/csv;charset=utf-8',
+    generate(company, lines, meta) {
+      const header = "BeneficiaryAccount,IFSC,BeneficiaryName,Amount,PaymentMode,Remarks,ClientRefId";
+      const rows = lines.map((l, idx) => {
+        const mode = l.amount >= 200000 ? 'RTGS' : 'NEFT';
+        return `"${l.acc}","${l.ifsc}","${l.name}","${l.amount.toFixed(2)}","${mode}","SALARY","REF${meta.shortYear}${meta.monthRaw}${idx+1}"`;
+      });
+      return { content: [header, ...rows].join('\n') + '\n', batchId: `PAYM${meta.shortYear}${meta.monthRaw}${meta.seq}`, prefix: 'PAYM' };
+    }
+  }
+};
+
+// ---------------------------------------------------------
 // 3. SCREEN ROUTER
-// Only one of these top-level screens is visible at a time.
 // ---------------------------------------------------------
 const SCREENS = ['auth', 'verify-pending', 'verifying', 'reset-password', 'complete-profile', 'dashboard'];
 function showScreen(name) {
   SCREENS.forEach(s => {
-    document.getElementById('screen-' + s).classList.toggle('hidden', s !== name);
+    const el = document.getElementById('screen-' + s);
+    if (el) el.classList.toggle('hidden', s !== name);
   });
 }
 
@@ -203,29 +348,23 @@ function mapAuthError(err) {
 
 function showAuthError(msg) {
   const box = document.getElementById('errorBox');
-  box.textContent = msg;
-  box.classList.add('show');
+  if (box) { box.textContent = msg; box.classList.add('show'); }
 }
 function clearAuthError() {
   const box = document.getElementById('errorBox');
-  box.textContent = '';
-  box.classList.remove('show');
+  if (box) { box.textContent = ''; box.classList.remove('show'); }
 }
 function showAuthSuccess(msg) {
   const box = document.getElementById('successBox');
-  box.textContent = msg;
-  box.classList.add('show');
+  if (box) { box.textContent = msg; box.classList.add('show'); }
 }
 function clearAuthSuccess() {
   const box = document.getElementById('successBox');
-  box.textContent = '';
-  box.classList.remove('show');
+  if (box) { box.textContent = ''; box.classList.remove('show'); }
 }
 
 // ---------------------------------------------------------
-// 4b. PASSWORD SHOW/HIDE TOGGLE (works for any .pw-toggle button
-// paired with an input via data-target, on any screen — login,
-// signup, and later the Settings page).
+// 4b. PASSWORD SHOW/HIDE TOGGLE
 // ---------------------------------------------------------
 function wirePasswordToggles() {
   document.querySelectorAll('.pw-toggle').forEach(btn => {
@@ -242,9 +381,6 @@ function wirePasswordToggles() {
   });
 }
 
-// Always land on the LOGIN form (not signup) whenever we route back
-// to the auth screen — fixes "stuck on signup form" after verifying
-// email, logging out, or clicking "use a different account".
 function goToAuthScreen() {
   clearAuthError();
   clearAuthSuccess();
@@ -264,7 +400,7 @@ function goToAuthScreen() {
 }
 
 // ---------------------------------------------------------
-// 5. AUTH SCREEN (login / signup / google)
+// 5. AUTH SCREEN
 // ---------------------------------------------------------
 function wireAuthForms() {
   const loginForm = document.getElementById('loginForm');
@@ -287,7 +423,6 @@ function wireAuthForms() {
     document.getElementById('switchToSignupWrap').classList.remove('hidden');
   };
 
-  // ---- Forgot password ----
   const forgotForm = document.getElementById('forgotPasswordForm');
   function resetForgotFormVisibility() {
     document.getElementById('forgotPwInstructions').classList.remove('hidden');
@@ -334,21 +469,13 @@ function wireAuthForms() {
     btn.disabled = true; btn.textContent = 'Sending...';
     try {
       await auth.sendPasswordResetEmail(email, actionCodeSettings);
-      // Same message whether or not the account exists — avoids
-      // leaking which emails are registered.
       showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
       forgotForm.reset();
       hideForgotFormAfterSend();
     } catch (err) {
-      if (err.code === 'auth/invalid-email') {
-        showAuthError(mapAuthError(err));
-      } else {
-        // Still show the generic success message for anything else
-        // (e.g. user-not-found) so we don't reveal account existence.
-        showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
-        forgotForm.reset();
-        hideForgotFormAfterSend();
-      }
+      showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
+      forgotForm.reset();
+      hideForgotFormAfterSend();
     } finally {
       btn.disabled = false; btn.textContent = 'Send Reset Link';
     }
@@ -363,7 +490,6 @@ function wireAuthForms() {
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
       await auth.signInWithEmailAndPassword(email, password);
-      // routeUser() fires automatically via onAuthStateChanged
     } catch (err) {
       showAuthError(mapAuthError(err));
     } finally {
@@ -390,9 +516,6 @@ function wireAuthForms() {
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       await cred.user.updateProfile({ displayName: name });
       await cred.user.sendEmailVerification(actionCodeSettings);
-      // Do NOT leave the user signed in unverified — sign out and
-      // make them explicitly verify + log in. This is what fixes
-      // "shows registered but isn't really".
       await auth.signOut();
 
       signupForm.reset();
@@ -408,11 +531,10 @@ function wireAuthForms() {
   document.getElementById('googleBtn').onclick = async () => {
     clearAuthError();
     try {
-      suppressAutoRoute = true; // hold the router while we check if this is a new user
+      suppressAutoRoute = true;
       const result = await auth.signInWithPopup(googleProvider);
       const isNewUser = result.additionalUserInfo && result.additionalUserInfo.isNewUser;
       if (isNewUser) {
-        // New Google sign-ups: confirm/complete their full name before continuing.
         document.getElementById('googleNameInput').value = result.user.displayName || '';
         showScreen('complete-profile');
       } else {
@@ -427,7 +549,7 @@ function wireAuthForms() {
 }
 
 // ---------------------------------------------------------
-// 5b. COMPLETE PROFILE SCREEN (new Google sign-ups only)
+// 5b. COMPLETE PROFILE SCREEN
 // ---------------------------------------------------------
 function wireCompleteProfileForm() {
   document.getElementById('completeProfileForm').addEventListener('submit', async (e) => {
@@ -449,7 +571,7 @@ function wireCompleteProfileForm() {
 }
 
 // ---------------------------------------------------------
-// 6. "CHECK YOUR EMAIL" SCREEN (post-signup, pre-verification)
+// 6. "CHECK YOUR EMAIL" SCREEN
 // ---------------------------------------------------------
 let resendCooldown = false;
 function wireVerifyPending() {
@@ -486,9 +608,7 @@ function wireVerifyPending() {
 }
 
 // ---------------------------------------------------------
-// 7. VERIFICATION LINK HANDLER (?mode=verifyEmail&oobCode=...)
-// This is what makes the link open THIS page's own UI instead
-// of Firebase's generic default page.
+// 7. VERIFICATION LINK HANDLER
 // ---------------------------------------------------------
 let suppressAutoRoute = false;
 
@@ -512,7 +632,6 @@ async function handleVerifyEmailAction(oobCode) {
     }
   }
 
-  // Clean the ?mode=&oobCode= out of the URL so a refresh doesn't re-trigger it.
   history.replaceState({}, '', window.location.pathname);
   btn.classList.remove('hidden');
   btn.onclick = async () => {
@@ -523,10 +642,7 @@ async function handleVerifyEmailAction(oobCode) {
 }
 
 // ---------------------------------------------------------
-// 7b. PASSWORD RESET LINK HANDLER (?mode=resetPassword&oobCode=...)
-// Without this, clicking the reset-password email link just lands
-// back on the normal auth screen with no way to actually set a new
-// password — this is what shows the "new password" form instead.
+// 7b. PASSWORD RESET LINK HANDLER
 // ---------------------------------------------------------
 async function handleResetPasswordAction(oobCode) {
   suppressAutoRoute = true;
@@ -593,14 +709,13 @@ async function handleResetPasswordAction(oobCode) {
 }
 
 // ---------------------------------------------------------
-// 8. ROUTER — decides which screen to show based on auth state
+// 8. ROUTER
 // ---------------------------------------------------------
 function routeUser(user) {
-  if (suppressAutoRoute) return; // we're busy handling a verification link
+  if (suppressAutoRoute) return;
   if (!user) { goToAuthScreen(); return; }
 
   if (!user.emailVerified) {
-    // This is the key fix: unverified users never reach the dashboard.
     document.getElementById('verifyPendingEmail').textContent = user.email;
     showScreen('verify-pending');
     return;
@@ -631,13 +746,12 @@ wirePasswordToggles();
 })();
 
 // ---------------------------------------------------------
-// 10. DASHBOARD (unchanged logic from dashboard.js, wrapped so it
-//     boots only once verification is confirmed)
+// 10. DASHBOARD
 // ---------------------------------------------------------
 let employees = [];
 let editingEmployeeId = null;
 let salaryInputs = {};
-let companyProfile = { name: '', accountNumber: '', sysId: '' };
+let companyProfile = { bankName: 'SBI', name: '', accountNumber: '', sysId: '' };
 let dashboardBooted = false;
 let currentUser = null;
 
@@ -703,15 +817,12 @@ async function loadEmployees() {
   renderDisbursementList();
 }
 
-// Bank account numbers are sensitive — mask them on screen by
-// default (last 4 digits only) with a click-to-reveal toggle, so
-// they aren't sitting in plain view on a shared screen or during
-// a screen-share.
 function maskAccount(acc) {
   const s = String(acc || '');
   if (s.length <= 4) return s;
   return '•'.repeat(s.length - 4) + s.slice(-4);
 }
+
 function wireMaskedAccountToggles(container) {
   container.querySelectorAll('.masked-acc button').forEach(btn => {
     btn.onclick = () => {
@@ -756,13 +867,6 @@ function renderEmployeeTable() {
   wireMaskedAccountToggles(tbody);
 }
 
-// ---------------------------------------------------------
-// Employee form helpers — mirror the desktop app's field-level
-// behaviour exactly: name parts are split/joined the same way,
-// account/IFSC fields block spaces & paste, name/IFSC fields
-// auto-uppercase as you type, and duplicate/mismatch checks are
-// evaluated live on every keystroke, not just on submit.
-// ---------------------------------------------------------
 function splitFullNameParts(fullName) {
   const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return ['', '', ''];
@@ -806,13 +910,9 @@ function wireEmployeeForm() {
   const accMismatchLbl  = document.getElementById('accMismatchLbl');
   const ifscMismatchLbl = document.getElementById('ifscMismatchLbl');
 
-  // Name fields: no spaces within a single box, auto-uppercase as-you-type
   [fFirst, fMiddle, fLast].forEach(el => { blockSpaceKey(el); autoUpperCaseLive(el); });
-  // Emp code: no spaces
   blockSpaceKey(fCode);
-  // Account / IFSC pairs: no spaces, no paste/right-click paste
   [fAcc, fAccC, fIfsc, fIfscC].forEach(el => { blockSpaceKey(el); blockPasteAndRightClick(el); });
-  // IFSC fields auto-uppercase as-you-type
   [fIfsc, fIfscC].forEach(el => autoUpperCaseLive(el));
 
   function clearMatchStyles(el) {
@@ -919,12 +1019,10 @@ function wireEmployeeForm() {
     const empCode = fCode.value.trim().padStart(2, '0');
     const transferType = fType.value;
 
-    // Required-field check — Middle Name is the sole optional field.
     if (!(fname && lname && acc && accC && ifsc && ifscC && empCode)) {
       showFieldError('Fill all database entry boxes completely before committing. (Middle Name is optional)');
       return;
     }
-    // Double-entry verification for Account Number and IFSC.
     if (acc !== accC || ifsc !== ifscC) {
       showFieldError('Verification Error: Double-entry field mismatch detected.');
       return;
@@ -935,7 +1033,6 @@ function wireEmployeeForm() {
     nameParts.push(lname);
     const fullName = nameParts.join(' ').toUpperCase();
 
-    // Duplicate account-number check, excluding the record currently being edited.
     if (existingAccountNumbers().includes(acc)) {
       showFieldError(`Duplicate Error: Account number ${acc} is already explicitly assigned inside ledger.`);
       return;
@@ -1044,8 +1141,6 @@ function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
     updateBatchTotal();
     return;
   }
-  // Only digits and at most one decimal point are allowed — mirrors the
-  // desktop app's character-by-character format check.
   let ok = true, dots = 0;
   for (const ch of v) {
     if (ch === '.') { dots += 1; ok = dots <= 1; }
@@ -1164,8 +1259,10 @@ function openExportPreview() {
   const monthRaw = document.getElementById('disbMonth').value;
   const monthName = MONTHS[parseInt(monthRaw,10)-1];
   const year = document.getElementById('disbYear').value;
+  const selectedBank = companyProfile.bankName || 'SBI';
 
   document.getElementById('exportPreviewBody').innerHTML = `
+    <p><strong>Bank Format:</strong> ${escapeHtml(selectedBank)}</p>
     <p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>
     <p><strong>Payroll Cycle:</strong> ${escapeHtml(monthName)} ${escapeHtml(year)}</p>
     <p><strong>Employees:</strong> ${lines.length}</p>
@@ -1180,7 +1277,6 @@ function openExportPreview() {
 
 async function executeExport() {
   const { tft, lines, total } = collectBatchLines();
-  const prefix = tft === 'Same Bank' ? 'SBST' : 'OBST';
   const monthRaw = document.getElementById('disbMonth').value;
   const monthName = MONTHS[parseInt(monthRaw,10)-1];
   const year = document.getElementById('disbYear').value;
@@ -1194,37 +1290,46 @@ async function executeExport() {
     alert('Could not generate batch number: ' + err.message);
     return;
   }
-  const batchId = `${prefix}${shortYear}${monthRaw}${seq}`;
 
-  const empLines = [];
-  const logRows = [];
-  lines.forEach(({ acc, empCode, name, ifsc, amount }) => {
-    const seqStr = `${prefix}${shortYear}${monthRaw}E${empCode}`;
-    empLines.push(`${acc}#${ifsc}#${txnDate}##${amount.toFixed(2)}#${seqStr}#${name}#SALARY OF ${monthName} ${year}#`);
-    logRows.push({ batchId, transferDate: txnDate, empCode, employeeName: name, accountNumber: acc, ifsc, amount: amount.toFixed(2), transferType: tft });
-  });
+  const selectedBank = companyProfile.bankName || 'SBI';
+  const formatter = BankFormatters[selectedBank] || BankFormatters.SBI;
 
-  const header = `${companyProfile.accountNumber}#${companyProfile.sysId}#${txnDate}#${total.toFixed(2)}##${batchId}#${companyProfile.name}#SALARY OF ${monthName} ${year}#`;
-  const output = [header, ...empLines].join('\n') + '\n';
+  const meta = { tft, lines, total, monthRaw, monthName, year, shortYear, txnDate, seq };
+  const { content, batchId, prefix } = formatter.generate(companyProfile, lines, meta);
 
-  const fileName = `${prefix.toLowerCase()}_salary_${monthName}_${year}.txt`;
-  downloadTextFile(fileName, output);
+  const fileName = `${(prefix || selectedBank).toLowerCase()}_salary_${monthName}_${year}.${formatter.ext}`;
+  downloadTextFile(fileName, content, formatter.mime);
+
+  const logRows = lines.map(({ acc, empCode, name, ifsc, amount }) => ({
+    batchId,
+    transferDate: txnDate,
+    empCode,
+    employeeName: name,
+    accountNumber: acc,
+    ifsc,
+    amount: amount.toFixed(2),
+    transferType: tft,
+    bank: selectedBank
+  }));
 
   try {
     await Api.addDisbursementRows(logRows);
     await Api.logAudit(currentUser.email, currentUser.displayName, 'EXPORT FILE',
-      `Batch: ${batchId} | Type: ${tft} | Total: ₹${total.toFixed(2)} | Employees: ${empLines.length} | File: ${fileName}`);
+      `Bank: ${selectedBank} | Batch: ${batchId} | Type: ${tft} | Total: ₹${total.toFixed(2)} | Employees: ${lines.length} | File: ${fileName}`);
   } catch (err) {
     alert('File downloaded, but logging to the ledger failed: ' + err.message);
   }
 }
 
-function downloadTextFile(filename, content) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+function downloadTextFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  a.href = url; 
+  a.download = filename;
+  document.body.appendChild(a); 
+  a.click(); 
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
@@ -1268,6 +1373,8 @@ async function loadCompanyProfile() {
   try {
     const p = await Api.getCompanyProfile();
     companyProfile = { ...companyProfile, ...p };
+    const bankEl = document.getElementById('companyBankInput');
+    if (bankEl) bankEl.value = p.bankName || 'SBI';
     document.getElementById('companyNameInput').value = p.name || '';
     document.getElementById('companyAccInput').value = p.accountNumber || '';
     document.getElementById('companySysInput').value = p.sysId || '';
@@ -1275,16 +1382,18 @@ async function loadCompanyProfile() {
     console.error(err);
   }
 }
+
 function wireCompanyForm() {
   document.getElementById('saveCompanyBtn').addEventListener('click', async () => {
+    const bankName = document.getElementById('companyBankInput') ? document.getElementById('companyBankInput').value : 'SBI';
     const name = document.getElementById('companyNameInput').value.trim().toUpperCase();
     const accountNumber = document.getElementById('companyAccInput').value.trim();
     const sysId = document.getElementById('companySysInput').value.trim();
-    if (!name || !accountNumber || !sysId) { alert('Please fill all fields.'); return; }
+    if (!name || !accountNumber) { alert('Please fill company name and account number.'); return; }
     try {
-      await Api.updateCompanyProfile({ name, accountNumber, sysId });
-      companyProfile = { ...companyProfile, name, accountNumber, sysId };
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | Branch: ${sysId}`);
+      await Api.updateCompanyProfile({ bankName, name, accountNumber, sysId });
+      companyProfile = { ...companyProfile, bankName, name, accountNumber, sysId };
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Bank: ${bankName} | Acc: ${accountNumber} | Branch: ${sysId}`);
       alert('Company profile updated.');
     } catch (err) {
       alert('Save failed: ' + err.message);
@@ -1294,12 +1403,6 @@ function wireCompanyForm() {
 
 // ---------------------------------------------------------
 // 10b. SETTINGS PAGE
-// Lets a signed-in user change their email/password from inside
-// the dashboard. Both the email and password forms re-authenticate
-// with the CURRENT password first — Firebase requires this
-// ("recent login") for sensitive account changes, and it also means
-// someone who merely stole a logged-in session can't silently take
-// over the account.
 // ---------------------------------------------------------
 function settingsMsg(boxId, text, isError) {
   const box = document.getElementById(boxId);
@@ -1318,7 +1421,6 @@ async function reauthenticate(password) {
   await auth.currentUser.reauthenticateWithCredential(cred);
 }
 
-// ---- Settings list → modal open/close ----
 function openSettingsModal(modalId, formId, msgBoxId) {
   clearSettingsMsg(msgBoxId);
   document.getElementById(formId).reset();
@@ -1339,7 +1441,6 @@ function wireSettingsForms() {
   document.getElementById('cancelChangePasswordBtn').addEventListener('click', () =>
     closeSettingsModal('changePasswordModal'));
 
-  // ---- Change email ----
   document.getElementById('changeEmailForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     clearSettingsMsg('settingsEmailMsg');
@@ -1349,9 +1450,6 @@ function wireSettingsForms() {
     btn.disabled = true; btn.textContent = 'Updating...';
     try {
       await reauthenticate(currentPassword);
-      // verifyBeforeUpdateEmail sends a confirmation link to the NEW
-      // address and only swaps the email once that link is clicked —
-      // so a typo or someone else's inbox can't hijack the account.
       await auth.currentUser.verifyBeforeUpdateEmail(newEmail, actionCodeSettings);
       settingsMsg('settingsEmailMsg', `Verification link sent to ${newEmail}. Your sign-in email will update once you click it.`, false);
       await Api.logAudit(currentUser.email, currentUser.displayName, 'REQUEST EMAIL CHANGE', `Requested change to ${newEmail}`);
@@ -1363,7 +1461,6 @@ function wireSettingsForms() {
     }
   });
 
-  // ---- Change password ----
   document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     clearSettingsMsg('settingsPasswordMsg');
@@ -1387,12 +1484,6 @@ function wireSettingsForms() {
 
 // ---------------------------------------------------------
 // 11. INACTIVITY AUTO-LOGOUT (15 min)
-// Signs the user out after 15 minutes of no activity — including
-// when the browser tab/window itself is inactive (switched away,
-// minimized, or backgrounded). A plain setInterval alone isn't
-// enough because browsers throttle timers in background tabs, so
-// the 30s check can fire late. We fix that by also re-checking the
-// instant the tab becomes visible/focused again.
 // ---------------------------------------------------------
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 let lastActivity = Date.now();
@@ -1408,12 +1499,8 @@ function checkInactivity() {
   }
 }
 
-// Regular check while the tab is in the foreground.
 setInterval(checkInactivity, 30000);
 
-// Catch the case where the tab was backgrounded/minimized long
-// enough that the timer above got throttled — re-check the moment
-// the user comes back, so logout happens immediately if overdue.
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) checkInactivity();
 });

@@ -43,7 +43,7 @@ function doPost(e) {
         result = deleteEmployee(body.accountNumber);
         break;
       case "logAudit":
-        result = logAudit(body.user, body.action, body.details);
+        result = logAudit(body.user, body.auditAction, body.details);
         break;
       default:
         return jsonResponse({ ok: false, error: "Unknown action: " + action });
@@ -126,6 +126,3 @@ function logAudit(user, action, details) {
   sheet.appendRow([new Date(), user, action, details]);
   return { logged: true };
 }
-
-
-App Script Deployement URL: https://script.google.com/macros/s/AKfycbzpdWdO51WvTU_LN_ICVC7QihXuoum4LKRFpY6yQBxSqaUPGuogYRV73nO_6j1NV-p4/exec

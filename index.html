@@ -160,6 +160,58 @@
 </div>
 
 <!-- ============================================================
+     SCREEN: RESET PASSWORD (opened from the password-reset email link)
+     ============================================================ -->
+<div id="screen-reset-password" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-card__strip"></div>
+      <div class="auth-card__body">
+
+        <div class="brand">
+          <span class="mark">PF</span>
+          <h1>PayFlow Pro</h1>
+        </div>
+        <p class="tagline">// choose a new password</p>
+
+        <div id="resetPwErrorBox" class="error-msg"></div>
+        <div id="resetPwSuccessBox" class="success-msg"></div>
+
+        <div id="resetPwCheckingMsg" style="color:var(--text2); font-size:13px; margin-bottom:16px;">
+          Checking your reset link...
+        </div>
+
+        <form id="resetPasswordForm" class="hidden">
+          <p style="color:var(--text2); font-size:13px; margin-bottom:16px;">
+            Resetting password for <strong id="resetPwEmail" style="color:var(--cyan);">—</strong>
+          </p>
+          <div class="field password-field">
+            <label>New Password</label>
+            <input type="password" id="resetPwNew" required minlength="6" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-target="resetPwNew" aria-label="Show password">
+              <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+          <div class="field password-field">
+            <label>Confirm New Password</label>
+            <input type="password" id="resetPwConfirm" required minlength="6" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-target="resetPwConfirm" aria-label="Show password">
+              <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+          <button type="submit" class="btn btn-primary" id="resetPwSubmitBtn">Set New Password</button>
+        </form>
+
+        <button id="resetPwBackToSignInBtn" class="btn btn-google hidden" style="margin-top:12px;">Back to Sign In</button>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
      SCREEN: COMPLETE PROFILE (new Google sign-ups confirm their name)
      ============================================================ -->
 <div id="screen-complete-profile" class="hidden">

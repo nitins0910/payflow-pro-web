@@ -53,7 +53,7 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
 // (or custom domain once you attach one). It's what makes the
 // verification email link open THIS app instead of Firebase's
 // generic default page.
-const SITE_URL = "https://nitins0910.github.io/";
+const SITE_URL = "https://nitins0910.github.io/payflow-pro-web/";
 const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 
 // ---------------------------------------------------------
@@ -157,7 +157,7 @@ const Api = {
 // 3. SCREEN ROUTER
 // Only one of these top-level screens is visible at a time.
 // ---------------------------------------------------------
-const SCREENS = ['auth', 'verify-pending', 'verifying', 'complete-profile', 'dashboard'];
+const SCREENS = ['auth', 'verify-pending', 'verifying', 'reset-password', 'complete-profile', 'dashboard'];
 function showScreen(name) {
   SCREENS.forEach(s => {
     document.getElementById('screen-' + s).classList.toggle('hidden', s !== name);
@@ -479,6 +479,76 @@ async function handleVerifyEmailAction(oobCode) {
 }
 
 // ---------------------------------------------------------
+// 7b. PASSWORD RESET LINK HANDLER (?mode=resetPassword&oobCode=...)
+// Without this, clicking the reset-password email link just lands
+// back on the normal auth screen with no way to actually set a new
+// password — this is what shows the "new password" form instead.
+// ---------------------------------------------------------
+async function handleResetPasswordAction(oobCode) {
+  suppressAutoRoute = true;
+  showScreen('reset-password');
+
+  const checkingMsg = document.getElementById('resetPwCheckingMsg');
+  const form = document.getElementById('resetPasswordForm');
+  const backBtn = document.getElementById('resetPwBackToSignInBtn');
+  const errBox = document.getElementById('resetPwErrorBox');
+  const okBox = document.getElementById('resetPwSuccessBox');
+
+  let email;
+  try {
+    email = await auth.verifyPasswordResetCode(oobCode);
+  } catch (err) {
+    checkingMsg.classList.add('hidden');
+    errBox.textContent = err.code === 'auth/invalid-action-code'
+      ? 'This reset link has expired or was already used. Please request a new one from the sign-in page.'
+      : mapAuthError(err);
+    errBox.classList.add('show');
+    backBtn.classList.remove('hidden');
+    history.replaceState({}, '', window.location.pathname);
+    return;
+  }
+
+  checkingMsg.classList.add('hidden');
+  document.getElementById('resetPwEmail').textContent = email;
+  form.classList.remove('hidden');
+  history.replaceState({}, '', window.location.pathname);
+
+  form.addEventListener('submit', async function onSubmit(e) {
+    e.preventDefault();
+    errBox.classList.remove('show'); errBox.textContent = '';
+    const newPw = document.getElementById('resetPwNew').value;
+    const confirmPw = document.getElementById('resetPwConfirm').value;
+    if (newPw !== confirmPw) {
+      errBox.textContent = 'Passwords do not match.';
+      errBox.classList.add('show');
+      return;
+    }
+    const btn = document.getElementById('resetPwSubmitBtn');
+    btn.disabled = true; btn.textContent = 'Setting password...';
+    try {
+      await auth.confirmPasswordReset(oobCode, newPw);
+      form.classList.add('hidden');
+      okBox.textContent = 'Password updated. You can now sign in with your new password.';
+      okBox.classList.add('show');
+      backBtn.classList.remove('hidden');
+      form.removeEventListener('submit', onSubmit);
+    } catch (err) {
+      errBox.textContent = err.code === 'auth/invalid-action-code'
+        ? 'This reset link has expired or was already used. Please request a new one from the sign-in page.'
+        : mapAuthError(err);
+      errBox.classList.add('show');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Set New Password';
+    }
+  }, { once: true });
+
+  backBtn.onclick = () => {
+    suppressAutoRoute = false;
+    goToAuthScreen();
+  };
+}
+
+// ---------------------------------------------------------
 // 8. ROUTER — decides which screen to show based on auth state
 // ---------------------------------------------------------
 function routeUser(user) {
@@ -510,6 +580,8 @@ wirePasswordToggles();
   const oobCode = params.get('oobCode');
   if (mode === 'verifyEmail' && oobCode) {
     handleVerifyEmailAction(oobCode);
+  } else if (mode === 'resetPassword' && oobCode) {
+    handleResetPasswordAction(oobCode);
   }
   auth.onAuthStateChanged(routeUser);
 })();

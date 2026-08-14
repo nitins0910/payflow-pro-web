@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayFlow Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="ledger-bg"></div>
+
+<!-- ============================================================
+     SCREEN: AUTH (Sign in / Sign up)
+     ============================================================ -->
+<div id="screen-auth" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-card__strip"></div>
+      <div class="auth-card__body">
+
+        <div class="brand">
+          <span class="mark">PF</span>
+          <h1>PayFlow Pro</h1>
+        </div>
+        <p class="tagline">// corporate payroll engine</p>
+
+        <div id="errorBox" class="error-msg"></div>
+
+        <!-- LOGIN FORM -->
+        <form id="loginForm">
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="loginEmail" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input type="password" id="loginPassword" required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary" id="loginBtn">Sign In</button>
+        </form>
+
+        <!-- SIGNUP FORM -->
+        <form id="signupForm" class="hidden">
+          <div class="field">
+            <label>Full Name</label>
+            <input type="text" id="signupName" required autocomplete="name">
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="signupEmail" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input type="password" id="signupPassword" required minlength="6" autocomplete="new-password">
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="signupBtn">Create Account</button>
+        </form>
+
+        <div class="divider">OR</div>
+
+        <button id="googleBtn" class="btn btn-google">
+          <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4c-7.7 0-14.3 4.4-17.7 10.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.6l-6.5-5.5C29.5 34.7 26.9 35.5 24 35.5c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.6 39.5 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.4-2.4 4.4-4.4 5.8l6.5 5.5C40.5 36.5 44 30.8 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+          Continue with Google
+        </button>
+
+        <div class="switch-mode">
+          <span id="switchToSignupWrap">New here? <button type="button" id="switchToSignup">Create an account</button></span>
+          <span id="switchToLoginWrap" class="hidden">Already have an account? <button type="button" id="switchToLogin">Sign in</button></span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCREEN: VERIFY-PENDING (shown right after signup)
+     ============================================================ -->
+<div id="screen-verify-pending" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-card__strip"></div>
+      <div class="auth-card__body" style="text-align:center;">
+
+        <div class="brand" style="justify-content:center;">
+          <span class="mark">PF</span>
+          <h1>PayFlow Pro</h1>
+        </div>
+
+        <div style="font-size:40px; margin:24px 0 10px;">📧</div>
+        <p style="color:var(--text); font-size:15px; font-weight:600; margin-bottom:6px;">Verify your email</p>
+        <p style="color:var(--text2); font-size:13.5px; line-height:1.6; margin-bottom:6px;">
+          We sent a verification link to<br>
+          <strong id="verifyPendingEmail" style="color:var(--cyan);">—</strong>
+        </p>
+        <p style="color:var(--text3); font-size:12px; line-height:1.6; margin-bottom:24px;">
+          Not in your inbox? Check your Spam / Promotions folder.
+        </p>
+
+        <button id="verifyPendingRefreshBtn" class="btn btn-primary" style="margin-bottom:10px;">I've verified — Continue</button>
+        <button id="resendVerifyBtn" class="btn btn-google" style="margin-bottom:10px;">Resend verification email</button>
+        <button id="verifyPendingLogoutBtn" class="btn btn-google">Use a different account</button>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCREEN: VERIFYING (handles the link clicked from the email)
+     ============================================================ -->
+<div id="screen-verifying" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-card__strip"></div>
+      <div class="auth-card__body" style="text-align:center;">
+
+        <div class="brand" style="justify-content:center;">
+          <span class="mark">PF</span>
+          <h1>PayFlow Pro</h1>
+        </div>
+
+        <div id="verifyIcon" style="font-size:40px; margin:24px 0 10px;">⏳</div>
+        <p id="verifyText" style="color:var(--text2); font-size:14px; line-height:1.6; margin-bottom:24px;">
+          Verifying your email...
+        </p>
+
+        <button id="verifyContinueBtn" class="btn btn-primary hidden">Continue to Sign In</button>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCREEN: DASHBOARD
+     ============================================================ -->
+<div id="screen-dashboard" class="hidden">
+  <div class="app-shell">
+
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark">PF</span>
+        <h1>PayFlow Pro</h1>
+      </div>
+
+      <div class="nav-item active" data-page="employees">Employee Ledger</div>
+      <div class="nav-item" data-page="disbursement">Disbursement</div>
+      <div class="nav-item" data-page="audit">Audit Trail</div>
+      <div class="nav-item" data-page="company">Company</div>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <strong id="userName">—</strong>
+          <span id="userEmail">—</span>
+        </div>
+        <button class="btn-inline secondary" style="width:100%;" id="logoutBtn">Log Out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <section id="page-employees">
+        <div class="page-head">
+          <div>
+            <h2>Employee Ledger</h2>
+            <p>Add, edit, and manage employee payout records.</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-inline secondary" id="bulkImportBtn">Bulk Import CSV</button>
+            <input type="file" id="bulkImportInput" accept=".csv" class="hidden">
+            <button class="btn-inline" id="addEmployeeBtn">+ Add Employee</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <input type="text" id="employeeSearch" placeholder="Search by name or account no..."
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Employee Name</th>
+                <th>Account Number</th>
+                <th>IFSC / Branch Code</th>
+                <th>Transfer Type</th>
+                <th>Emp Code</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="employeeTableBody"></tbody>
+          </table>
+          <div id="employeeEmptyState" class="empty-state hidden">No employees yet. Add your first record above.</div>
+        </div>
+      </section>
+
+      <section id="page-disbursement" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Disbursement</h2>
+            <p>Enter amounts and export the SBI bulk payment file.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end;">
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">TRANSFER TYPE</label>
+              <select id="disbTransferType" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px;">
+                <option value="Same Bank">Same Bank Transfer</option>
+                <option value="Other Bank">Other Bank Transfer</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">PAYROLL MONTH</label>
+              <select id="disbMonth" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px;"></select>
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">PAYROLL YEAR</label>
+              <select id="disbYear" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px;"></select>
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">TRANSFER DATE</label>
+              <div style="padding:8px 10px; color:var(--text2);" id="disbDateDisplay"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <input type="text" id="disbSearch" placeholder="Search by name or account no..."
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px;">
+          <table>
+            <thead>
+              <tr><th>Emp Code</th><th>Employee</th><th>Account</th><th style="text-align:right;">Amount (₹)</th></tr>
+            </thead>
+            <tbody id="disbTableBody"></tbody>
+          </table>
+          <div id="disbEmptyState" class="empty-state hidden">No employees with this transfer type yet.</div>
+        </div>
+
+        <div class="panel" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:22px; font-weight:700; color:var(--success);" id="disbTotal">BATCH TOTAL ₹ 0.00</div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn-inline secondary" id="disbClearBtn">Clear All</button>
+            <button class="btn-inline" id="disbExportBtn">Export .TXT File</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-audit" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Audit Trail</h2>
+            <p>Every add, edit, delete, and export is logged here.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <input type="text" id="auditSearch" placeholder="Search by user, action, detail..."
+            style="width:320px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px;">
+          <table>
+            <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+          <div id="auditEmptyState" class="empty-state hidden">No audit records found.</div>
+        </div>
+      </section>
+
+      <section id="page-company" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Company Profile</h2>
+            <p>These details print on every exported bulk file.</p>
+          </div>
+        </div>
+        <div class="panel" style="max-width:480px;">
+          <div class="field">
+            <label>Company Name</label>
+            <input type="text" id="companyNameInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
+          </div>
+          <div class="field">
+            <label>Company Account Number</label>
+            <input type="text" id="companyAccInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
+          </div>
+          <div class="field">
+            <label>Branch / Sys Code</label>
+            <input type="text" id="companySysInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
+          </div>
+          <button class="btn-inline" id="saveCompanyBtn">Save Company Profile</button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="employeeModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h3 id="modalTitle">Add Employee</h3>
+      <form id="employeeForm">
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" id="empName" required>
+        </div>
+        <div class="field">
+          <label>Account Number</label>
+          <input type="text" id="empAccount" required>
+        </div>
+        <div class="field">
+          <label>IFSC / Branch Code</label>
+          <input type="text" id="empIfsc" required>
+        </div>
+        <div class="field">
+          <label>Employee Code</label>
+          <input type="text" id="empCode" required>
+        </div>
+        <div class="field">
+          <label>Transfer Type</label>
+          <select id="empTransferType" required style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px;">
+            <option value="Same Bank">Same Bank</option>
+            <option value="Other Bank">Other Bank</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-inline secondary" id="cancelModalBtn">Cancel</button>
+          <button type="submit" class="btn-inline" id="saveEmployeeBtn" style="flex:1;">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="exportPreviewModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:520px;">
+      <h3>Confirm Export</h3>
+      <div id="exportPreviewBody" style="font-size:13px; color:var(--text2); line-height:1.7;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-inline secondary" id="cancelExportBtn">Cancel</button>
+        <button type="button" class="btn-inline" id="confirmExportBtn" style="flex:1;">Confirm → Export</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

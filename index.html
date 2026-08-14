@@ -12,9 +12,9 @@
 <div class="ledger-bg"></div>
 
 <!-- ============================================================
-     SCREEN: AUTH
+     SCREEN: AUTH (Sign in / Sign up)
      ============================================================ -->
-<div id="screen-auth">
+<div id="screen-auth" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
@@ -24,7 +24,7 @@
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
-        <p class="tagline">// multi-bank payroll engine</p>
+        <p class="tagline">// corporate payroll engine</p>
 
         <div id="errorBox" class="error-msg"></div>
         <div id="successBox" class="success-msg"></div>
@@ -51,7 +51,7 @@
 
         <!-- FORGOT PASSWORD FORM -->
         <form id="forgotPasswordForm" class="hidden">
-          <p id="forgotPwInstructions" style="color:var(--text-grey); font-size:13px; margin-bottom:16px;">
+          <p id="forgotPwInstructions" style="color:var(--text2); font-size:13px; margin-bottom:18px;">
             Enter the email on your account. We'll send a link to reset your password.
           </p>
           <div class="field" id="forgotEmailField">
@@ -112,58 +112,91 @@
   </div>
 </div>
 
-<!-- SCREEN: VERIFY PENDING -->
+<!-- ============================================================
+     SCREEN: VERIFY-PENDING (shown right after signup)
+     ============================================================ -->
 <div id="screen-verify-pending" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body" style="text-align:center;">
+
         <div class="brand" style="justify-content:center;">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
+
         <div style="font-size:40px; margin:24px 0 10px;">📧</div>
         <p style="color:var(--text); font-size:15px; font-weight:600; margin-bottom:6px;">Verify your email</p>
-        <p style="color:var(--text-grey); font-size:13.5px; line-height:1.6; margin-bottom:6px;">
-          Verification link sent to<br><strong id="verifyPendingEmail" style="color:var(--cyan);">—</strong>
+        <p style="color:var(--text2); font-size:13.5px; line-height:1.6; margin-bottom:6px;">
+          We sent a verification link to<br>
+          <strong id="verifyPendingEmail" style="color:var(--cyan);">—</strong>
         </p>
-        <p style="color:var(--text-muted); font-size:12px; margin-bottom:24px;">Check Spam folder if not received.</p>
+        <p style="color:var(--text3); font-size:12px; line-height:1.6; margin-bottom:24px;">
+          Not in your inbox? Check your Spam / Promotions folder.
+        </p>
+
         <button id="verifyPendingRefreshBtn" class="btn btn-primary" style="margin-bottom:10px;">I've verified — Continue</button>
         <button id="resendVerifyBtn" class="btn btn-google" style="margin-bottom:10px;">Resend verification email</button>
         <button id="verifyPendingLogoutBtn" class="btn btn-google">Use a different account</button>
+
       </div>
     </div>
   </div>
 </div>
 
-<!-- SCREEN: VERIFYING -->
+<!-- ============================================================
+     SCREEN: VERIFYING (handles the link clicked from the email)
+     ============================================================ -->
 <div id="screen-verifying" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body" style="text-align:center;">
-        <div class="brand" style="justify-content:center;"><span class="mark">PF</span><h1>PayFlow Pro</h1></div>
+
+        <div class="brand" style="justify-content:center;">
+          <span class="mark">PF</span>
+          <h1>PayFlow Pro</h1>
+        </div>
+
         <div id="verifyIcon" style="font-size:40px; margin:24px 0 10px;">⏳</div>
-        <p id="verifyText" style="color:var(--text-grey); font-size:14px; margin-bottom:24px;">Verifying your email...</p>
+        <p id="verifyText" style="color:var(--text2); font-size:14px; line-height:1.6; margin-bottom:24px;">
+          Verifying your email...
+        </p>
+
         <button id="verifyContinueBtn" class="btn btn-primary hidden">Continue to Sign In</button>
+
       </div>
     </div>
   </div>
 </div>
 
-<!-- SCREEN: RESET PASSWORD -->
+<!-- ============================================================
+     SCREEN: RESET PASSWORD (opened from the password-reset email link)
+     ============================================================ -->
 <div id="screen-reset-password" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body">
-        <div class="brand"><span class="mark">PF</span><h1>PayFlow Pro</h1></div>
+
+        <div class="brand">
+          <span class="mark">PF</span>
+          <h1>PayFlow Pro</h1>
+        </div>
         <p class="tagline">// choose a new password</p>
+
         <div id="resetPwErrorBox" class="error-msg"></div>
         <div id="resetPwSuccessBox" class="success-msg"></div>
-        <div id="resetPwCheckingMsg" style="color:var(--text-grey); font-size:13px; margin-bottom:16px;">Checking reset link...</div>
+
+        <div id="resetPwCheckingMsg" style="color:var(--text2); font-size:13px; margin-bottom:16px;">
+          Checking your reset link...
+        </div>
+
         <form id="resetPasswordForm" class="hidden">
-          <p style="color:var(--text-grey); font-size:13px; margin-bottom:16px;">Resetting password for <strong id="resetPwEmail" style="color:var(--cyan);">—</strong></p>
+          <p style="color:var(--text2); font-size:13px; margin-bottom:16px;">
+            Resetting password for <strong id="resetPwEmail" style="color:var(--cyan);">—</strong>
+          </p>
           <div class="field password-field">
             <label>New Password</label>
             <input type="password" id="resetPwNew" required minlength="8" autocomplete="new-password">
@@ -182,20 +215,33 @@
           </div>
           <button type="submit" class="btn btn-primary" id="resetPwSubmitBtn">Set New Password</button>
         </form>
+
         <button id="resetPwBackToSignInBtn" class="btn btn-google hidden" style="margin-top:12px;">Back to Sign In</button>
+
       </div>
     </div>
   </div>
 </div>
 
-<!-- SCREEN: COMPLETE PROFILE -->
+<!-- ============================================================
+     SCREEN: COMPLETE PROFILE (new Google sign-ups confirm their name)
+     ============================================================ -->
 <div id="screen-complete-profile" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body">
-        <div class="brand"><span class="mark">PF</span><h1>PayFlow Pro</h1></div>
-        <p class="tagline">// confirm profile</p>
+
+        <div class="brand">
+          <span class="mark">PF</span>
+          <h1>PayFlow Pro</h1>
+        </div>
+        <p class="tagline">// one last step</p>
+
+        <p style="color:var(--text2); font-size:13px; margin-bottom:20px;">
+          Welcome! Please confirm your full name for your account.
+        </p>
+
         <form id="completeProfileForm">
           <div class="field">
             <label>Full Name</label>
@@ -203,6 +249,7 @@
           </div>
           <button type="submit" class="btn btn-primary" id="completeProfileBtn">Continue</button>
         </form>
+
       </div>
     </div>
   </div>
@@ -223,7 +270,7 @@
       <div class="nav-item active" data-page="employees">Employee Ledger</div>
       <div class="nav-item" data-page="disbursement">Disbursement</div>
       <div class="nav-item" data-page="audit">Audit Trail</div>
-      <div class="nav-item" data-page="company">Company Profile</div>
+      <div class="nav-item" data-page="company">Company</div>
       <div class="nav-item" data-page="settings">Settings</div>
 
       <div class="sidebar-footer">
@@ -237,12 +284,11 @@
 
     <main class="main">
 
-      <!-- PAGE: EMPLOYEES -->
       <section id="page-employees">
         <div class="page-head">
           <div>
             <h2>Employee Ledger</h2>
-            <p>Manage employee records and bank payout coordinates.</p>
+            <p>Add, edit, and manage employee payout records.</p>
           </div>
           <div style="display:flex; gap:8px;">
             <button class="btn-inline secondary" id="bulkImportBtn">Bulk Import CSV</button>
@@ -252,9 +298,7 @@
         </div>
 
         <div class="panel">
-          <input type="text" id="employeeSearch" placeholder="Search by name, employee code or account no..."
-            style="width:320px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
-            color:var(--text); padding:9px 12px; font-size:13px; border-radius:4px;">
+          <input type="text" id="employeeSearch" class="search-input" style="width:280px;" placeholder="Search by name or account no...">
           <table>
             <thead>
               <tr>
@@ -268,172 +312,134 @@
             </thead>
             <tbody id="employeeTableBody"></tbody>
           </table>
-          <div id="employeeEmptyState" class="empty-state hidden">No employee records found. Add or import above.</div>
+          <div id="employeeEmptyState" class="empty-state hidden">No employees yet. Add your first record above.</div>
         </div>
       </section>
 
-      <!-- PAGE: DISBURSEMENT -->
       <section id="page-disbursement" class="hidden">
         <div class="page-head">
           <div>
-            <h2>Disbursement Engine</h2>
-            <p>Allocate payout amounts and export bank-compliant disbursement batches.</p>
+            <h2>Disbursement</h2>
+            <p>Enter amounts and export the SBI bulk payment file.</p>
           </div>
         </div>
 
         <div class="panel">
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px; align-items:flex-end;">
-            <div>
-              <label style="display:block; font-size:11px; color:var(--text-grey); font-family:var(--font-mono); margin-bottom:6px;">TRANSFER TYPE</label>
-              <select id="disbTransferType" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; width:100%;">
+          <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="control-group">
+              <label class="field-label">Transfer Type</label>
+              <select id="disbTransferType" class="select-field">
                 <option value="Same Bank">Same Bank Transfer</option>
                 <option value="Other Bank">Other Bank Transfer</option>
               </select>
             </div>
-            <div>
-              <label style="display:block; font-size:11px; color:var(--text-grey); font-family:var(--font-mono); margin-bottom:6px;">PAYROLL MONTH</label>
-              <select id="disbMonth" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; width:100%;"></select>
+            <div class="control-group">
+              <label class="field-label">Payroll Month</label>
+              <select id="disbMonth" class="select-field"></select>
             </div>
-            <div>
-              <label style="display:block; font-size:11px; color:var(--text-grey); font-family:var(--font-mono); margin-bottom:6px;">PAYROLL YEAR</label>
-              <select id="disbYear" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; width:100%;"></select>
+            <div class="control-group">
+              <label class="field-label">Payroll Year</label>
+              <select id="disbYear" class="select-field"></select>
             </div>
-            <div>
-              <label style="display:block; font-size:11px; color:var(--text-grey); font-family:var(--font-mono); margin-bottom:6px;">CUSTOM VALUE DATE</label>
-              <input type="date" id="disbCustomDate" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:7px 10px; width:100%; font-family:var(--font-body); border-radius:4px;">
+            <div class="control-group">
+              <label class="field-label">Transfer Date</label>
+              <input type="date" id="disbDateDisplay" class="date-field">
             </div>
           </div>
+          <p class="field-hint" style="margin-top:12px;">The transfer date is used as the value date in the exported bulk file — set it to today or a future date as needed.</p>
         </div>
 
         <div class="panel">
-          <input type="text" id="disbSearch" placeholder="Filter current list by name or account..."
-            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
-            color:var(--text); padding:9px 12px; font-size:13px; border-radius:4px;">
+          <input type="text" id="disbSearch" class="search-input" style="width:280px;" placeholder="Search by name or account no...">
           <table>
             <thead>
               <tr><th>Emp Code</th><th>Employee</th><th>Account</th><th style="text-align:right;">Amount (₹)</th></tr>
             </thead>
             <tbody id="disbTableBody"></tbody>
           </table>
-          <div id="disbEmptyState" class="empty-state hidden">No employees found matching the filter criteria.</div>
+          <div id="disbEmptyState" class="empty-state hidden">No employees with this transfer type yet.</div>
         </div>
 
-        <div class="panel" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div class="panel" style="display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:20px; font-weight:700; color:var(--success);" id="disbTotal">BATCH TOTAL ₹ 0.00</div>
+            <div style="font-size:22px; font-weight:700; color:var(--success);" id="disbTotal">BATCH TOTAL ₹ 0.00</div>
           </div>
           <div style="display:flex; gap:10px;">
-            <button class="btn-inline secondary" id="disbClearBtn">Clear Amounts</button>
-            <button class="btn-inline" id="disbExportBtn">Export Bulk File</button>
+            <button class="btn-inline secondary" id="disbClearBtn">Clear All</button>
+            <button class="btn-inline" id="disbExportBtn">Export .TXT File</button>
           </div>
         </div>
       </section>
 
-      <!-- PAGE: AUDIT -->
       <section id="page-audit" class="hidden">
         <div class="page-head">
           <div>
             <h2>Audit Trail</h2>
-            <p>Immutable system event logs for security and compliance.</p>
+            <p>Every add, edit, delete, and export is logged here.</p>
           </div>
         </div>
         <div class="panel">
-          <input type="text" id="auditSearch" placeholder="Filter audit trail events..."
-            style="width:320px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
-            color:var(--text); padding:9px 12px; font-size:13px; border-radius:4px;">
+          <input type="text" id="auditSearch" class="search-input" style="width:320px;" placeholder="Search by user, action, detail...">
           <table>
             <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
             <tbody id="auditTableBody"></tbody>
           </table>
-          <div id="auditEmptyState" class="empty-state hidden">No audit logs recorded yet.</div>
+          <div id="auditEmptyState" class="empty-state hidden">No audit records found.</div>
         </div>
       </section>
 
-      <!-- PAGE: COMPANY -->
       <section id="page-company" class="hidden">
         <div class="page-head">
           <div>
             <h2>Company Profile</h2>
-            <p>Corporate account configuration used across all exported formats.</p>
+            <p>These details print on every exported bulk file.</p>
           </div>
         </div>
-        <div class="panel" style="max-width:520px;">
+        <div class="panel" style="max-width:480px;">
           <div class="field">
-            <label>Operating Corporate Bank</label>
-            <select id="companyBankInput">
-              <option value="SBI">State Bank of India (SBI)</option>
-              <option value="PNB">Punjab National Bank (PNB)</option>
-              <option value="BOB">Bank of Baroda (BOB)</option>
-              <option value="CNRB">Canara Bank</option>
-              <option value="UBI">Union Bank of India</option>
-              <option value="INDB">Indian Bank</option>
-              <option value="HDFC">HDFC Bank (Enet)</option>
-              <option value="ICICI">ICICI Bank (CIB / CMS)</option>
-              <option value="AXIS">Axis Bank (Corporate CMS)</option>
-              <option value="KOTAK">Kotak Mahindra Bank</option>
-              <option value="INDUSIND">IndusInd Bank</option>
-              <option value="YES">Yes Bank</option>
-              <option value="PAYMENTS_BANK">Payments Bank (Paytm / Airtel)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Registered Company Name</label>
+            <label>Company Name</label>
             <input type="text" id="companyNameInput">
           </div>
           <div class="field">
-            <label>Corporate Account Number</label>
+            <label>Company Account Number</label>
             <input type="text" id="companyAccInput">
           </div>
           <div class="field">
-            <label>Branch Code / SysID / Client Code</label>
+            <label>Branch / Sys Code</label>
             <input type="text" id="companySysInput">
           </div>
-          <button class="btn-inline" id="saveCompanyBtn" style="margin-top:8px;">Save Company Profile</button>
+          <button class="btn-inline" id="saveCompanyBtn">Save Company Profile</button>
         </div>
       </section>
 
-      <!-- PAGE: SETTINGS -->
       <section id="page-settings" class="hidden">
         <div class="page-head">
           <div>
-            <h2>Security & Settings</h2>
-            <p>Manage your account credentials and security preferences.</p>
+            <h2>Settings</h2>
+            <p>Manage your sign-in email and password.</p>
           </div>
         </div>
 
         <div class="panel" style="padding:0; overflow:hidden;">
-          <!-- Shown ONLY for Google Sign-In Users -->
-          <div id="googleAccountNotice" class="google-auth-notice hidden">
-            <span>🛡️</span>
+          <div class="settings-list-item" id="openChangeEmailBtn" role="button" tabindex="0">
             <div>
-              <strong>Managed by Google Identity</strong>
-              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-                You are signed in using your Google Account. Password and email updates are managed directly from your Google Security dashboard.
-              </div>
+              <div class="settings-list-item__title">Sign-in Email</div>
+              <div class="settings-list-item__subtitle">Change the email you use to sign in</div>
             </div>
+            <span class="settings-list-item__chevron">›</span>
           </div>
-
-          <!-- Shown ONLY for Email/Password Users -->
-          <div id="emailAuthOptions">
-            <div class="settings-list-item" id="openChangeEmailBtn" role="button" tabindex="0">
-              <div>
-                <div class="settings-list-item__title">Update Sign-in Email</div>
-                <div class="settings-list-item__subtitle">Request email address swap with re-verification</div>
-              </div>
-              <span style="color:var(--text-muted); font-size:18px;">›</span>
+          <div class="settings-list-item" id="openChangePasswordBtn" role="button" tabindex="0">
+            <div>
+              <div class="settings-list-item__title">Password</div>
+              <div class="settings-list-item__subtitle">Update your account password</div>
             </div>
-            <div class="settings-list-item" id="openChangePasswordBtn" role="button" tabindex="0">
-              <div>
-                <div class="settings-list-item__title">Change Password</div>
-                <div class="settings-list-item__subtitle">Update master credentials for your workspace</div>
-              </div>
-              <span style="color:var(--text-muted); font-size:18px;">›</span>
-            </div>
+            <span class="settings-list-item__chevron">›</span>
           </div>
         </div>
+
       </section>
 
-      <!-- Modals -->
+      <!-- Change Email modal -->
       <div id="changeEmailModal" class="modal-backdrop hidden">
         <div class="modal">
           <h3>Sign-in Email</h3>
@@ -444,9 +450,10 @@
               <input type="password" id="emailChangeCurrentPassword" required autocomplete="current-password">
             </div>
             <div class="field">
-              <label>New Email Address</label>
+              <label>New Email</label>
               <input type="email" id="newEmailInput" required autocomplete="email">
             </div>
+            <p class="field-hint">We'll send a verification link to the new address — your email only changes after you confirm it.</p>
             <div class="modal-actions">
               <button type="button" class="btn-inline secondary" id="cancelChangeEmailBtn">Cancel</button>
               <button type="submit" class="btn-inline" id="changeEmailBtn">Update Email</button>
@@ -455,18 +462,27 @@
         </div>
       </div>
 
+      <!-- Change Password modal -->
       <div id="changePasswordModal" class="modal-backdrop hidden">
         <div class="modal">
-          <h3>Change Password</h3>
+          <h3>Password</h3>
           <div id="settingsPasswordMsg"></div>
           <form id="changePasswordForm">
             <div class="field password-field">
               <label>Current Password</label>
               <input type="password" id="pwChangeCurrentPassword" required autocomplete="current-password">
+              <button type="button" class="pw-toggle" data-target="pwChangeCurrentPassword" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
             </div>
             <div class="field password-field">
               <label>New Password</label>
               <input type="password" id="pwChangeNewPassword" required minlength="8" autocomplete="new-password">
+              <button type="button" class="pw-toggle" data-target="pwChangeNewPassword" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
             </div>
             <div class="modal-actions">
               <button type="button" class="btn-inline secondary" id="cancelChangePasswordBtn">Cancel</button>
@@ -479,24 +495,35 @@
     </main>
   </div>
 
-  <!-- ADD / EDIT EMPLOYEE MODAL -->
   <div id="employeeModal" class="modal-backdrop hidden">
-    <div class="modal">
-      <h3 id="modalTitle">Add Employee Record</h3>
+    <div class="modal" style="max-width:560px;">
+      <h3 id="modalTitle">Add Employee</h3>
       <form id="employeeForm" autocomplete="off">
         <div id="employeeFormError" class="error-msg"></div>
 
         <div class="field-row-3">
-          <div class="field"><label>First Name</label><input type="text" id="empFirstName" required></div>
-          <div class="field"><label>Middle Name</label><input type="text" id="empMiddleName"></div>
-          <div class="field"><label>Last Name</label><input type="text" id="empLastName" required></div>
+          <div class="field">
+            <label>First Name</label>
+            <input type="text" id="empFirstName" required>
+          </div>
+          <div class="field">
+            <label>Middle Name (Optional)</label>
+            <input type="text" id="empMiddleName">
+          </div>
+          <div class="field">
+            <label>Last Name</label>
+            <input type="text" id="empLastName" required>
+          </div>
         </div>
 
         <div class="field-row-2">
-          <div class="field"><label>Emp Code (e.g. 01)</label><input type="text" id="empCode" required></div>
+          <div class="field">
+            <label>Emp Code (e.g. 02)</label>
+            <input type="text" id="empCode" required>
+          </div>
           <div class="field">
             <label>Transfer Type</label>
-            <select id="empTransferType" required>
+            <select id="empTransferType" required class="select-field">
               <option value="Same Bank">Same Bank</option>
               <option value="Other Bank">Other Bank</option>
             </select>
@@ -506,43 +533,42 @@
         <div class="field-row-2">
           <div class="field">
             <label>Account Number</label>
-            <input type="text" id="empAccount" required>
+            <input type="text" id="empAccount" required autocomplete="off">
           </div>
           <div class="field">
-            <label>Confirm Account</label>
-            <input type="text" id="empAccountConfirm" required>
-            <div class="field-mismatch" id="accMismatchLbl"></div>
+            <label>Confirm Account Number</label>
+            <input type="text" id="empAccountConfirm" required autocomplete="off">
+            <div class="field-hint field-mismatch" id="accMismatchLbl"></div>
           </div>
         </div>
 
         <div class="field-row-2">
           <div class="field">
             <label>IFSC Code</label>
-            <input type="text" id="empIfsc" required>
+            <input type="text" id="empIfsc" required autocomplete="off">
           </div>
           <div class="field">
             <label>Confirm IFSC</label>
-            <input type="text" id="empIfscConfirm" required>
-            <div class="field-mismatch" id="ifscMismatchLbl"></div>
+            <input type="text" id="empIfscConfirm" required autocomplete="off">
+            <div class="field-hint field-mismatch" id="ifscMismatchLbl"></div>
           </div>
         </div>
 
         <div class="modal-actions">
           <button type="button" class="btn-inline secondary" id="cancelModalBtn">Cancel</button>
-          <button type="submit" class="btn-inline" id="saveEmployeeBtn" style="flex:1;">Save Record</button>
+          <button type="submit" class="btn-inline" id="saveEmployeeBtn" style="flex:1;">Save</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- EXPORT PREVIEW MODAL -->
   <div id="exportPreviewModal" class="modal-backdrop hidden">
-    <div class="modal" style="max-width:480px;">
-      <h3>Confirm Batch Generation</h3>
-      <div id="exportPreviewBody" style="font-size:13px; color:var(--text-grey); line-height:1.8;"></div>
+    <div class="modal" style="max-width:520px;">
+      <h3>Confirm Export</h3>
+      <div id="exportPreviewBody" style="font-size:13px; color:var(--text2); line-height:1.7;"></div>
       <div class="modal-actions">
         <button type="button" class="btn-inline secondary" id="cancelExportBtn">Cancel</button>
-        <button type="button" class="btn-inline" id="confirmExportBtn" style="flex:1;">Export Bulk File</button>
+        <button type="button" class="btn-inline" id="confirmExportBtn" style="flex:1;">Confirm → Export</button>
       </div>
     </div>
   </div>

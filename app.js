@@ -1188,11 +1188,34 @@ function wireSettingsForms() {
 
 // ---------------------------------------------------------
 // 11. INACTIVITY AUTO-LOGOUT (15 min)
+// Signs the user out after 15 minutes of no activity — including
+// when the browser tab/window itself is inactive (switched away,
+// minimized, or backgrounded). A plain setInterval alone isn't
+// enough because browsers throttle timers in background tabs, so
+// the 30s check can fire late. We fix that by also re-checking the
+// instant the tab becomes visible/focused again.
 // ---------------------------------------------------------
+const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 let lastActivity = Date.now();
-['click','keydown','mousemove'].forEach(evt => document.addEventListener(evt, () => lastActivity = Date.now()));
-setInterval(() => {
-  if (auth.currentUser && Date.now() - lastActivity > 15 * 60 * 1000) {
+
+function markActivity() { lastActivity = Date.now(); }
+['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(evt =>
+  document.addEventListener(evt, markActivity, { passive: true })
+);
+
+function checkInactivity() {
+  if (auth.currentUser && Date.now() - lastActivity > INACTIVITY_LIMIT_MS) {
     auth.signOut();
   }
-}, 30000);
+}
+
+// Regular check while the tab is in the foreground.
+setInterval(checkInactivity, 30000);
+
+// Catch the case where the tab was backgrounded/minimized long
+// enough that the timer above got throttled — re-check the moment
+// the user comes back, so logout happens immediately if overdue.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) checkInactivity();
+});
+window.addEventListener('focus', checkInactivity);

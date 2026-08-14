@@ -187,7 +187,7 @@ function mapAuthError(err) {
     'auth/weak-password': 'Password should be at least 8 characters.',
     'auth/wrong-password': 'Incorrect email or password.',
     'auth/invalid-credential': 'Incorrect email or password.',
-    'auth/user-not-found': 'No account found with this email.',
+    'auth/user-not-found': 'Incorrect email or password.',
     'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
     'auth/network-request-failed': 'Network error. Check your connection and try again.',
     'auth/popup-closed-by-user': 'Google sign-in was closed before completing.',

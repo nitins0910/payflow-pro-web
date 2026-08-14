@@ -237,6 +237,9 @@ function goToAuthScreen() {
   clearAuthSuccess();
   document.getElementById('signupForm').classList.add('hidden');
   document.getElementById('forgotPasswordForm').classList.add('hidden');
+  document.getElementById('forgotEmailField').classList.remove('hidden');
+  document.getElementById('forgotSubmitBtn').classList.remove('hidden');
+  document.getElementById('forgotSendAgainRow').classList.add('hidden');
   document.getElementById('loginForm').classList.remove('hidden');
   document.getElementById('switchModeWrap').classList.remove('hidden');
   document.getElementById('authDivider').classList.remove('hidden');
@@ -272,8 +275,14 @@ function wireAuthForms() {
 
   // ---- Forgot password ----
   const forgotForm = document.getElementById('forgotPasswordForm');
+  function resetForgotFormVisibility() {
+    document.getElementById('forgotEmailField').classList.remove('hidden');
+    document.getElementById('forgotSubmitBtn').classList.remove('hidden');
+    document.getElementById('forgotSendAgainRow').classList.add('hidden');
+  }
   document.getElementById('forgotPasswordLink').onclick = () => {
     clearAuthError(); clearAuthSuccess();
+    resetForgotFormVisibility();
     loginForm.classList.add('hidden');
     forgotForm.classList.remove('hidden');
     document.getElementById('switchModeWrap').classList.add('hidden');
@@ -284,11 +293,17 @@ function wireAuthForms() {
   document.getElementById('forgotBackBtn').onclick = () => {
     clearAuthError(); clearAuthSuccess();
     forgotForm.reset();
+    resetForgotFormVisibility();
     forgotForm.classList.add('hidden');
     loginForm.classList.remove('hidden');
     document.getElementById('switchModeWrap').classList.remove('hidden');
     document.getElementById('authDivider').classList.remove('hidden');
     document.getElementById('googleBtn').classList.remove('hidden');
+  };
+  document.getElementById('forgotSendAgainBtn').onclick = () => {
+    clearAuthSuccess();
+    resetForgotFormVisibility();
+    document.getElementById('forgotEmail').focus();
   };
   forgotForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -302,6 +317,9 @@ function wireAuthForms() {
       // leaking which emails are registered.
       showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
       forgotForm.reset();
+      document.getElementById('forgotEmailField').classList.add('hidden');
+      document.getElementById('forgotSubmitBtn').classList.add('hidden');
+      document.getElementById('forgotSendAgainRow').classList.remove('hidden');
     } catch (err) {
       if (err.code === 'auth/invalid-email') {
         showAuthError(mapAuthError(err));
@@ -310,6 +328,9 @@ function wireAuthForms() {
         // (e.g. user-not-found) so we don't reveal account existence.
         showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
         forgotForm.reset();
+        document.getElementById('forgotEmailField').classList.add('hidden');
+        document.getElementById('forgotSubmitBtn').classList.add('hidden');
+        document.getElementById('forgotSendAgainRow').classList.remove('hidden');
       }
     } finally {
       btn.disabled = false; btn.textContent = 'Send Reset Link';

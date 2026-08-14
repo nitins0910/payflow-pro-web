@@ -54,11 +54,14 @@
           <p style="color:var(--text2); font-size:13px; margin-bottom:18px;">
             Enter the email on your account. We'll send a link to reset your password.
           </p>
-          <div class="field">
+          <div class="field" id="forgotEmailField">
             <label>Email</label>
             <input type="email" id="forgotEmail" required autocomplete="email">
           </div>
           <button type="submit" class="btn btn-primary" id="forgotSubmitBtn">Send Reset Link</button>
+          <div class="forgot-link-row hidden" id="forgotSendAgainRow" style="justify-content:center; margin-top:14px;">
+            <button type="button" id="forgotSendAgainBtn">Didn't get it? Send again</button>
+          </div>
           <button type="button" class="btn btn-google" style="margin-top:10px;" id="forgotBackBtn">Back to Sign In</button>
         </form>
 

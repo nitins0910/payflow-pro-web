@@ -421,86 +421,81 @@
         <div class="page-head">
           <div>
             <h2>Settings</h2>
-            <p>Manage your sign-in email, password, and account security.</p>
+            <p>Manage your sign-in email and password.</p>
           </div>
         </div>
 
-        <div class="settings-grid">
-
-          <!-- Change Email -->
-          <div class="panel">
-            <h3>Sign-in Email</h3>
-            <div id="settingsEmailMsg"></div>
-            <form id="changeEmailForm">
-              <div class="field">
-                <label>Current Password</label>
-                <input type="password" id="emailChangeCurrentPassword" required autocomplete="current-password">
-              </div>
-              <div class="field">
-                <label>New Email</label>
-                <input type="email" id="newEmailInput" required autocomplete="email">
-              </div>
-              <button type="submit" class="btn-inline" id="changeEmailBtn">Update Email</button>
-              <p class="field-hint">We'll send a verification link to the new address — your email only changes after you confirm it.</p>
-            </form>
-          </div>
-
-          <!-- Change Password -->
-          <div class="panel">
-            <h3>Password</h3>
-            <div id="settingsPasswordMsg"></div>
-            <form id="changePasswordForm">
-              <div class="field password-field">
-                <label>Current Password</label>
-                <input type="password" id="pwChangeCurrentPassword" required autocomplete="current-password">
-                <button type="button" class="pw-toggle" data-target="pwChangeCurrentPassword" aria-label="Show password">
-                  <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                </button>
-              </div>
-              <div class="field password-field">
-                <label>New Password</label>
-                <input type="password" id="pwChangeNewPassword" required minlength="8" autocomplete="new-password">
-                <button type="button" class="pw-toggle" data-target="pwChangeNewPassword" aria-label="Show password">
-                  <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                </button>
-              </div>
-              <button type="submit" class="btn-inline" id="changePasswordBtn">Update Password</button>
-            </form>
-          </div>
-
-          <!-- Two-Factor Authentication -->
-          <div class="panel" style="grid-column:1 / -1;">
-            <h3>Two-Factor Authentication</h3>
-            <div id="mfaStatusBadge" class="security-badge off">2FA is OFF</div>
-            <p style="color:var(--text2); font-size:12.5px; margin-bottom:14px; max-width:560px;">
-              This account handles employee bank account details for salary disbursement. A leaked password alone
-              should not be enough to get in — add a phone number as a second verification step at sign-in.
-            </p>
-            <div id="mfaEnrollBox">
-              <div class="field" style="max-width:260px;">
-                <label>Phone Number (with country code)</label>
-                <input type="tel" id="mfaPhoneInput" placeholder="+91XXXXXXXXXX">
-              </div>
-              <div id="mfaRecaptchaContainer"></div>
-              <button class="btn-inline" id="mfaSendCodeBtn">Send Verification Code</button>
-              <div id="mfaCodeRow" class="hidden" style="margin-top:14px;">
-                <div class="field" style="max-width:200px;">
-                  <label>6-Digit Code</label>
-                  <input type="text" id="mfaCodeInput" maxlength="6" inputmode="numeric">
-                </div>
-                <button class="btn-inline" id="mfaVerifyCodeBtn">Confirm & Enable 2FA</button>
-              </div>
+        <div class="panel" style="padding:0; overflow:hidden;">
+          <div class="settings-list-item" id="openChangeEmailBtn" role="button" tabindex="0">
+            <div>
+              <div class="settings-list-item__title">Sign-in Email</div>
+              <div class="settings-list-item__subtitle">Change the email you use to sign in</div>
             </div>
-            <div id="mfaEnabledBox" class="hidden">
-              <p style="color:var(--text2); font-size:13px; margin-bottom:12px;">2FA is active on this account via SMS.</p>
-              <button class="btn-inline secondary" id="mfaDisableBtn">Turn Off 2FA</button>
-            </div>
+            <span class="settings-list-item__chevron">›</span>
           </div>
-
+          <div class="settings-list-item" id="openChangePasswordBtn" role="button" tabindex="0">
+            <div>
+              <div class="settings-list-item__title">Password</div>
+              <div class="settings-list-item__subtitle">Update your account password</div>
+            </div>
+            <span class="settings-list-item__chevron">›</span>
+          </div>
         </div>
+
       </section>
+
+      <!-- Change Email modal -->
+      <div id="changeEmailModal" class="modal-backdrop hidden">
+        <div class="modal">
+          <h3>Sign-in Email</h3>
+          <div id="settingsEmailMsg"></div>
+          <form id="changeEmailForm">
+            <div class="field">
+              <label>Current Password</label>
+              <input type="password" id="emailChangeCurrentPassword" required autocomplete="current-password">
+            </div>
+            <div class="field">
+              <label>New Email</label>
+              <input type="email" id="newEmailInput" required autocomplete="email">
+            </div>
+            <p class="field-hint">We'll send a verification link to the new address — your email only changes after you confirm it.</p>
+            <div class="modal-actions">
+              <button type="button" class="btn-inline secondary" id="cancelChangeEmailBtn">Cancel</button>
+              <button type="submit" class="btn-inline" id="changeEmailBtn">Update Email</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Change Password modal -->
+      <div id="changePasswordModal" class="modal-backdrop hidden">
+        <div class="modal">
+          <h3>Password</h3>
+          <div id="settingsPasswordMsg"></div>
+          <form id="changePasswordForm">
+            <div class="field password-field">
+              <label>Current Password</label>
+              <input type="password" id="pwChangeCurrentPassword" required autocomplete="current-password">
+              <button type="button" class="pw-toggle" data-target="pwChangeCurrentPassword" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <div class="field password-field">
+              <label>New Password</label>
+              <input type="password" id="pwChangeNewPassword" required minlength="8" autocomplete="new-password">
+              <button type="button" class="pw-toggle" data-target="pwChangeNewPassword" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-inline secondary" id="cancelChangePasswordBtn">Cancel</button>
+              <button type="submit" class="btn-inline" id="changePasswordBtn">Update Password</button>
+            </div>
+          </form>
+        </div>
+      </div>
 
     </main>
   </div>

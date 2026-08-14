@@ -687,7 +687,6 @@ function wireNav() {
       document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
       document.getElementById('page-' + item.dataset.page).classList.remove('hidden');
       if (item.dataset.page === 'audit') loadAuditTrail();
-      if (item.dataset.page === 'settings') refreshMfaStatus();
     });
   });
 }
@@ -1097,11 +1096,11 @@ function wireCompanyForm() {
 // ---------------------------------------------------------
 // 10b. SETTINGS PAGE
 // Lets a signed-in user change their email/password from inside
-// the dashboard, and enroll in SMS-based 2FA. Both the email and
-// password forms re-authenticate with the CURRENT password first —
-// Firebase requires this ("recent login") for sensitive account
-// changes, and it also means someone who merely stole a logged-in
-// session can't silently take over the account.
+// the dashboard. Both the email and password forms re-authenticate
+// with the CURRENT password first — Firebase requires this
+// ("recent login") for sensitive account changes, and it also means
+// someone who merely stole a logged-in session can't silently take
+// over the account.
 // ---------------------------------------------------------
 function settingsMsg(boxId, text, isError) {
   const box = document.getElementById(boxId);
@@ -1120,7 +1119,27 @@ async function reauthenticate(password) {
   await auth.currentUser.reauthenticateWithCredential(cred);
 }
 
+// ---- Settings list → modal open/close ----
+function openSettingsModal(modalId, formId, msgBoxId) {
+  clearSettingsMsg(msgBoxId);
+  document.getElementById(formId).reset();
+  document.getElementById(modalId).classList.remove('hidden');
+}
+function closeSettingsModal(modalId) {
+  document.getElementById(modalId).classList.add('hidden');
+}
+
 function wireSettingsForms() {
+  document.getElementById('openChangeEmailBtn').addEventListener('click', () =>
+    openSettingsModal('changeEmailModal', 'changeEmailForm', 'settingsEmailMsg'));
+  document.getElementById('cancelChangeEmailBtn').addEventListener('click', () =>
+    closeSettingsModal('changeEmailModal'));
+
+  document.getElementById('openChangePasswordBtn').addEventListener('click', () =>
+    openSettingsModal('changePasswordModal', 'changePasswordForm', 'settingsPasswordMsg'));
+  document.getElementById('cancelChangePasswordBtn').addEventListener('click', () =>
+    closeSettingsModal('changePasswordModal'));
+
   // ---- Change email ----
   document.getElementById('changeEmailForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1163,83 +1182,6 @@ function wireSettingsForms() {
       settingsMsg('settingsPasswordMsg', mapAuthError(err), true);
     } finally {
       btn.disabled = false; btn.textContent = 'Update Password';
-    }
-  });
-
-  wireMfaEnrollment();
-}
-
-// ---- Two-Factor Authentication (SMS) ----
-let mfaRecaptchaVerifier = null;
-let mfaVerificationId = null;
-
-function refreshMfaStatus() {
-  const user = auth.currentUser;
-  if (!user) return;
-  const enrolled = user.multiFactor && user.multiFactor.enrolledFactors && user.multiFactor.enrolledFactors.length > 0;
-  const badge = document.getElementById('mfaStatusBadge');
-  badge.textContent = enrolled ? '2FA is ON' : '2FA is OFF';
-  badge.className = 'security-badge ' + (enrolled ? 'on' : 'off');
-  document.getElementById('mfaEnrollBox').classList.toggle('hidden', enrolled);
-  document.getElementById('mfaEnabledBox').classList.toggle('hidden', !enrolled);
-}
-
-function wireMfaEnrollment() {
-  document.getElementById('mfaSendCodeBtn').addEventListener('click', async () => {
-    const phone = document.getElementById('mfaPhoneInput').value.trim();
-    if (!phone) { alert('Enter a phone number first.'); return; }
-    const btn = document.getElementById('mfaSendCodeBtn');
-    btn.disabled = true; btn.textContent = 'Sending...';
-    try {
-      if (!mfaRecaptchaVerifier) {
-        mfaRecaptchaVerifier = new firebase.auth.RecaptchaVerifier('mfaRecaptchaContainer', { size: 'invisible' }, auth);
-      }
-      const session = await auth.currentUser.multiFactor.getSession();
-      const phoneInfoOptions = { phoneNumber: phone, session };
-      const phoneAuthProvider = new firebase.auth.PhoneAuthProvider(auth);
-      mfaVerificationId = await phoneAuthProvider.verifyPhoneNumber(phoneInfoOptions, mfaRecaptchaVerifier);
-      document.getElementById('mfaCodeRow').classList.remove('hidden');
-      btn.textContent = 'Code sent — check your phone';
-    } catch (err) {
-      alert('Could not send code: ' + mapAuthError(err));
-      btn.textContent = 'Send Verification Code';
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  document.getElementById('mfaVerifyCodeBtn').addEventListener('click', async () => {
-    const code = document.getElementById('mfaCodeInput').value.trim();
-    if (!code || !mfaVerificationId) { alert('Request a code first.'); return; }
-    const btn = document.getElementById('mfaVerifyCodeBtn');
-    btn.disabled = true; btn.textContent = 'Confirming...';
-    try {
-      const cred = firebase.auth.PhoneAuthProvider.credential(mfaVerificationId, code);
-      const assertion = firebase.auth.PhoneMultiFactorGenerator.assertion(cred);
-      await auth.currentUser.multiFactor.enroll(assertion, 'Phone number');
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'ENABLE 2FA', 'SMS-based 2FA enabled');
-      document.getElementById('mfaCodeInput').value = '';
-      document.getElementById('mfaPhoneInput').value = '';
-      document.getElementById('mfaCodeRow').classList.add('hidden');
-      refreshMfaStatus();
-    } catch (err) {
-      alert('Could not verify code: ' + mapAuthError(err));
-    } finally {
-      btn.disabled = false; btn.textContent = 'Confirm & Enable 2FA';
-    }
-  });
-
-  document.getElementById('mfaDisableBtn').addEventListener('click', async () => {
-    if (!confirm('Turn off 2FA? Your account will rely on password alone again.')) return;
-    try {
-      const enrolled = auth.currentUser.multiFactor.enrolledFactors;
-      if (enrolled && enrolled.length) {
-        await auth.currentUser.multiFactor.unenroll(enrolled[0]);
-      }
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'DISABLE 2FA', 'SMS-based 2FA turned off');
-      refreshMfaStatus();
-    } catch (err) {
-      alert('Could not disable 2FA: ' + mapAuthError(err));
     }
   });
 }

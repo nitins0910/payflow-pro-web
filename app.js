@@ -18,6 +18,33 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+
+// ---------------------------------------------------------
+// 1b. APP CHECK — blocks scripted / bot signups & requests
+// that don't come from this real web app, so someone can't
+// just hammer createUserWithEmailAndPassword in a loop and
+// burn through the free Firebase quota.
+//
+// SETUP REQUIRED (one-time, in Firebase Console):
+//   1. Console → Build → App Check → Apps → register this web app
+//      with the "reCAPTCHA v3" provider.
+//   2. Copy the site key it gives you and paste it below in place
+//      of "PASTE_YOUR_RECAPTCHA_V3_SITE_KEY_HERE".
+//   3. Console → App Check → APIs tab → mark "Firestore" and
+//      "Authentication" as Enforced (not just Monitored).
+// Until you do this, App Check runs in a harmless no-op state —
+// it does NOT block anything on its own.
+// ---------------------------------------------------------
+const RECAPTCHA_V3_SITE_KEY = "6LcGm4UtAAAAAE6U6J4olvwUW4RDKVcJ0cHTMZ54";
+if (RECAPTCHA_V3_SITE_KEY && RECAPTCHA_V3_SITE_KEY.indexOf("PASTE_YOUR") !== 0) {
+  firebase.appCheck().activate(
+    new firebase.appCheck.ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
+    true // auto-refresh the token
+  );
+} else {
+  console.warn('[App Check] Not activated — RECAPTCHA_V3_SITE_KEY is still a placeholder. Signups are NOT yet protected from bot abuse. See comment above.');
+}
+
 const auth = firebase.auth();
 const db = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
@@ -26,7 +53,7 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
 // (or custom domain once you attach one). It's what makes the
 // verification email link open THIS app instead of Firebase's
 // generic default page.
-const SITE_URL = "https://payflow-pro-4070a.web.app/";
+const SITE_URL = "https://nitins0910.github.io/";
 const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 
 // ---------------------------------------------------------
@@ -130,7 +157,7 @@ const Api = {
 // 3. SCREEN ROUTER
 // Only one of these top-level screens is visible at a time.
 // ---------------------------------------------------------
-const SCREENS = ['auth', 'verify-pending', 'verifying', 'dashboard'];
+const SCREENS = ['auth', 'verify-pending', 'verifying', 'complete-profile', 'dashboard'];
 function showScreen(name) {
   SCREENS.forEach(s => {
     document.getElementById('screen-' + s).classList.toggle('hidden', s !== name);
@@ -151,6 +178,12 @@ function mapAuthError(err) {
     'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
     'auth/network-request-failed': 'Network error. Check your connection and try again.',
     'auth/popup-closed-by-user': 'Google sign-in was closed before completing.',
+    'auth/requires-recent-login': 'For your security, please re-enter your current password to confirm this change.',
+    'auth/email-already-exists': 'That email is already in use by another account.',
+    'auth/invalid-phone-number': 'Please enter a valid phone number with country code, e.g. +91XXXXXXXXXX.',
+    'auth/invalid-verification-code': 'That verification code is incorrect.',
+    'auth/code-expired': 'That verification code has expired. Please request a new one.',
+    'auth/missing-verification-code': 'Please enter the code sent to your phone.',
   };
   return map[err.code] || err.message;
 }
@@ -165,14 +198,49 @@ function clearAuthError() {
   box.textContent = '';
   box.classList.remove('show');
 }
+function showAuthSuccess(msg) {
+  const box = document.getElementById('successBox');
+  box.textContent = msg;
+  box.classList.add('show');
+}
+function clearAuthSuccess() {
+  const box = document.getElementById('successBox');
+  box.textContent = '';
+  box.classList.remove('show');
+}
+
+// ---------------------------------------------------------
+// 4b. PASSWORD SHOW/HIDE TOGGLE (works for any .pw-toggle button
+// paired with an input via data-target, on any screen — login,
+// signup, and later the Settings page).
+// ---------------------------------------------------------
+function wirePasswordToggles() {
+  document.querySelectorAll('.pw-toggle').forEach(btn => {
+    if (btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.target);
+      if (!input) return;
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.classList.toggle('is-visible', !showing);
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+  });
+}
 
 // Always land on the LOGIN form (not signup) whenever we route back
 // to the auth screen — fixes "stuck on signup form" after verifying
 // email, logging out, or clicking "use a different account".
 function goToAuthScreen() {
   clearAuthError();
+  clearAuthSuccess();
   document.getElementById('signupForm').classList.add('hidden');
+  document.getElementById('forgotPasswordForm').classList.add('hidden');
   document.getElementById('loginForm').classList.remove('hidden');
+  document.getElementById('switchModeWrap').classList.remove('hidden');
+  document.getElementById('authDivider').classList.remove('hidden');
+  document.getElementById('googleBtn').classList.remove('hidden');
   document.getElementById('switchToLoginWrap').classList.add('hidden');
   document.getElementById('switchToSignupWrap').classList.remove('hidden');
   showScreen('auth');
@@ -188,19 +256,65 @@ function wireAuthForms() {
   const switchToLogin = document.getElementById('switchToLogin');
 
   switchToSignup.onclick = () => {
-    clearAuthError();
+    clearAuthError(); clearAuthSuccess();
     loginForm.classList.add('hidden');
     signupForm.classList.remove('hidden');
     document.getElementById('switchToSignupWrap').classList.add('hidden');
     document.getElementById('switchToLoginWrap').classList.remove('hidden');
   };
   switchToLogin.onclick = () => {
-    clearAuthError();
+    clearAuthError(); clearAuthSuccess();
     signupForm.classList.add('hidden');
     loginForm.classList.remove('hidden');
     document.getElementById('switchToLoginWrap').classList.add('hidden');
     document.getElementById('switchToSignupWrap').classList.remove('hidden');
   };
+
+  // ---- Forgot password ----
+  const forgotForm = document.getElementById('forgotPasswordForm');
+  document.getElementById('forgotPasswordLink').onclick = () => {
+    clearAuthError(); clearAuthSuccess();
+    loginForm.classList.add('hidden');
+    forgotForm.classList.remove('hidden');
+    document.getElementById('switchModeWrap').classList.add('hidden');
+    document.getElementById('authDivider').classList.add('hidden');
+    document.getElementById('googleBtn').classList.add('hidden');
+    document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value || '';
+  };
+  document.getElementById('forgotBackBtn').onclick = () => {
+    clearAuthError(); clearAuthSuccess();
+    forgotForm.reset();
+    forgotForm.classList.add('hidden');
+    loginForm.classList.remove('hidden');
+    document.getElementById('switchModeWrap').classList.remove('hidden');
+    document.getElementById('authDivider').classList.remove('hidden');
+    document.getElementById('googleBtn').classList.remove('hidden');
+  };
+  forgotForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAuthError(); clearAuthSuccess();
+    const btn = document.getElementById('forgotSubmitBtn');
+    const email = document.getElementById('forgotEmail').value.trim();
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      await auth.sendPasswordResetEmail(email, actionCodeSettings);
+      // Same message whether or not the account exists — avoids
+      // leaking which emails are registered.
+      showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
+      forgotForm.reset();
+    } catch (err) {
+      if (err.code === 'auth/invalid-email') {
+        showAuthError(mapAuthError(err));
+      } else {
+        // Still show the generic success message for anything else
+        // (e.g. user-not-found) so we don't reveal account existence.
+        showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
+        forgotForm.reset();
+      }
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send Reset Link';
+    }
+  });
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -250,12 +364,44 @@ function wireAuthForms() {
   document.getElementById('googleBtn').onclick = async () => {
     clearAuthError();
     try {
-      await auth.signInWithPopup(googleProvider);
-      // Google accounts come pre-verified, routeUser() sends to dashboard.
+      suppressAutoRoute = true; // hold the router while we check if this is a new user
+      const result = await auth.signInWithPopup(googleProvider);
+      const isNewUser = result.additionalUserInfo && result.additionalUserInfo.isNewUser;
+      if (isNewUser) {
+        // New Google sign-ups: confirm/complete their full name before continuing.
+        document.getElementById('googleNameInput').value = result.user.displayName || '';
+        showScreen('complete-profile');
+      } else {
+        suppressAutoRoute = false;
+        routeUser(result.user);
+      }
     } catch (err) {
+      suppressAutoRoute = false;
       showAuthError(mapAuthError(err));
     }
   };
+}
+
+// ---------------------------------------------------------
+// 5b. COMPLETE PROFILE SCREEN (new Google sign-ups only)
+// ---------------------------------------------------------
+function wireCompleteProfileForm() {
+  document.getElementById('completeProfileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('completeProfileBtn');
+    const name = document.getElementById('googleNameInput').value.trim();
+    if (!name) return;
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try {
+      await auth.currentUser.updateProfile({ displayName: name });
+      suppressAutoRoute = false;
+      routeUser(auth.currentUser);
+    } catch (err) {
+      alert('Could not save name: ' + err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Continue';
+    }
+  });
 }
 
 // ---------------------------------------------------------
@@ -355,6 +501,8 @@ function routeUser(user) {
 // ---------------------------------------------------------
 wireAuthForms();
 wireVerifyPending();
+wireCompleteProfileForm();
+wirePasswordToggles();
 
 (function boot() {
   const params = new URLSearchParams(window.location.search);
@@ -408,6 +556,8 @@ async function bootDashboard(user) {
     wireDisbursement();
     wireAudit();
     wireCompanyForm();
+    wireSettingsForms();
+    wirePasswordToggles();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
   }
@@ -421,6 +571,7 @@ function wireNav() {
       document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
       document.getElementById('page-' + item.dataset.page).classList.remove('hidden');
       if (item.dataset.page === 'audit') loadAuditTrail();
+      if (item.dataset.page === 'settings') refreshMfaStatus();
     });
   });
 }
@@ -435,6 +586,27 @@ async function loadEmployees() {
   }
   renderEmployeeTable();
   renderDisbursementList();
+}
+
+// Bank account numbers are sensitive — mask them on screen by
+// default (last 4 digits only) with a click-to-reveal toggle, so
+// they aren't sitting in plain view on a shared screen or during
+// a screen-share.
+function maskAccount(acc) {
+  const s = String(acc || '');
+  if (s.length <= 4) return s;
+  return '•'.repeat(s.length - 4) + s.slice(-4);
+}
+function wireMaskedAccountToggles(container) {
+  container.querySelectorAll('.masked-acc button').forEach(btn => {
+    btn.onclick = () => {
+      const span = btn.previousElementSibling;
+      const revealed = span.dataset.revealed === '1';
+      span.textContent = revealed ? maskAccount(span.dataset.full) : span.dataset.full;
+      span.dataset.revealed = revealed ? '0' : '1';
+      btn.textContent = revealed ? 'Show' : 'Hide';
+    };
+  });
 }
 
 function renderEmployeeTable() {
@@ -453,7 +625,7 @@ function renderEmployeeTable() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${emp.name}</td>
-      <td>${emp.accountNumber}</td>
+      <td><span class="masked-acc"><span data-full="${emp.accountNumber}" data-revealed="0">${maskAccount(emp.accountNumber)}</span><button type="button">Show</button></span></td>
       <td>${emp.ifsc}</td>
       <td>${emp.transferType}</td>
       <td>${emp.empCode}</td>
@@ -466,6 +638,7 @@ function renderEmployeeTable() {
 
   tbody.querySelectorAll('[data-edit]').forEach(btn => btn.onclick = () => openEditModal(btn.dataset.edit));
   tbody.querySelectorAll('[data-delete]').forEach(btn => btn.onclick = () => handleDelete(btn.dataset.delete));
+  wireMaskedAccountToggles(tbody);
 }
 
 function wireEmployeeForm() {
@@ -616,7 +789,7 @@ function renderDisbursementList() {
     tr.innerHTML = `
       <td>${emp.empCode}</td>
       <td>${emp.name}</td>
-      <td>${emp.accountNumber}</td>
+      <td><span class="masked-acc"><span data-full="${emp.accountNumber}" data-revealed="0">${maskAccount(emp.accountNumber)}</span><button type="button">Show</button></span></td>
       <td style="text-align:right;">
         <input type="text" data-acc="${emp.accountNumber}" placeholder="0.00"
           style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); color:var(--success); padding:6px 8px;">
@@ -626,6 +799,7 @@ function renderDisbursementList() {
     inputEl.addEventListener('input', updateBatchTotal);
     salaryInputs[emp.accountNumber] = { inputEl, name: emp.name, ifsc: emp.ifsc, empCode: emp.empCode };
   });
+  wireMaskedAccountToggles(tbody);
   updateBatchTotal();
 }
 
@@ -800,6 +974,156 @@ function wireCompanyForm() {
       alert('Company profile updated.');
     } catch (err) {
       alert('Save failed: ' + err.message);
+    }
+  });
+}
+
+// ---------------------------------------------------------
+// 10b. SETTINGS PAGE
+// Lets a signed-in user change their email/password from inside
+// the dashboard, and enroll in SMS-based 2FA. Both the email and
+// password forms re-authenticate with the CURRENT password first —
+// Firebase requires this ("recent login") for sensitive account
+// changes, and it also means someone who merely stole a logged-in
+// session can't silently take over the account.
+// ---------------------------------------------------------
+function settingsMsg(boxId, text, isError) {
+  const box = document.getElementById(boxId);
+  box.textContent = text;
+  box.className = isError ? 'error-msg show' : 'success-msg show';
+  box.style.marginBottom = '16px';
+}
+function clearSettingsMsg(boxId) {
+  const box = document.getElementById(boxId);
+  box.textContent = '';
+  box.className = '';
+}
+
+async function reauthenticate(password) {
+  const cred = firebase.auth.EmailAuthProvider.credential(auth.currentUser.email, password);
+  await auth.currentUser.reauthenticateWithCredential(cred);
+}
+
+function wireSettingsForms() {
+  // ---- Change email ----
+  document.getElementById('changeEmailForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearSettingsMsg('settingsEmailMsg');
+    const btn = document.getElementById('changeEmailBtn');
+    const currentPassword = document.getElementById('emailChangeCurrentPassword').value;
+    const newEmail = document.getElementById('newEmailInput').value.trim();
+    btn.disabled = true; btn.textContent = 'Updating...';
+    try {
+      await reauthenticate(currentPassword);
+      // verifyBeforeUpdateEmail sends a confirmation link to the NEW
+      // address and only swaps the email once that link is clicked —
+      // so a typo or someone else's inbox can't hijack the account.
+      await auth.currentUser.verifyBeforeUpdateEmail(newEmail, actionCodeSettings);
+      settingsMsg('settingsEmailMsg', `Verification link sent to ${newEmail}. Your sign-in email will update once you click it.`, false);
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'REQUEST EMAIL CHANGE', `Requested change to ${newEmail}`);
+      document.getElementById('changeEmailForm').reset();
+    } catch (err) {
+      settingsMsg('settingsEmailMsg', mapAuthError(err), true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Update Email';
+    }
+  });
+
+  // ---- Change password ----
+  document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearSettingsMsg('settingsPasswordMsg');
+    const btn = document.getElementById('changePasswordBtn');
+    const currentPassword = document.getElementById('pwChangeCurrentPassword').value;
+    const newPassword = document.getElementById('pwChangeNewPassword').value;
+    btn.disabled = true; btn.textContent = 'Updating...';
+    try {
+      await reauthenticate(currentPassword);
+      await auth.currentUser.updatePassword(newPassword);
+      settingsMsg('settingsPasswordMsg', 'Password updated.', false);
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'CHANGE PASSWORD', 'Password updated from Settings');
+      document.getElementById('changePasswordForm').reset();
+    } catch (err) {
+      settingsMsg('settingsPasswordMsg', mapAuthError(err), true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Update Password';
+    }
+  });
+
+  wireMfaEnrollment();
+}
+
+// ---- Two-Factor Authentication (SMS) ----
+let mfaRecaptchaVerifier = null;
+let mfaVerificationId = null;
+
+function refreshMfaStatus() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const enrolled = user.multiFactor && user.multiFactor.enrolledFactors && user.multiFactor.enrolledFactors.length > 0;
+  const badge = document.getElementById('mfaStatusBadge');
+  badge.textContent = enrolled ? '2FA is ON' : '2FA is OFF';
+  badge.className = 'security-badge ' + (enrolled ? 'on' : 'off');
+  document.getElementById('mfaEnrollBox').classList.toggle('hidden', enrolled);
+  document.getElementById('mfaEnabledBox').classList.toggle('hidden', !enrolled);
+}
+
+function wireMfaEnrollment() {
+  document.getElementById('mfaSendCodeBtn').addEventListener('click', async () => {
+    const phone = document.getElementById('mfaPhoneInput').value.trim();
+    if (!phone) { alert('Enter a phone number first.'); return; }
+    const btn = document.getElementById('mfaSendCodeBtn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      if (!mfaRecaptchaVerifier) {
+        mfaRecaptchaVerifier = new firebase.auth.RecaptchaVerifier('mfaRecaptchaContainer', { size: 'invisible' }, auth);
+      }
+      const session = await auth.currentUser.multiFactor.getSession();
+      const phoneInfoOptions = { phoneNumber: phone, session };
+      const phoneAuthProvider = new firebase.auth.PhoneAuthProvider(auth);
+      mfaVerificationId = await phoneAuthProvider.verifyPhoneNumber(phoneInfoOptions, mfaRecaptchaVerifier);
+      document.getElementById('mfaCodeRow').classList.remove('hidden');
+      btn.textContent = 'Code sent — check your phone';
+    } catch (err) {
+      alert('Could not send code: ' + mapAuthError(err));
+      btn.textContent = 'Send Verification Code';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('mfaVerifyCodeBtn').addEventListener('click', async () => {
+    const code = document.getElementById('mfaCodeInput').value.trim();
+    if (!code || !mfaVerificationId) { alert('Request a code first.'); return; }
+    const btn = document.getElementById('mfaVerifyCodeBtn');
+    btn.disabled = true; btn.textContent = 'Confirming...';
+    try {
+      const cred = firebase.auth.PhoneAuthProvider.credential(mfaVerificationId, code);
+      const assertion = firebase.auth.PhoneMultiFactorGenerator.assertion(cred);
+      await auth.currentUser.multiFactor.enroll(assertion, 'Phone number');
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'ENABLE 2FA', 'SMS-based 2FA enabled');
+      document.getElementById('mfaCodeInput').value = '';
+      document.getElementById('mfaPhoneInput').value = '';
+      document.getElementById('mfaCodeRow').classList.add('hidden');
+      refreshMfaStatus();
+    } catch (err) {
+      alert('Could not verify code: ' + mapAuthError(err));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Confirm & Enable 2FA';
+    }
+  });
+
+  document.getElementById('mfaDisableBtn').addEventListener('click', async () => {
+    if (!confirm('Turn off 2FA? Your account will rely on password alone again.')) return;
+    try {
+      const enrolled = auth.currentUser.multiFactor.enrolledFactors;
+      if (enrolled && enrolled.length) {
+        await auth.currentUser.multiFactor.unenroll(enrolled[0]);
+      }
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'DISABLE 2FA', 'SMS-based 2FA turned off');
+      refreshMfaStatus();
+    } catch (err) {
+      alert('Could not disable 2FA: ' + mapAuthError(err));
     }
   });
 }

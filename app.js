@@ -49,14 +49,6 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-// SESSION persistence: the sign-in is only kept for the current browser tab.
-// Closing the tab or the whole browser clears it, so the next visit lands
-// back on the sign-in screen instead of staying logged in indefinitely
-// (the previous default, LOCAL persistence, survived browser restarts).
-auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(err => {
-  console.warn('[Auth] Could not set session persistence:', err.message);
-});
-
 // IMPORTANT: this must be your real, live Firebase Hosting URL
 // (or custom domain once you attach one). It's what makes the
 // verification email link open THIS app instead of Firebase's
@@ -119,12 +111,13 @@ const Api = {
     return {
       name: d.companyName || '',
       accountNumber: d.accountNumber || '',
-      sysId: d.sysId || ''
+      sysId: d.sysId || '',
+      bankName: d.bankName || 'SBI'
     };
   },
-  async updateCompanyProfile({ name, accountNumber, sysId }) {
+  async updateCompanyProfile({ name, accountNumber, sysId, bankName }) {
     await userRef().set({
-      companyName: name, accountNumber, sysId,
+      companyName: name, accountNumber, sysId, bankName,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   },
@@ -172,6 +165,206 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[ch]));
+}
+
+// ---------------------------------------------------------
+// 2c. MULTI-BANK BULK PAYMENT FILE SUPPORT
+//
+// BANKS: the master list backing the Company Profile "bank" dropdown.
+//   key         — stable internal id, stored in Firestore as bankName
+//   label       — text shown in the dropdown
+//   ifscPrefix  — the 4-letter IFSC bank code used to detect an
+//                 "internal / same-bank" transfer for that bank
+//
+// BankFormatters: one entry per BANKS key, keyed the same way, each
+// providing the file extension/MIME type and a generate() function
+// that turns a batch into that bank's exact file layout. This is the
+// single place to touch when a bank changes its file spec or a new
+// bank needs to be added — nothing else in the export pipeline is
+// bank-specific.
+//
+// NOTE: the exact CSV column layouts below follow the specs supplied
+// for SBI, PNB, BOB, HDFC, ICICI, Axis and Kotak. Canara, Union,
+// IndusInd, Yes Bank and the payments banks don't have a distinct
+// spec on file, so they fall back to a generic standard CSV layout —
+// confirm the live column order with each bank's CMS/corporate net
+// banking portal before using those in production.
+// ---------------------------------------------------------
+const BANKS = [
+  { key: 'SBI',      label: 'State Bank of India (SBI)',   ifscPrefix: 'SBIN' },
+  { key: 'PNB',      label: 'Punjab National Bank (PNB)',  ifscPrefix: 'PUNB' },
+  { key: 'BOB',      label: 'Bank of Baroda (BOB)',        ifscPrefix: 'BARB' },
+  { key: 'CNRB',     label: 'Canara Bank (CNRB)',          ifscPrefix: 'CNRB' },
+  { key: 'UBI',      label: 'Union Bank of India (UBI)',   ifscPrefix: 'UBIN' },
+  { key: 'INDB',     label: 'Indian Bank (INDB)',          ifscPrefix: 'IDIB' },
+  { key: 'HDFC',     label: 'HDFC Bank (HDFC)',            ifscPrefix: 'HDFC' },
+  { key: 'ICIC',     label: 'ICICI Bank (ICIC)',           ifscPrefix: 'ICIC' },
+  { key: 'UTIB',     label: 'Axis Bank (UTIB)',            ifscPrefix: 'UTIB' },
+  { key: 'KKBK',     label: 'Kotak Mahindra Bank (KKBK)',  ifscPrefix: 'KKBK' },
+  { key: 'INDUSIND', label: 'IndusInd Bank (INDB)',        ifscPrefix: 'INDB' },
+  { key: 'YESB',     label: 'Yes Bank (YESB)',             ifscPrefix: 'YESB' },
+  { key: 'PAYTM',    label: 'Payments Bank — Paytm',       ifscPrefix: 'PYTM' },
+  { key: 'AIRTEL',   label: 'Payments Bank — Airtel',      ifscPrefix: 'AIRP' },
+];
+const BANK_BY_KEY = Object.fromEntries(BANKS.map(b => [b.key, b]));
+
+// Wraps a CSV field in quotes if it contains a comma, quote, or newline.
+function csvField(value) {
+  const s = String(value ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csvRow(values) { return values.map(csvField).join(','); }
+
+// Determines NEFT / RTGS / IMPS / Same Bank for a single transaction on
+// any non-SBI bank, per the rules in the spec:
+//  - Same Bank / Internal: beneficiary IFSC starts with the company's
+//    own bank's 4-letter code
+//  - otherwise RTGS if amount >= ₹2,00,000, else NEFT
+//  - IMPS is an optional override toggle for any cross-bank transfer
+function determineTransactionMode(bankKey, ifsc, amount, preferImps) {
+  const bank = BANK_BY_KEY[bankKey];
+  if (!bank) return 'NEFT';
+  const sameBank = bank.ifscPrefix && String(ifsc || '').toUpperCase().startsWith(bank.ifscPrefix);
+  if (sameBank) return 'Same Bank';
+  if (preferImps) return 'IMPS';
+  return amount >= 200000 ? 'RTGS' : 'NEFT';
+}
+
+// ctx passed to every generate() below:
+//   companyProfile { name, accountNumber, sysId, bankName }
+//   lines[]  { acc, empCode, name, ifsc, amount, mode }
+//   total, batchId, txnDate ('DD/MM/YYYY'), monthName, year, tft
+const BankFormatters = {
+  SBI: {
+    ext: 'txt', mime: 'text/plain;charset=utf-8',
+    generate(ctx) {
+      const prefix = ctx.tft === 'Same Bank' ? 'SBST' : 'OBST';
+      const empLines = ctx.lines.map(l => {
+        const seqStr = `${prefix}${ctx.shortYear}${ctx.monthRaw}E${l.empCode}`;
+        return `${l.acc}#${l.ifsc}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${l.name}#SALARY OF ${ctx.monthName} ${ctx.year}#`;
+      });
+      const header = `${ctx.companyProfile.accountNumber}#${ctx.companyProfile.sysId}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${ctx.companyProfile.name}#SALARY OF ${ctx.monthName} ${ctx.year}#`;
+      return [header, ...empLines].join('\n') + '\n';
+    }
+  },
+  PNB: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'DebitAcc,BenAcc,Amount,BenName,IFSC,TxnType,TxnDate,Remarks';
+      const rows = ctx.lines.map(l => csvRow([
+        ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc, l.mode,
+        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  BOB: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'PaymentType,DebitAcc,BenAcc,BenName,Amount,IFSC,Remarks,TxnDate';
+      const rows = ctx.lines.map(l => csvRow([
+        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+        `SALARY OF ${ctx.monthName} ${ctx.year}`, ctx.txnDate
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  CNRB: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
+      const rows = ctx.lines.map(l => csvRow([
+        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  UBI: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
+      const rows = ctx.lines.map(l => csvRow([
+        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  INDB: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
+      const rows = ctx.lines.map(l => csvRow([
+        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  HDFC: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Email,Remarks';
+      const rows = ctx.lines.map(l => csvRow([
+        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+        ctx.txnDate, '', `SALARY OF ${ctx.monthName} ${ctx.year}`
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  ICIC: {
+    ext: 'txt', mime: 'text/plain;charset=utf-8',
+    generate(ctx) {
+      const rows = ctx.lines.map(l =>
+        [l.mode, ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc,
+          `SALARY OF ${ctx.monthName} ${ctx.year}`].join('^'));
+      return rows.join('\n') + '\n';
+    }
+  },
+  UTIB: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'PaymentType,DebitAcc,BenAcc,BenName,Amount,IFSC,Remarks,TxnDate';
+      const rows = ctx.lines.map(l => csvRow([
+        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+        `SALARY OF ${ctx.monthName} ${ctx.year}`, ctx.txnDate
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  KKBK: {
+    ext: 'csv', mime: 'text/csv;charset=utf-8',
+    generate(ctx) {
+      const header = 'ClientCode,DebitAcc,BenAcc,Amount,BenName,IFSC,ValueDate,Narration';
+      const rows = ctx.lines.map(l => csvRow([
+        ctx.companyProfile.sysId, ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2),
+        l.name, l.ifsc, ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
+      ]));
+      return [header, ...rows].join('\r\n') + '\r\n';
+    }
+  },
+  // Generic standard CSV layout — used for banks without a distinct
+  // spec supplied (IndusInd, Yes Bank, Paytm, Airtel Payments Bank).
+  INDUSIND: { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
+  YESB:     { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
+  PAYTM:    { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
+  AIRTEL:   { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
+};
+function genericCsv(ctx) {
+  const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
+  const rows = ctx.lines.map(l => csvRow([
+    l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+    ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
+  ]));
+  return [header, ...rows].join('\r\n') + '\r\n';
+}
+
+function populateCompanyBankSelect() {
+  const sel = document.getElementById('companyBankInput');
+  if (!sel || sel.dataset.populated) return;
+  sel.dataset.populated = '1';
+  sel.innerHTML = BANKS.map(b => `<option value="${b.key}">${escapeHtml(b.label)}</option>`).join('');
 }
 
 // ---------------------------------------------------------
@@ -645,7 +838,7 @@ wirePasswordToggles();
 let employees = [];
 let editingEmployeeId = null;
 let salaryInputs = {};
-let companyProfile = { name: '', accountNumber: '', sysId: '' };
+let companyProfile = { name: '', accountNumber: '', sysId: '', bankName: 'SBI' };
 let dashboardBooted = false;
 let currentUser = null;
 
@@ -657,10 +850,53 @@ function formatDateDDMMYYYY(d) {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
+// ---------------------------------------------------------
+// Google account UI — profile photo in the sidebar, and hiding the
+// "change email/password" settings for accounts signed in via Google
+// (those credentials live with Google, not with Firebase's email/
+// password provider, so there's nothing here to change).
+// ---------------------------------------------------------
+function getInitials(name, email) {
+  const src = (name || email || '').trim();
+  if (!src) return '?';
+  const parts = src.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+function isGoogleAccount(user) {
+  return !!user && Array.isArray(user.providerData) &&
+    user.providerData.some(p => p.providerId === 'google.com');
+}
+function applyUserProfileUI(user) {
+  const imgEl = document.getElementById('userAvatarImg');
+  const fallbackEl = document.getElementById('userAvatarFallback');
+
+  if (user.photoURL) {
+    imgEl.src = user.photoURL;
+    imgEl.classList.remove('hidden');
+    fallbackEl.classList.add('hidden');
+    // Google photo URLs can occasionally fail to load (revoked, rate
+    // limited, offline) — fall back to initials instead of a broken image.
+    imgEl.onerror = () => {
+      imgEl.classList.add('hidden');
+      fallbackEl.classList.remove('hidden');
+    };
+  } else {
+    imgEl.classList.add('hidden');
+    fallbackEl.textContent = getInitials(user.displayName, user.email);
+    fallbackEl.classList.remove('hidden');
+  }
+
+  const google = isGoogleAccount(user);
+  document.getElementById('settingsCredentialsList').classList.toggle('hidden', google);
+  document.getElementById('settingsGoogleNotice').classList.toggle('hidden', !google);
+}
+
 async function bootDashboard(user) {
   currentUser = user;
   document.getElementById('userName').textContent = user.displayName || 'PayFlow User';
   document.getElementById('userEmail').textContent = user.email;
+  applyUserProfileUI(user);
 
   try {
     await initUserContext(user.uid);
@@ -669,8 +905,9 @@ async function bootDashboard(user) {
     return;
   }
 
-  populateMonthYear();
+  initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
+  renderEmployeeKpis();
 
   if (!dashboardBooted) {
     dashboardBooted = true;
@@ -682,8 +919,69 @@ async function bootDashboard(user) {
     wireCompanyForm();
     wireSettingsForms();
     wirePasswordToggles();
+    wireModalCloseButtons();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
+  }
+}
+
+// Generic "×" close button on every modal — just hides the backdrop,
+// same as each modal's own Cancel button, without needing bespoke
+// wiring per modal.
+function wireModalCloseButtons() {
+  document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modal = document.getElementById(btn.dataset.modal);
+      if (modal) modal.classList.add('hidden');
+    });
+  });
+}
+
+// Populates the KPI summary row at the top of the Employee Ledger page:
+// headcount, the company's configured bank, this calendar month's total
+// disbursed amount, and the most recent export batch — all derived from
+// data already being fetched (employees, company profile, disbursement
+// history), so no extra Firestore reads are introduced.
+async function renderEmployeeKpis() {
+  const totalEl = document.getElementById('kpiTotalEmployees');
+  const bankEl = document.getElementById('kpiCompanyBank');
+  const monthEl = document.getElementById('kpiMonthDisbursed');
+  const lastEl = document.getElementById('kpiLastExport');
+  const lastSubEl = document.getElementById('kpiLastExportSub');
+  if (!totalEl) return; // KPI row only exists on the Employee Ledger page
+
+  totalEl.textContent = employees.length;
+  const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
+  bankEl.textContent = bank.label;
+
+  let history = [];
+  try {
+    history = await Api.getDisbursementHistory();
+  } catch (err) {
+    console.error(err);
+  }
+
+  const now = new Date();
+  let monthTotal = 0;
+  history.forEach(row => {
+    const created = row.createdAt && row.createdAt.toDate ? row.createdAt.toDate() : null;
+    if (created && created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()) {
+      const amt = parseFloat(row.amount);
+      if (!isNaN(amt)) monthTotal += amt;
+    }
+  });
+  monthEl.textContent = `₹ ${monthTotal.toFixed(2)}`;
+
+  // getDisbursementHistory() is already ordered newest-first, so the
+  // first row belongs to the most recently exported batch.
+  const last = history[0];
+  if (last) {
+    lastEl.textContent = last.batchId || '—';
+    const d = last.createdAt && last.createdAt.toDate ? last.createdAt.toDate().toLocaleDateString() : (last.transferDate || '');
+    lastSubEl.textContent = d ? `on ${d}` : '';
+  } else {
+    lastEl.textContent = '—';
+    lastSubEl.textContent = 'No exports yet';
   }
 }
 
@@ -732,6 +1030,17 @@ function wireMaskedAccountToggles(container) {
   });
 }
 
+// Renders a transfer-mode/type value (Same Bank, RTGS, NEFT, IMPS,
+// Other Bank) as a small colored pill instead of plain text.
+function badgeForMode(mode) {
+  const cls = mode === 'Same Bank' ? 'badge-green'
+    : mode === 'RTGS' ? 'badge-blue'
+    : mode === 'NEFT' ? 'badge-blue'
+    : mode === 'IMPS' ? 'badge-amber'
+    : 'badge-grey';
+  return `<span class="badge ${cls}">${escapeHtml(mode || '—')}</span>`;
+}
+
 function renderEmployeeTable() {
   const tbody = document.getElementById('employeeTableBody');
   const emptyState = document.getElementById('employeeEmptyState');
@@ -750,7 +1059,7 @@ function renderEmployeeTable() {
       <td>${escapeHtml(emp.name)}</td>
       <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
       <td>${escapeHtml(emp.ifsc)}</td>
-      <td>${escapeHtml(emp.transferType)}</td>
+      <td>${badgeForMode(emp.transferType)}</td>
       <td>${escapeHtml(emp.empCode)}</td>
       <td class="row-actions">
         <button data-edit="${escapeHtml(emp.id)}">Edit</button>
@@ -1031,36 +1340,38 @@ function parseCsv(text) {
   return out;
 }
 
-function populateMonthYear() {
-  const monthSel = document.getElementById('disbMonth');
-  const yearSel = document.getElementById('disbYear');
+// Initializes the two native date pickers on the Disbursement page:
+//  - Payroll Cycle (<input type="month">) — defaults to the current
+//    month, drives the payroll-cycle label used on the exported file.
+//  - Transfer Date (<input type="date">) — defaults to today but is
+//    fully editable, so a batch can be dated for a future value date
+//    instead of always using "today".
+function initDisbursementDateFields() {
   const now = new Date();
-  monthSel.innerHTML = MONTHS.map((m, i) => `<option value="${String(i+1).padStart(2,'0')}">${String(i+1).padStart(2,'0')} - ${m}</option>`).join('');
-  monthSel.value = String(now.getMonth()+1).padStart(2,'0');
-  const cy = now.getFullYear();
-  yearSel.innerHTML = Array.from({length:11}, (_, i) => cy+i).map(y => `<option value="${y}">${y}</option>`).join('');
-  yearSel.value = String(cy);
-
-  // Transfer date defaults to today but is a real <input type="date">, so
-  // the user can pick any date for the exported file instead of always
-  // getting the current date.
-  const dateInput = document.getElementById('disbDateDisplay');
-  if (dateInput && !dateInput.value) {
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth()+1).padStart(2,'0');
-    const dd = String(now.getDate()).padStart(2,'0');
-    dateInput.value = `${yyyy}-${mm}-${dd}`;
-  }
+  const monthInput = document.getElementById('disbPayrollMonth');
+  const dateInput = document.getElementById('disbTransferDate');
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (monthInput && !monthInput.value) monthInput.value = ym;
+  if (dateInput && !dateInput.value) dateInput.value = ymd;
 }
 
-// Reads the user-selected transfer date (yyyy-mm-dd from the date input)
-// and returns it formatted as dd/mm/yyyy for the export file. Falls back
-// to today if nothing is selected yet.
-function getSelectedTransferDate() {
-  const raw = document.getElementById('disbDateDisplay').value;
-  if (!raw) return formatDateDDMMYYYY(new Date());
-  const [yyyy, mm, dd] = raw.split('-');
-  return `${dd}/${mm}/${yyyy}`;
+// Reads the Payroll Cycle picker ("YYYY-MM") into the { monthRaw,
+// year, monthName } shape the rest of the export pipeline expects.
+function getPayrollCycle() {
+  const raw = document.getElementById('disbPayrollMonth').value; // "YYYY-MM"
+  const [year, monthRaw] = String(raw || '').split('-');
+  const monthName = MONTHS[parseInt(monthRaw, 10) - 1] || '';
+  return { monthRaw: monthRaw || '', year: year || '', monthName };
+}
+
+// Reads the Transfer Date picker ("YYYY-MM-DD") and reformats it to
+// the DD/MM/YYYY convention every bank file / audit record uses.
+function getTransferDateDDMMYYYY() {
+  const raw = document.getElementById('disbTransferDate').value; // "YYYY-MM-DD"
+  const [y, m, d] = String(raw || '').split('-');
+  if (!y || !m || !d) return '';
+  return `${d}/${m}/${y}`;
 }
 
 function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
@@ -1068,7 +1379,7 @@ function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
   warnEl.textContent = '';
   inputEl.classList.remove('input-mismatch');
   if (!v) {
-    lightEl.style.background = '#F43F5E';
+    lightEl.style.background = '#FF4757';
     updateBatchTotal();
     return;
   }
@@ -1081,18 +1392,55 @@ function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
     if (!ok) break;
   }
   if (!ok) {
-    lightEl.style.background = '#F43F5E';
+    lightEl.style.background = '#FF4757';
     warnEl.textContent = '⚠ INVALID FORMAT';
   } else {
     const val = parseFloat(v);
     if (!isNaN(val) && val > 0) {
-      lightEl.style.background = '#22C55E';
+      lightEl.style.background = '#00E676';
     } else {
-      lightEl.style.background = '#F43F5E';
+      lightEl.style.background = '#FF4757';
       warnEl.textContent = '⚠ MUST BE > 0';
     }
   }
   updateBatchTotal();
+}
+
+// Shows/hides the SBI-style "Transfer Type" selector vs. the
+// cross-bank "Prefer IMPS" toggle, and refreshes the bank badge —
+// called whenever the company's bank changes.
+function updateDisbursementModeUI() {
+  const bankKey = companyProfile.bankName || 'SBI';
+  const bank = BANK_BY_KEY[bankKey] || BANK_BY_KEY.SBI;
+  const isSbi = bankKey === 'SBI';
+
+  const badge = document.getElementById('disbBankBadge');
+  if (badge) badge.textContent = `BANK: ${bank.label}`;
+
+  const subtitle = document.getElementById('disbSubtitle');
+  if (subtitle) {
+    subtitle.textContent = isSbi
+      ? 'Enter amounts and export the SBI bulk payment file.'
+      : `Enter amounts and export the ${bank.label} bulk payment file. Mode (Same Bank / RTGS / NEFT / IMPS) is auto-detected per beneficiary.`;
+  }
+
+  const ttWrap = document.getElementById('disbTransferTypeWrap');
+  const impsWrap = document.getElementById('disbImpsWrap');
+  if (ttWrap) ttWrap.classList.toggle('hidden', !isSbi);
+  if (impsWrap) impsWrap.classList.toggle('hidden', isSbi);
+}
+
+// For the currently-selected bank, works out which employees belong in
+// the batch and what transfer mode applies to each one.
+//  - SBI: unchanged behaviour — filtered by the employee's own stored
+//    Same Bank / Other Bank transferType.
+//  - Every other bank: all employees are shown, and the mode is
+//    computed live from IFSC + amount (+ the "Prefer IMPS" toggle).
+function currentModeFor(ifsc, amount) {
+  const bankKey = companyProfile.bankName || 'SBI';
+  if (bankKey === 'SBI') return null;
+  const preferImps = !!document.getElementById('disbUseImps')?.checked;
+  return determineTransactionMode(bankKey, ifsc, amount, preferImps);
 }
 
 function renderDisbursementList() {
@@ -1100,6 +1448,8 @@ function renderDisbursementList() {
   const emptyState = document.getElementById('disbEmptyState');
   if (!tbody) return;
 
+  const bankKey = companyProfile.bankName || 'SBI';
+  const isSbi = bankKey === 'SBI';
   const tft = document.getElementById('disbTransferType').value;
   const query = (document.getElementById('disbSearch').value || '').trim().toLowerCase();
 
@@ -1107,7 +1457,7 @@ function renderDisbursementList() {
   tbody.innerHTML = '';
 
   const filtered = employees.filter(e =>
-    e.transferType === tft &&
+    (isSbi ? e.transferType === tft : true) &&
     (!query || e.name.toLowerCase().includes(query) || String(e.accountNumber).includes(query) || String(e.empCode).includes(query)));
 
   if (!filtered.length) { emptyState.classList.remove('hidden'); updateBatchTotal(); return; }
@@ -1119,20 +1469,29 @@ function renderDisbursementList() {
       <td>${escapeHtml(emp.empCode)}</td>
       <td>${escapeHtml(emp.name)}</td>
       <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
+      <td><span data-mode>${isSbi ? badgeForMode(tft) : badgeForMode('—')}</span></td>
       <td style="text-align:right;">
         <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
           <span style="font-size:10px; color:var(--danger); font-weight:700;" data-warn></span>
-          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#F43F5E;" data-light></span>
+          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#FF4757;" data-light></span>
           <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00"
-            style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); color:var(--success); padding:6px 8px;">
+            style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--success); padding:6px 8px;">
         </div>
       </td>`;
     tbody.appendChild(tr);
     const inputEl = tr.querySelector('input');
     const lightEl = tr.querySelector('[data-light]');
     const warnEl  = tr.querySelector('[data-warn]');
-    inputEl.addEventListener('input', () => validateLiveAmountEntry(inputEl, lightEl, warnEl));
-    salaryInputs[emp.accountNumber] = { inputEl, name: emp.name, ifsc: emp.ifsc, empCode: emp.empCode };
+    const modeEl  = tr.querySelector('[data-mode]');
+    inputEl.addEventListener('input', () => {
+      validateLiveAmountEntry(inputEl, lightEl, warnEl);
+      if (!isSbi) {
+        const v = parseFloat(inputEl.value);
+        modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, isNaN(v) ? 0 : v));
+      }
+    });
+    if (!isSbi) modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, 0));
+    salaryInputs[emp.accountNumber] = { inputEl, modeEl, name: emp.name, ifsc: emp.ifsc, empCode: emp.empCode };
   });
   wireMaskedAccountToggles(tbody);
   updateBatchTotal();
@@ -1150,13 +1509,14 @@ function updateBatchTotal() {
 function wireDisbursement() {
   document.getElementById('disbTransferType').addEventListener('change', renderDisbursementList);
   document.getElementById('disbSearch').addEventListener('input', renderDisbursementList);
+  document.getElementById('disbUseImps').addEventListener('change', renderDisbursementList);
   document.getElementById('disbClearBtn').addEventListener('click', () => {
     document.querySelectorAll('#disbTableBody tr').forEach(tr => {
       const inputEl = tr.querySelector('input');
       const lightEl = tr.querySelector('[data-light]');
       const warnEl  = tr.querySelector('[data-warn]');
       if (inputEl) inputEl.value = '';
-      if (lightEl) lightEl.style.background = '#F43F5E';
+      if (lightEl) lightEl.style.background = '#FF4757';
       if (warnEl)  warnEl.textContent = '';
     });
     updateBatchTotal();
@@ -1165,10 +1525,13 @@ function wireDisbursement() {
   document.getElementById('cancelExportBtn').addEventListener('click', () => {
     document.getElementById('exportPreviewModal').classList.add('hidden');
   });
+  updateDisbursementModeUI();
   renderDisbursementList();
 }
 
 function collectBatchLines() {
+  const bankKey = companyProfile.bankName || 'SBI';
+  const isSbi = bankKey === 'SBI';
   const tft = document.getElementById('disbTransferType').value;
   const lines = [];
   let total = 0, hasInvalid = false;
@@ -1179,7 +1542,8 @@ function collectBatchLines() {
     if (isNaN(v)) { hasInvalid = true; continue; }
     if (v <= 0) continue;
     total += v;
-    lines.push({ acc, empCode: md.empCode, name: md.name, ifsc: md.ifsc, amount: v });
+    const mode = isSbi ? tft : currentModeFor(md.ifsc, v);
+    lines.push({ acc, empCode: md.empCode, name: md.name, ifsc: md.ifsc, amount: v, mode });
   }
   return { tft, lines, total, hasInvalid };
 }
@@ -1189,15 +1553,25 @@ function openExportPreview() {
   if (hasInvalid) { alert('Block Export Execution: Invalid amount format strings detected.'); return; }
   if (!lines.length) { alert('Execution blocked: No valid allocations found to process.'); return; }
 
-  const monthRaw = document.getElementById('disbMonth').value;
-  const monthName = MONTHS[parseInt(monthRaw,10)-1];
-  const year = document.getElementById('disbYear').value;
-  const dateInput = document.getElementById('disbDateDisplay');
-  if (!dateInput.value) { alert('Please select a transfer date before exporting.'); return; }
-  const txnDate = getSelectedTransferDate();
+  const txnDate = getTransferDateDDMMYYYY();
+  if (!txnDate) { alert('Please select a Transfer Date before exporting.'); return; }
+
+  const bankKey = companyProfile.bankName || 'SBI';
+  const isSbi = bankKey === 'SBI';
+  const bank = BANK_BY_KEY[bankKey] || BANK_BY_KEY.SBI;
+  const { monthName, year } = getPayrollCycle();
+
+  const modeSummary = isSbi
+    ? `<p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>`
+    : (() => {
+        const counts = {};
+        lines.forEach(l => { counts[l.mode] = (counts[l.mode] || 0) + 1; });
+        const breakdown = Object.entries(counts).map(([m, c]) => `${escapeHtml(m)}: ${c}`).join(' &nbsp;•&nbsp; ');
+        return `<p><strong>Bank:</strong> ${escapeHtml(bank.label)}</p><p><strong>Mode breakdown:</strong> ${breakdown}</p>`;
+      })();
 
   document.getElementById('exportPreviewBody').innerHTML = `
-    <p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>
+    ${modeSummary}
     <p><strong>Payroll Cycle:</strong> ${escapeHtml(monthName)} ${escapeHtml(year)}</p>
     <p><strong>Transfer Date:</strong> ${escapeHtml(txnDate)}</p>
     <p><strong>Employees:</strong> ${lines.length}</p>
@@ -1210,14 +1584,21 @@ function openExportPreview() {
   };
 }
 
+// Refactored executeExport(): resolves the company's bank, delegates
+// file-content generation to that bank's BankFormatters strategy, and
+// keeps the existing batch counter / disbursement history / audit
+// logging behaviour unchanged for every bank.
 async function executeExport() {
   const { tft, lines, total } = collectBatchLines();
+  const bankKey = companyProfile.bankName || 'SBI';
+  const bank = BANK_BY_KEY[bankKey] || BANK_BY_KEY.SBI;
+  const formatter = BankFormatters[bankKey] || BankFormatters.SBI;
+
   const prefix = tft === 'Same Bank' ? 'SBST' : 'OBST';
-  const monthRaw = document.getElementById('disbMonth').value;
-  const monthName = MONTHS[parseInt(monthRaw,10)-1];
-  const year = document.getElementById('disbYear').value;
+  const { monthRaw, monthName, year } = getPayrollCycle();
   const shortYear = year.slice(2);
-  const txnDate = getSelectedTransferDate();
+  const txnDate = getTransferDateDDMMYYYY();
+  if (!txnDate) { alert('Please select a Transfer Date before exporting.'); return; }
 
   let seq;
   try {
@@ -1228,31 +1609,30 @@ async function executeExport() {
   }
   const batchId = `${prefix}${shortYear}${monthRaw}${seq}`;
 
-  const empLines = [];
-  const logRows = [];
-  lines.forEach(({ acc, empCode, name, ifsc, amount }) => {
-    const seqStr = `${prefix}${shortYear}${monthRaw}E${empCode}`;
-    empLines.push(`${acc}#${ifsc}#${txnDate}##${amount.toFixed(2)}#${seqStr}#${name}#SALARY OF ${monthName} ${year}#`);
-    logRows.push({ batchId, transferDate: txnDate, empCode, employeeName: name, accountNumber: acc, ifsc, amount: amount.toFixed(2), transferType: tft });
+  const logRows = lines.map(({ acc, empCode, name, ifsc, amount, mode }) => ({
+    batchId, transferDate: txnDate, empCode, employeeName: name, accountNumber: acc, ifsc,
+    amount: amount.toFixed(2), transferType: mode, bank: bankKey
+  }));
+
+  const output = formatter.generate({
+    companyProfile, lines, total, batchId, txnDate, monthRaw, shortYear, monthName, year, tft
   });
 
-  const header = `${companyProfile.accountNumber}#${companyProfile.sysId}#${txnDate}#${total.toFixed(2)}##${batchId}#${companyProfile.name}#SALARY OF ${monthName} ${year}#`;
-  const output = [header, ...empLines].join('\n') + '\n';
-
-  const fileName = `${prefix.toLowerCase()}_salary_${monthName}_${year}.txt`;
-  downloadTextFile(fileName, output);
+  const fileName = `${bankKey.toLowerCase()}_salary_${monthName}_${year}.${formatter.ext}`;
+  downloadTextFile(fileName, output, formatter.mime);
 
   try {
     await Api.addDisbursementRows(logRows);
     await Api.logAudit(currentUser.email, currentUser.displayName, 'EXPORT FILE',
-      `Batch: ${batchId} | Type: ${tft} | Total: ₹${total.toFixed(2)} | Employees: ${empLines.length} | File: ${fileName}`);
+      `Batch: ${batchId} | Bank: ${bank.label} | Total: ₹${total.toFixed(2)} | Employees: ${lines.length} | File: ${fileName}`);
+    renderEmployeeKpis();
   } catch (err) {
     alert('File downloaded, but logging to the ledger failed: ' + err.message);
   }
 }
 
-function downloadTextFile(filename, content) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+function downloadTextFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
@@ -1297,26 +1677,34 @@ function renderAuditTable() {
 }
 
 async function loadCompanyProfile() {
+  populateCompanyBankSelect();
   try {
     const p = await Api.getCompanyProfile();
     companyProfile = { ...companyProfile, ...p };
     document.getElementById('companyNameInput').value = p.name || '';
     document.getElementById('companyAccInput').value = p.accountNumber || '';
     document.getElementById('companySysInput').value = p.sysId || '';
+    document.getElementById('companyBankInput').value = p.bankName || 'SBI';
   } catch (err) {
     console.error(err);
   }
+  updateDisbursementModeUI();
 }
 function wireCompanyForm() {
+  populateCompanyBankSelect();
   document.getElementById('saveCompanyBtn').addEventListener('click', async () => {
     const name = document.getElementById('companyNameInput').value.trim().toUpperCase();
     const accountNumber = document.getElementById('companyAccInput').value.trim();
     const sysId = document.getElementById('companySysInput').value.trim();
-    if (!name || !accountNumber || !sysId) { alert('Please fill all fields.'); return; }
+    const bankName = document.getElementById('companyBankInput').value;
+    if (!name || !accountNumber || !sysId || !bankName) { alert('Please fill all fields.'); return; }
     try {
-      await Api.updateCompanyProfile({ name, accountNumber, sysId });
-      companyProfile = { ...companyProfile, name, accountNumber, sysId };
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | Branch: ${sysId}`);
+      await Api.updateCompanyProfile({ name, accountNumber, sysId, bankName });
+      companyProfile = { ...companyProfile, name, accountNumber, sysId, bankName };
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | Branch: ${sysId} | Bank: ${bankName}`);
+      updateDisbursementModeUI();
+      renderDisbursementList();
+      renderEmployeeKpis();
       alert('Company profile updated.');
     } catch (err) {
       alert('Save failed: ' + err.message);

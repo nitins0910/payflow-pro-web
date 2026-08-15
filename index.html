@@ -267,16 +267,35 @@
         <h1>PayFlow Pro</h1>
       </div>
 
-      <div class="nav-item active" data-page="employees">Employee Ledger</div>
-      <div class="nav-item" data-page="disbursement">Disbursement</div>
-      <div class="nav-item" data-page="audit">Audit Trail</div>
-      <div class="nav-item" data-page="company">Company</div>
-      <div class="nav-item" data-page="settings">Settings</div>
+      <div class="nav-item active" data-page="employees">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Employee Ledger
+      </div>
+      <div class="nav-item" data-page="disbursement">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Disbursement
+      </div>
+      <div class="nav-item" data-page="audit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Audit Trail
+      </div>
+      <div class="nav-item" data-page="company">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9.01"/><line x1="9" y1="12" x2="9" y2="12.01"/><line x1="9" y1="15" x2="9" y2="15.01"/></svg>
+        Company
+      </div>
+      <div class="nav-item" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </div>
 
       <div class="sidebar-footer">
         <div class="user-chip">
-          <strong id="userName">—</strong>
-          <span id="userEmail">—</span>
+          <img id="userAvatarImg" class="user-avatar hidden" alt="Profile photo">
+          <div id="userAvatarFallback" class="user-avatar-fallback hidden">—</div>
+          <div class="user-chip__text">
+            <strong id="userName">—</strong>
+            <span id="userEmail">—</span>
+          </div>
         </div>
         <button class="btn-inline secondary" style="width:100%;" id="logoutBtn">Log Out</button>
       </div>
@@ -297,8 +316,31 @@
           </div>
         </div>
 
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card__label">Total Employees</div>
+            <div class="kpi-card__value" id="kpiTotalEmployees">0</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Company Bank</div>
+            <div class="kpi-card__value" id="kpiCompanyBank" style="font-size:16px;">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Disbursed This Month</div>
+            <div class="kpi-card__value" id="kpiMonthDisbursed">₹ 0.00</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Last Export</div>
+            <div class="kpi-card__value" id="kpiLastExport" style="font-size:16px;">—</div>
+            <div class="kpi-card__sub" id="kpiLastExportSub"></div>
+          </div>
+        </div>
+
         <div class="panel">
-          <input type="text" id="employeeSearch" class="search-input" style="width:280px;" placeholder="Search by name or account no...">
+          <input type="text" id="employeeSearch" placeholder="Search by name or account no..."
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
+          <div class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -312,7 +354,11 @@
             </thead>
             <tbody id="employeeTableBody"></tbody>
           </table>
-          <div id="employeeEmptyState" class="empty-state hidden">No employees yet. Add your first record above.</div>
+          </div>
+          <div id="employeeEmptyState" class="empty-state hidden">
+            <div class="empty-state__icon">👥</div>
+            No employees yet. Add your first record above.
+          </div>
         </div>
       </section>
 
@@ -320,44 +366,53 @@
         <div class="page-head">
           <div>
             <h2>Disbursement</h2>
-            <p>Enter amounts and export the SBI bulk payment file.</p>
+            <p id="disbSubtitle">Enter amounts and export the bulk payment file.</p>
           </div>
+          <div class="security-badge" id="disbBankBadge">BANK: —</div>
         </div>
 
         <div class="panel">
-          <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
-            <div class="control-group">
-              <label class="field-label">Transfer Type</label>
-              <select id="disbTransferType" class="select-field">
+          <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end;">
+            <div id="disbTransferTypeWrap">
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">TRANSFER TYPE</label>
+              <select id="disbTransferType" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
                 <option value="Same Bank">Same Bank Transfer</option>
                 <option value="Other Bank">Other Bank Transfer</option>
               </select>
             </div>
-            <div class="control-group">
-              <label class="field-label">Payroll Month</label>
-              <select id="disbMonth" class="select-field"></select>
+            <div id="disbImpsWrap" class="hidden">
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">CROSS-BANK MODE</label>
+              <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="disbUseImps"> Prefer IMPS
+              </label>
             </div>
-            <div class="control-group">
-              <label class="field-label">Payroll Year</label>
-              <select id="disbYear" class="select-field"></select>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">PAYROLL CYCLE</label>
+              <input type="month" id="disbPayrollMonth" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm); font-family:var(--font-body);">
             </div>
-            <div class="control-group">
-              <label class="field-label">Transfer Date</label>
-              <input type="date" id="disbDateDisplay" class="date-field">
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">TRANSFER DATE</label>
+              <input type="date" id="disbTransferDate" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm); font-family:var(--font-body);">
             </div>
           </div>
-          <p class="field-hint" style="margin-top:12px;">The transfer date is used as the value date in the exported bulk file — set it to today or a future date as needed.</p>
         </div>
 
         <div class="panel">
-          <input type="text" id="disbSearch" class="search-input" style="width:280px;" placeholder="Search by name or account no...">
+          <input type="text" id="disbSearch" placeholder="Search by name or account no..."
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
+          <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Emp Code</th><th>Employee</th><th>Account</th><th style="text-align:right;">Amount (₹)</th></tr>
+              <tr><th>Emp Code</th><th>Employee</th><th>Account</th><th>Mode</th><th style="text-align:right;">Amount (₹)</th></tr>
             </thead>
             <tbody id="disbTableBody"></tbody>
           </table>
-          <div id="disbEmptyState" class="empty-state hidden">No employees with this transfer type yet.</div>
+          </div>
+          <div id="disbEmptyState" class="empty-state hidden">
+            <div class="empty-state__icon">💳</div>
+            No employees with this transfer type yet.
+          </div>
         </div>
 
         <div class="panel" style="display:flex; justify-content:space-between; align-items:center;">
@@ -366,7 +421,7 @@
           </div>
           <div style="display:flex; gap:10px;">
             <button class="btn-inline secondary" id="disbClearBtn">Clear All</button>
-            <button class="btn-inline" id="disbExportBtn">Export .TXT File</button>
+            <button class="btn-inline" id="disbExportBtn">Export File</button>
           </div>
         </div>
       </section>
@@ -379,12 +434,19 @@
           </div>
         </div>
         <div class="panel">
-          <input type="text" id="auditSearch" class="search-input" style="width:320px;" placeholder="Search by user, action, detail...">
+          <input type="text" id="auditSearch" placeholder="Search by user, action, detail..."
+            style="width:320px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
+          <div class="table-wrap">
           <table>
             <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
             <tbody id="auditTableBody"></tbody>
           </table>
-          <div id="auditEmptyState" class="empty-state hidden">No audit records found.</div>
+          </div>
+          <div id="auditEmptyState" class="empty-state hidden">
+            <div class="empty-state__icon">🕘</div>
+            No audit records found.
+          </div>
         </div>
       </section>
 
@@ -398,15 +460,20 @@
         <div class="panel" style="max-width:480px;">
           <div class="field">
             <label>Company Name</label>
-            <input type="text" id="companyNameInput">
+            <input type="text" id="companyNameInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
           </div>
           <div class="field">
             <label>Company Account Number</label>
-            <input type="text" id="companyAccInput">
+            <input type="text" id="companyAccInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
           </div>
           <div class="field">
             <label>Branch / Sys Code</label>
-            <input type="text" id="companySysInput">
+            <input type="text" id="companySysInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+          </div>
+          <div class="field">
+            <label>Company's Bank</label>
+            <select id="companyBankInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);"></select>
+            <div class="field-hint">Determines the bulk payment file format generated in Disbursement.</div>
           </div>
           <button class="btn-inline" id="saveCompanyBtn">Save Company Profile</button>
         </div>
@@ -421,19 +488,25 @@
         </div>
 
         <div class="panel" style="padding:0; overflow:hidden;">
-          <div class="settings-list-item" id="openChangeEmailBtn" role="button" tabindex="0">
-            <div>
-              <div class="settings-list-item__title">Sign-in Email</div>
-              <div class="settings-list-item__subtitle">Change the email you use to sign in</div>
+          <div id="settingsCredentialsList">
+            <div class="settings-list-item" id="openChangeEmailBtn" role="button" tabindex="0">
+              <div>
+                <div class="settings-list-item__title">Sign-in Email</div>
+                <div class="settings-list-item__subtitle">Change the email you use to sign in</div>
+              </div>
+              <span class="settings-list-item__chevron">›</span>
             </div>
-            <span class="settings-list-item__chevron">›</span>
+            <div class="settings-list-item" id="openChangePasswordBtn" role="button" tabindex="0">
+              <div>
+                <div class="settings-list-item__title">Password</div>
+                <div class="settings-list-item__subtitle">Update your account password</div>
+              </div>
+              <span class="settings-list-item__chevron">›</span>
+            </div>
           </div>
-          <div class="settings-list-item" id="openChangePasswordBtn" role="button" tabindex="0">
-            <div>
-              <div class="settings-list-item__title">Password</div>
-              <div class="settings-list-item__subtitle">Update your account password</div>
-            </div>
-            <span class="settings-list-item__chevron">›</span>
+          <div id="settingsGoogleNotice" class="settings-notice hidden">
+            <span style="font-size:18px;">🔒</span>
+            <span>You're signed in with Google. Your email and password are managed through your Google Account, so they can't be changed here.</span>
           </div>
         </div>
 
@@ -442,7 +515,10 @@
       <!-- Change Email modal -->
       <div id="changeEmailModal" class="modal-backdrop hidden">
         <div class="modal">
-          <h3>Sign-in Email</h3>
+          <div class="modal-head">
+            <h3>Sign-in Email</h3>
+            <button type="button" class="modal-close" data-modal="changeEmailModal" aria-label="Close">×</button>
+          </div>
           <div id="settingsEmailMsg"></div>
           <form id="changeEmailForm">
             <div class="field">
@@ -465,7 +541,10 @@
       <!-- Change Password modal -->
       <div id="changePasswordModal" class="modal-backdrop hidden">
         <div class="modal">
-          <h3>Password</h3>
+          <div class="modal-head">
+            <h3>Password</h3>
+            <button type="button" class="modal-close" data-modal="changePasswordModal" aria-label="Close">×</button>
+          </div>
           <div id="settingsPasswordMsg"></div>
           <form id="changePasswordForm">
             <div class="field password-field">
@@ -497,7 +576,10 @@
 
   <div id="employeeModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:560px;">
-      <h3 id="modalTitle">Add Employee</h3>
+      <div class="modal-head">
+        <h3 id="modalTitle">Add Employee</h3>
+        <button type="button" class="modal-close" data-modal="employeeModal" aria-label="Close">×</button>
+      </div>
       <form id="employeeForm" autocomplete="off">
         <div id="employeeFormError" class="error-msg"></div>
 
@@ -523,7 +605,7 @@
           </div>
           <div class="field">
             <label>Transfer Type</label>
-            <select id="empTransferType" required class="select-field">
+            <select id="empTransferType" required style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
               <option value="Same Bank">Same Bank</option>
               <option value="Other Bank">Other Bank</option>
             </select>
@@ -564,7 +646,10 @@
 
   <div id="exportPreviewModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:520px;">
-      <h3>Confirm Export</h3>
+      <div class="modal-head">
+        <h3>Confirm Export</h3>
+        <button type="button" class="modal-close" data-modal="exportPreviewModal" aria-label="Close">×</button>
+      </div>
       <div id="exportPreviewBody" style="font-size:13px; color:var(--text2); line-height:1.7;"></div>
       <div class="modal-actions">
         <button type="button" class="btn-inline secondary" id="cancelExportBtn">Cancel</button>

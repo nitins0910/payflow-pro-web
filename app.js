@@ -3244,13 +3244,35 @@ function wireCompanyForm() {
 
   // Live preview of the 6-digit branch code as the user types their
   // full IFSC, so they can see exactly what will land in the file.
-  ifscInput.addEventListener('input', () => {
+  // Also checks the IFSC's 4-letter bank code against whichever bank
+  // is currently selected above — every Indian bank's IFSC is 11
+  // characters (4 letters + reserved '0' + 6-char branch code), so the
+  // length check never changes per bank, but the leading 4 letters
+  // must match the selected bank or the file would silently claim the
+  // wrong bank/mode for every beneficiary.
+  function refreshIfscPreview() {
     const raw = ifscInput.value.trim().toUpperCase();
     ifscInput.value = raw;
-    if (raw.length < 11) { ifscPreviewEl.textContent = ''; return; }
-    ifscPreviewEl.textContent = isValidIfscFormat(raw)
-      ? `Branch code for the file: ${branchCodeFromIfsc(raw)}`
-      : 'That doesn\'t look like a valid IFSC — check the format (e.g. SBIN0001234).';
+    if (raw.length < 11) { ifscPreviewEl.textContent = ''; ifscPreviewEl.classList.remove('field-mismatch'); return; }
+    if (!isValidIfscFormat(raw)) {
+      ifscPreviewEl.textContent = 'That doesn\'t look like a valid IFSC — check the format (e.g. SBIN0001234).';
+      ifscPreviewEl.classList.add('field-mismatch');
+      return;
+    }
+    const bank = BANK_BY_KEY[selectedCompanyBankKey];
+    if (bank && bank.ifscPrefix && !raw.startsWith(bank.ifscPrefix)) {
+      ifscPreviewEl.textContent = `This doesn't look like a ${bank.label} IFSC — expected it to start with "${bank.ifscPrefix}". Re-check the code or change the selected bank above.`;
+      ifscPreviewEl.classList.add('field-mismatch');
+      return;
+    }
+    ifscPreviewEl.classList.remove('field-mismatch');
+    ifscPreviewEl.textContent = `Branch code for the file: ${branchCodeFromIfsc(raw)}`;
+  }
+  ifscInput.addEventListener('input', refreshIfscPreview);
+  // Re-validate the IFSC against the newly-selected bank immediately,
+  // instead of waiting for Save to catch a now-mismatched prefix.
+  document.querySelectorAll('#companyBankGroup .bank-select-btn').forEach(btn => {
+    btn.addEventListener('click', refreshIfscPreview);
   });
 
   document.getElementById('editCompanyBtn').addEventListener('click', () => setCompanyEditMode(true));

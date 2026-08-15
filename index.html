@@ -593,6 +593,16 @@
         <!-- EDIT VIEW (double-entry fields, hidden unless Edit is clicked) -->
         <div class="panel hidden" id="companyEditView" style="max-width:480px;">
           <div class="field">
+            <label>Company's Bank</label>
+            <div class="bank-select-group" id="companyBankGroup">
+              <button type="button" class="bank-select-btn" data-bank="SBI">SBI</button>
+              <button type="button" class="bank-select-btn" data-bank="HDFC">HDFC</button>
+              <button type="button" class="bank-select-btn" data-bank="ICICI">ICICI</button>
+              <button type="button" class="bank-select-btn" data-bank="PNB">PNB</button>
+            </div>
+            <div class="field-hint">Select this first — it determines the bulk payment file format in Payroll Run, and which IFSC prefix is expected below.</div>
+          </div>
+          <div class="field">
             <label>Company Name</label>
             <input type="text" id="companyNameInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
           </div>
@@ -613,21 +623,12 @@
             <input type="text" id="companyIfscInput" maxlength="11" placeholder="e.g. SBIN0001234" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
             <div class="field-hint info-popover hidden" id="sysCodeInfoText">
               Enter your company bank account's full 11-character IFSC code — printed on your
-              chequebook or visible in your bank's net-banking/app. We automatically pull out
-              the 6-character branch code from it for the payment file, so you never need to
-              enter that separately.
+              chequebook or visible in your bank's net-banking/app. Every Indian bank's IFSC is
+              11 characters (4-letter bank code + a reserved "0" + 6-character branch code),
+              regardless of which bank it is. We automatically pull out the 6-character branch
+              code from it for the payment file, so you never need to enter that separately.
             </div>
             <div class="field-hint" id="companyIfscPreview"></div>
-          </div>
-          <div class="field">
-            <label>Company's Bank</label>
-            <div class="bank-select-group" id="companyBankGroup">
-              <button type="button" class="bank-select-btn" data-bank="SBI">SBI</button>
-              <button type="button" class="bank-select-btn" data-bank="HDFC">HDFC</button>
-              <button type="button" class="bank-select-btn" data-bank="ICICI">ICICI</button>
-              <button type="button" class="bank-select-btn" data-bank="PNB">PNB</button>
-            </div>
-            <div class="field-hint">Determines the bulk payment file format generated in Payroll Run.</div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-inline secondary" id="cancelCompanyEditBtn">Cancel</button>

@@ -1148,6 +1148,21 @@ function autoUpperCaseLive(el) {
     }
   });
 }
+// Strips any non-digit character as the user types (or pastes, drag-drops,
+// autofills, etc. — anything that fires an 'input' event). Used for
+// Employee Code and Account Number fields, which must be numeric only;
+// IFSC stays untouched since it's genuinely alphanumeric (e.g. SBIN0001234).
+function digitsOnlyLive(el) {
+  el.addEventListener('input', () => {
+    const pos = el.selectionStart;
+    const digits = el.value.replace(/[^0-9]/g, '');
+    if (digits !== el.value) {
+      const removed = el.value.length - digits.length;
+      el.value = digits;
+      try { el.setSelectionRange(pos - removed, pos - removed); } catch (_) {}
+    }
+  });
+}
 
 function wireEmployeeForm() {
   const modal = document.getElementById('employeeModal');
@@ -1168,11 +1183,15 @@ function wireEmployeeForm() {
 
   // Name fields: no spaces within a single box, auto-uppercase as-you-type
   [fFirst, fMiddle, fLast].forEach(el => { blockSpaceKey(el); autoUpperCaseLive(el); });
-  // Emp code: no spaces
+  // Emp code: numeric only, no spaces
   blockSpaceKey(fCode);
+  digitsOnlyLive(fCode);
   // Account / IFSC pairs: no spaces, no paste/right-click paste
   [fAcc, fAccC, fIfsc, fIfscC].forEach(el => { blockSpaceKey(el); blockPasteAndRightClick(el); });
-  // IFSC fields auto-uppercase as-you-type
+  // Account Number is numeric only; IFSC stays alphanumeric (bank codes
+  // like SBIN0001234 genuinely mix letters and digits) and just gets
+  // auto-uppercased as before.
+  [fAcc, fAccC].forEach(el => digitsOnlyLive(el));
   [fIfsc, fIfscC].forEach(el => autoUpperCaseLive(el));
 
   function clearMatchStyles(el) {
@@ -1284,6 +1303,17 @@ function wireEmployeeForm() {
       showFieldError('Please fill in all required fields before saving. (Middle Name is optional)');
       return;
     }
+    // Employee Code and Account Number must be numeric only — the fields
+    // already filter this live, but this catches anything that slips
+    // through (e.g. a value set programmatically) before it gets saved.
+    if (!/^[0-9]+$/.test(empCode)) {
+      showFieldError('Employee Code must contain numbers only.');
+      return;
+    }
+    if (!/^[0-9]+$/.test(acc) || !/^[0-9]+$/.test(accC)) {
+      showFieldError('Account Number must contain numbers only.');
+      return;
+    }
     // Double-entry verification for Account Number and IFSC.
     if (acc !== accC || ifsc !== ifscC) {
       showFieldError('Account Number and IFSC must match their confirmation fields.');
@@ -1373,11 +1403,14 @@ function parseCsv(text) {
   const out = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.trim());
-    const accountNumber = cols[idxAcc >= 0 ? idxAcc : 0] || '';
+    // Account Number and Emp Code are numeric-only fields — strip any
+    // stray letters/symbols from the CSV the same way the manual Add
+    // Employee form does, so bulk import can't bypass that rule.
+    const accountNumber = (cols[idxAcc >= 0 ? idxAcc : 0] || '').replace(/[^0-9]/g, '');
     const ifsc = (cols[idxIfsc >= 0 ? idxIfsc : 1] || '').toUpperCase();
     const name = (cols[idxName >= 0 ? idxName : 2] || '').toUpperCase();
     const transferType = cols[idxType >= 0 ? idxType : 3] || 'Same Bank';
-    const empCode = (cols[idxCode >= 0 ? idxCode : 4] || '01').padStart(2, '0');
+    const empCode = ((cols[idxCode >= 0 ? idxCode : 4] || '01').replace(/[^0-9]/g, '') || '01').padStart(2, '0');
     if (accountNumber && name) out.push({ accountNumber, ifsc, name, transferType, empCode });
   }
   return out;
@@ -1790,6 +1823,8 @@ function wireCompanyForm() {
     blockSpaceKey(el);
     blockPasteAndRightClick(el);
   });
+  // Company Account Number is numeric only; IFSC stays alphanumeric.
+  [accInput, accConfirmInput].forEach(el => digitsOnlyLive(el));
   [ifscInput, ifscConfirmInput].forEach(el => autoUpperCaseLive(el));
 
   // Live double-entry check — mirrors the Employee form's Account
@@ -1845,6 +1880,10 @@ function wireCompanyForm() {
     const bankName = document.getElementById('companyBankInput').value;
     if (!name || !accountNumber || !accountNumberConfirm || !ifsc || !ifscConfirm || !sysId || !bankName) {
       alert('Please fill all fields.'); return;
+    }
+    if (!/^[0-9]+$/.test(accountNumber) || !/^[0-9]+$/.test(accountNumberConfirm)) {
+      alert('Company Account Number must contain numbers only.');
+      return;
     }
     if (accountNumber !== accountNumberConfirm) {
       alert('Company Account Number and its confirmation do not match.');

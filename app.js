@@ -220,7 +220,11 @@ function buyCreditPack(pack) {
         });
         if (verify.ok && verify.data.verified) {
           setWalletBalance(verify.data.creditsRemaining);
-          toast(`Payment successful — ${verify.data.creditsAdded} credits added.`, 'success');
+          if (verify.data.alreadyProcessed) {
+            toast(`Balance updated — ${verify.data.creditsRemaining} credits.`, 'success');
+          } else {
+            toast(`Payment successful — ${verify.data.creditsAdded} credits added.`, 'success');
+          }
           resolve(true);
         } else {
           toast((verify.data && verify.data.error) || 'Payment verification failed.', 'error');

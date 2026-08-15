@@ -159,16 +159,19 @@ async function callBillingFunction(name, body) {
 // Called once per dashboard boot (every login). Idempotent server-side —
 // only the very first call for a given user actually grants the 5 free
 // credits; every call after that just reads the current balance back.
+// Returns the server response ({ credits, granted }) so bootDashboard()
+// can decide how to schedule the guided tour, or null on failure.
 async function initWallet() {
   const res = await callBillingFunction('init-wallet');
   if (!res.ok) {
     toast((res.data && res.data.error) || 'Could not load your wallet.', 'error');
-    return;
+    return null;
   }
   setWalletBalance(res.data.credits);
   if (res.data.granted) {
     showFreeCreditsModal(res.data.credits);
   }
+  return res.data;
 }
 
 function setWalletBalance(credits) {
@@ -184,6 +187,31 @@ function showFreeCreditsModal(credits) {
   if (!modal) return;
   document.getElementById('freeCreditsAmount').textContent = credits;
   modal.classList.remove('hidden');
+}
+
+// Set right before showing the free-credits modal for a brand-new
+// signup — tells closeFreeCreditsModal() to launch the guided tour
+// immediately once the user dismisses the "Congratulations" dialog,
+// so the walkthrough feels like the very next step of onboarding
+// rather than a separate, disconnected popup later.
+let pendingTourAfterCredits = false;
+
+function closeFreeCreditsModal() {
+  const modal = document.getElementById('freeCreditsModal');
+  if (modal) modal.classList.add('hidden');
+  if (pendingTourAfterCredits) {
+    pendingTourAfterCredits = false;
+    // Small delay so the modal-close feels finished before the tour's
+    // spotlight overlay appears, instead of the two fighting on-screen.
+    setTimeout(() => startTour(), 300);
+  }
+}
+
+function wireFreeCreditsModal() {
+  const closeBtn = document.getElementById('freeCreditsCloseBtn');
+  const goBtn = document.getElementById('freeCreditsGoBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeFreeCreditsModal);
+  if (goBtn) goBtn.addEventListener('click', closeFreeCreditsModal);
 }
 
 // Opens Razorpay's hosted checkout for a specific credit pack. Resolves
@@ -1270,10 +1298,11 @@ async function bootDashboard(user) {
     return;
   }
 
-  initWallet();
+  const walletInitPromise = initWallet();
   initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
   renderEmployeeKpis();
+  const walletInit = await walletInitPromise;
 
   if (!dashboardBooted) {
     dashboardBooted = true;
@@ -1289,6 +1318,7 @@ async function bootDashboard(user) {
     wirePasswordToggles();
     wireModalCloseButtons();
     wireHelpSupport();
+    wireFreeCreditsModal();
     wireGuidedTour();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     const walletChip = document.getElementById('walletChip');
@@ -1302,7 +1332,16 @@ async function bootDashboard(user) {
     // fall back to just always showing the tour rather than erroring out.
     let tourAlreadySeen = false;
     try { tourAlreadySeen = !!localStorage.getItem('payflow-tour-seen'); } catch (e) { /* ignore */ }
-    if (!tourAlreadySeen) {
+
+    if (walletInit && walletInit.granted) {
+      // Brand-new signup: the "Congratulations, 5 free credits" modal is
+      // already showing (triggered inside initWallet()). Don't also fire
+      // the tour on a timer — closeFreeCreditsModal() starts it the
+      // instant the user dismisses that dialog, so the walkthrough reads
+      // as the very next step of onboarding instead of two separate,
+      // uncoordinated popups.
+      pendingTourAfterCredits = true;
+    } else if (!tourAlreadySeen) {
       setTimeout(() => startTour(), 600);
     }
   }

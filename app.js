@@ -276,8 +276,8 @@ function confirmDialog(message, { title = 'Please confirm', danger = true } = {}
 //
 // NOTE: the exact CSV column layouts below follow the specs supplied
 // for SBI, PNB, BOB, HDFC, ICICI, Axis and Kotak. Canara, Union,
-// IndusInd, Yes Bank and the payments banks don't have a distinct
-// spec on file, so they fall back to a generic standard CSV layout —
+// IndusInd and Yes Bank don't have a distinct spec on file, so they
+// fall back to a generic standard CSV layout —
 // confirm the live column order with each bank's CMS/corporate net
 // banking portal before using those in production.
 // ---------------------------------------------------------
@@ -294,8 +294,6 @@ const BANKS = [
   { key: 'KKBK',     label: 'Kotak Mahindra Bank (KKBK)',  ifscPrefix: 'KKBK' },
   { key: 'INDUSIND', label: 'IndusInd Bank (INDB)',        ifscPrefix: 'INDB' },
   { key: 'YESB',     label: 'Yes Bank (YESB)',             ifscPrefix: 'YESB' },
-  { key: 'PAYTM',    label: 'Payments Bank — Paytm',       ifscPrefix: 'PYTM' },
-  { key: 'AIRTEL',   label: 'Payments Bank — Airtel',      ifscPrefix: 'AIRP' },
 ];
 const BANK_BY_KEY = Object.fromEntries(BANKS.map(b => [b.key, b]));
 
@@ -455,11 +453,9 @@ const BankFormatters = {
     }
   },
   // Generic standard CSV layout — used for banks without a distinct
-  // spec supplied (IndusInd, Yes Bank, Paytm, Airtel Payments Bank).
+  // spec supplied (IndusInd, Yes Bank).
   INDUSIND: { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
   YESB:     { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
-  PAYTM:    { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
-  AIRTEL:   { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
 };
 function genericCsv(ctx) {
   const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
@@ -1057,6 +1053,11 @@ async function bootDashboard(user) {
   currentUser = user;
   document.getElementById('userName').textContent = user.displayName || 'PayFlow User';
   document.getElementById('userEmail').textContent = user.email;
+  const welcomeNameEl = document.getElementById('dashWelcomeName');
+  if (welcomeNameEl) {
+    const firstName = (user.displayName || '').trim().split(/\s+/)[0];
+    welcomeNameEl.textContent = firstName ? `, ${firstName}` : '';
+  }
   applyUserProfileUI(user);
 
   try {
@@ -1069,6 +1070,7 @@ async function bootDashboard(user) {
   initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
   renderEmployeeKpis();
+  loadDashboardOverview();
 
   if (!dashboardBooted) {
     dashboardBooted = true;
@@ -1151,6 +1153,11 @@ async function renderEmployeeKpis() {
   }
 }
 
+function goToPage(page) {
+  const item = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (item) item.click();
+}
+
 function wireNav() {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -1160,8 +1167,117 @@ function wireNav() {
       document.getElementById('page-' + item.dataset.page).classList.remove('hidden');
       if (item.dataset.page === 'audit') loadAuditTrail();
       if (item.dataset.page === 'exports') loadExportHistory();
+      if (item.dataset.page === 'dashboard') loadDashboardOverview();
     });
   });
+
+  // "View all →" links inside the Overview panels just jump to the
+  // corresponding tab, reusing the same nav-item click logic above.
+  document.querySelectorAll('[data-page-link]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      goToPage(link.dataset.pageLink);
+    });
+  });
+
+  const quickAdd = document.getElementById('dashQuickAddEmployee');
+  if (quickAdd) quickAdd.addEventListener('click', () => {
+    goToPage('employees');
+    document.getElementById('addEmployeeBtn').click();
+  });
+  const quickDisburse = document.getElementById('dashQuickDisburse');
+  if (quickDisburse) quickDisburse.addEventListener('click', () => goToPage('disbursement'));
+  const quickExports = document.getElementById('dashQuickExports');
+  if (quickExports) quickExports.addEventListener('click', () => goToPage('exports'));
+}
+
+// ---------------------------------------------------------
+// DASHBOARD / OVERVIEW — the landing page after login. Pulls together
+// data already used elsewhere (employees, company profile, recent
+// exports, recent audit activity) into one at-a-glance summary instead
+// of leaving the app on an empty screen.
+// ---------------------------------------------------------
+async function loadDashboardOverview() {
+  const elEmployees = document.getElementById('dashKpiEmployees');
+  const elBank = document.getElementById('dashKpiBank');
+  const elMonth = document.getElementById('dashKpiMonth');
+  const elExports = document.getElementById('dashKpiExports');
+  if (!elEmployees) return;
+
+  elEmployees.textContent = employees.length;
+  const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
+  elBank.textContent = bank.label;
+
+  const recentExportsBody = document.getElementById('dashRecentExports');
+  const recentActivityBody = document.getElementById('dashRecentActivity');
+  recentExportsBody.innerHTML = '<tr><td colspan="4" style="color:var(--text3);">Loading…</td></tr>';
+  recentActivityBody.innerHTML = '<li class="dash-activity-item" style="color:var(--text3);">Loading…</li>';
+
+  let history = [];
+  let audit = [];
+  try {
+    [history, audit] = await Promise.all([Api.getDisbursementHistory(), Api.getAuditTrail()]);
+  } catch (err) {
+    console.error(err);
+  }
+
+  const now = new Date();
+  let monthTotal = 0;
+  const byBatch = new Map();
+  history.forEach(row => {
+    const created = row.createdAt && row.createdAt.toDate ? row.createdAt.toDate() : null;
+    if (created && created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()) {
+      const amt = parseFloat(row.amount);
+      if (!isNaN(amt)) monthTotal += amt;
+    }
+    if (!byBatch.has(row.batchId)) {
+      byBatch.set(row.batchId, { batchId: row.batchId, bank: row.bank, count: 0, total: 0, createdAt: row.createdAt });
+    }
+    const b = byBatch.get(row.batchId);
+    b.count += 1;
+    b.total += parseFloat(row.amount) || 0;
+  });
+  elMonth.textContent = `₹ ${monthTotal.toFixed(2)}`;
+
+  const batches = [...byBatch.values()].sort((a, b) => {
+    const ta = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
+    const tb = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
+    return tb - ta;
+  });
+  elExports.textContent = batches.length;
+
+  recentExportsBody.innerHTML = '';
+  if (!batches.length) {
+    recentExportsBody.innerHTML = '<tr><td colspan="4" style="color:var(--text3);">No exports yet.</td></tr>';
+  } else {
+    batches.slice(0, 5).forEach(b => {
+      const d = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().toLocaleDateString() : '—';
+      recentExportsBody.innerHTML += `
+        <tr>
+          <td style="font-family:var(--font-mono); font-size:12.5px;">${escapeHtml(b.batchId)}</td>
+          <td>${d}</td>
+          <td>${b.count}</td>
+          <td style="text-align:right; font-weight:600;">₹${b.total.toFixed(2)}</td>
+        </tr>`;
+    });
+  }
+
+  recentActivityBody.innerHTML = '';
+  if (!audit.length) {
+    recentActivityBody.innerHTML = '<li class="dash-activity-item" style="color:var(--text3);">No activity yet.</li>';
+  } else {
+    audit.slice(0, 6).forEach(r => {
+      const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString() : '';
+      recentActivityBody.innerHTML += `
+        <li class="dash-activity-item">
+          <span class="dash-activity-item__dot"></span>
+          <div>
+            <div class="dash-activity-item__action">${escapeHtml(r.action)} <span class="dash-activity-item__user">— ${escapeHtml(r.userName || r.userEmail || '')}</span></div>
+            <div class="dash-activity-item__time">${escapeHtml(ts)}</div>
+          </div>
+        </li>`;
+    });
+  }
 }
 
 // Renders N placeholder rows into a <tbody> while a Firestore read is
@@ -1178,7 +1294,7 @@ async function loadEmployees() {
   try {
     employees = await Api.getEmployees();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);">Could not load employees: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger);">Could not load employees: ${escapeHtml(err.message)}</td></tr>`;
     return;
   }
   renderEmployeeTable();
@@ -1277,6 +1393,8 @@ function renderEmployeeTable() {
       <td>${escapeHtml(emp.ifsc)}</td>
       <td>${badgeForMode(emp.transferType)}</td>
       <td>${escapeHtml(emp.empCode)}</td>
+      <td>${escapeHtml(emp.mobile || '—')}</td>
+      <td>${escapeHtml(emp.email || '—')}</td>
       <td class="row-actions">
         <button data-edit="${escapeHtml(emp.id)}">Edit</button>
         <button data-delete="${escapeHtml(emp.id)}" class="danger">Delete</button>
@@ -1405,18 +1523,45 @@ function wireEmployeeForm() {
   const fLast   = document.getElementById('empLastName');
   const fCode   = document.getElementById('empCode');
   const fType   = document.getElementById('empTransferType');
+  const fMobile = document.getElementById('empMobile');
+  const fEmail  = document.getElementById('empEmail');
   const fAcc    = document.getElementById('empAccount');
   const fAccC   = document.getElementById('empAccountConfirm');
   const fIfsc   = document.getElementById('empIfsc');
   const fIfscC  = document.getElementById('empIfscConfirm');
   const accMismatchLbl  = document.getElementById('accMismatchLbl');
   const ifscMismatchLbl = document.getElementById('ifscMismatchLbl');
+  const mobileErrLbl = document.getElementById('empMobileError');
+  const emailErrLbl  = document.getElementById('empEmailError');
 
   // Name fields: no spaces within a single box, auto-uppercase as-you-type
   [fFirst, fMiddle, fLast].forEach(el => { blockSpaceKey(el); autoUpperCaseLive(el); });
   // Emp code: numeric only, no spaces
   blockSpaceKey(fCode);
   digitsOnlyLive(fCode);
+  // Mobile: digits only, max 10, no spaces
+  blockSpaceKey(fMobile);
+  fMobile.addEventListener('input', () => {
+    fMobile.value = fMobile.value.replace(/[^0-9]/g, '').slice(0, 10);
+    validateMobileEmailLive();
+  });
+  fEmail.addEventListener('input', validateMobileEmailLive);
+
+  function validateMobileEmailLive() {
+    const mobileVal = fMobile.value.trim();
+    if (!mobileVal) { mobileErrLbl.textContent = ''; fMobile.classList.remove('input-mismatch'); }
+    else if (!/^[6-9][0-9]{9}$/.test(mobileVal)) {
+      mobileErrLbl.textContent = 'Enter a valid 10-digit mobile number';
+      fMobile.classList.add('input-mismatch');
+    } else { mobileErrLbl.textContent = ''; fMobile.classList.remove('input-mismatch'); }
+
+    const emailVal = fEmail.value.trim();
+    if (!emailVal) { emailErrLbl.textContent = ''; fEmail.classList.remove('input-mismatch'); }
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      emailErrLbl.textContent = 'Enter a valid email address';
+      fEmail.classList.add('input-mismatch');
+    } else { emailErrLbl.textContent = ''; fEmail.classList.remove('input-mismatch'); }
+  }
   // Account / IFSC pairs: no spaces, no paste/right-click paste
   [fAcc, fAccC, fIfsc, fIfscC].forEach(el => { blockSpaceKey(el); blockPasteAndRightClick(el); });
   // Account Number is numeric only; IFSC stays alphanumeric (bank codes
@@ -1485,9 +1630,11 @@ function wireEmployeeForm() {
 
   function resetForm() {
     employeeForm.reset();
-    [fAcc, fAccC, fIfsc, fIfscC].forEach(clearMatchStyles);
+    [fAcc, fAccC, fIfsc, fIfscC, fMobile, fEmail].forEach(clearMatchStyles);
     accMismatchLbl.textContent = '';
     ifscMismatchLbl.textContent = '';
+    mobileErrLbl.textContent = '';
+    emailErrLbl.textContent = '';
     clearFieldError();
     fType.value = 'Same Bank';
   }
@@ -1517,6 +1664,8 @@ function wireEmployeeForm() {
     fIfscC.value = emp.ifsc;
     fCode.value = emp.empCode;
     fType.value = emp.transferType;
+    fMobile.value = emp.mobile || '';
+    fEmail.value = emp.email || '';
     modal.classList.remove('hidden');
   };
 
@@ -1533,10 +1682,20 @@ function wireEmployeeForm() {
     const ifscC  = fIfscC.value.trim().replace(/\s+/g, '').toUpperCase();
     const empCode = fCode.value.trim().padStart(2, '0');
     const transferType = fType.value;
+    const mobile = fMobile.value.trim();
+    const email  = fEmail.value.trim().toLowerCase();
 
     // Required-field check — Middle Name is the sole optional field.
-    if (!(fname && lname && acc && accC && ifsc && ifscC && empCode)) {
+    if (!(fname && lname && acc && accC && ifsc && ifscC && empCode && mobile && email)) {
       showFieldError('Please fill in all required fields before saving. (Middle Name is optional)');
+      return;
+    }
+    if (!/^[6-9][0-9]{9}$/.test(mobile)) {
+      showFieldError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showFieldError('Please enter a valid email address.');
       return;
     }
     // Employee Code and Account Number must be numeric only — the fields
@@ -1573,7 +1732,7 @@ function wireEmployeeForm() {
       return;
     }
 
-    const emp = { name: fullName, accountNumber: acc, ifsc, empCode, transferType };
+    const emp = { name: fullName, accountNumber: acc, ifsc, empCode, transferType, mobile, email };
 
     const btn = document.getElementById('saveEmployeeBtn');
     btn.disabled = true; btn.textContent = 'Saving...';
@@ -2296,18 +2455,57 @@ function renderExportHistory() {
     const total = batch.rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
     const bank = BANK_BY_KEY[batch.bank] || { label: batch.bank };
     const tr = document.createElement('tr');
+    tr.className = 'export-batch-row';
     tr.innerHTML = `
-      <td style="font-family:var(--font-mono);">${escapeHtml(batch.batchId)}</td>
+      <td style="font-family:var(--font-mono);"><button type="button" class="row-expand-toggle" data-expand="${escapeHtml(batch.batchId)}" aria-label="Show employee-wise breakdown"><span class="row-expand-arrow">›</span> ${escapeHtml(batch.batchId)}</button></td>
       <td>${escapeHtml(bank.label)}</td>
       <td>${escapeHtml(batch.transferDate || '—')}</td>
       <td>${batch.rows.length}</td>
       <td style="text-align:right;">₹${total.toFixed(2)}</td>
       <td class="row-actions"><button data-redownload="${escapeHtml(batch.batchId)}">Re-download</button></td>`;
     tbody.appendChild(tr);
+
+    // Hidden-by-default detail row: employee-wise amount breakdown for
+    // this batch, so you can see exactly who was paid how much in a
+    // given export without re-downloading and opening the file.
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'export-batch-detail hidden';
+    detailTr.dataset.detailFor = batch.batchId;
+    const rowsSorted = [...batch.rows].sort((a, b) =>
+      (a.employeeName || '').localeCompare(b.employeeName || ''));
+    const detailRows = rowsSorted.map(r => `
+      <tr>
+        <td style="color:var(--text2); font-family:var(--font-mono); font-size:12px;">${escapeHtml(r.empCode || '—')}</td>
+        <td>${escapeHtml(r.employeeName || '—')}</td>
+        <td style="font-family:var(--font-mono); font-size:12.5px; color:var(--text2);">${escapeHtml(maskAccount(r.accountNumber))}</td>
+        <td>${badgeForMode(r.transferType)}</td>
+        <td style="text-align:right; font-weight:600;">₹${(parseFloat(r.amount) || 0).toFixed(2)}</td>
+      </tr>`).join('');
+    detailTr.innerHTML = `
+      <td colspan="6" style="padding:0;">
+        <div class="export-batch-breakdown">
+          <div class="export-batch-breakdown__head">Employee-wise breakdown — ${batch.rows.length} employee(s), ₹${total.toFixed(2)} total</div>
+          <table class="export-batch-breakdown__table">
+            <thead><tr><th>Emp Code</th><th>Employee</th><th>Account</th><th>Mode</th><th style="text-align:right;">Amount (₹)</th></tr></thead>
+            <tbody>${detailRows}</tbody>
+          </table>
+        </div>
+      </td>`;
+    tbody.appendChild(detailTr);
   });
 
   tbody.querySelectorAll('[data-redownload]').forEach(btn =>
     btn.onclick = () => redownloadBatch(btn.dataset.redownload));
+
+  tbody.querySelectorAll('[data-expand]').forEach(btn =>
+    btn.onclick = () => {
+      const id = btn.dataset.expand;
+      const detailRow = tbody.querySelector(`.export-batch-detail[data-detail-for="${CSS.escape(id)}"]`);
+      if (!detailRow) return;
+      const willOpen = detailRow.classList.contains('hidden');
+      detailRow.classList.toggle('hidden');
+      btn.closest('tr').classList.toggle('is-expanded', willOpen);
+    });
 }
 
 function redownloadBatch(batchId) {

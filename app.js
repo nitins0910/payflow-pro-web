@@ -49,6 +49,16 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
+// SESSION persistence: Firebase's default (LOCAL) keeps the user signed
+// in even after the browser is fully closed and reopened. SESSION ties
+// the sign-in to the current tab instead — the moment the tab or the
+// whole browser window is closed, the sign-in state is gone, so the
+// next visit lands back on the Sign In screen instead of walking
+// straight into the dashboard. Must be set before any sign-in call.
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(err => {
+  console.warn('[Auth] Could not set session persistence:', err.message);
+});
+
 // IMPORTANT: this must be your real, live Firebase Hosting URL
 // (or custom domain once you attach one). It's what makes the
 // verification email link open THIS app instead of Firebase's
@@ -121,13 +131,27 @@ const Api = {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   },
+  // Runs inside a Firestore transaction, so even if the user has two
+  // tabs open and both hit "Export" at the same instant, each export
+  // still reads-and-writes the counter atomically — nobody can ever
+  // walk away with the same number. That's what actually guarantees
+  // uniqueness here, not the number format itself.
+  //
+  // The counter value is encoded in base-36 (0-9 then A-Z) instead of
+  // plain decimal, so the code stays alphanumeric like before but
+  // packs far more values into the same width: 4 base-36 characters
+  // give 36^4 = ~1.68 million unique exports before the code needs to
+  // grow past 4 characters on its own (it never repeats either way —
+  // padStart just keeps the width tidy for as long as possible).
+  // Need more headroom later? Bump the padStart number below (e.g.
+  // 5 or 6) — everything downstream just treats this as a string.
   async getAndIncrementCounter() {
     const counterRef = userRef().collection('meta').doc('fileCounter');
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(counterRef);
       const current = snap.exists ? (snap.data().value || 1) : 1;
       tx.set(counterRef, { value: current + 1 }, { merge: true });
-      return `A${String(current).padStart(2, '0')}`;
+      return current.toString(36).toUpperCase().padStart(4, '0');
     });
   },
   async addDisbursementRows(rows) {
@@ -251,9 +275,14 @@ const BankFormatters = {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
       const d = v => sanitizeForDelimitedFile(v, '#');
-      const prefix = ctx.tft === 'Same Bank' ? 'SBST' : 'OBST';
+      // Each row's reference reuses ctx.batchId — which already carries
+      // this export's unique counter value — plus the employee code.
+      // Previously this only combined month + empCode, so exporting the
+      // same month twice produced identical row codes both times. Tying
+      // it to batchId means every row from every export is unique, while
+      // still telling you which employee (and which batch) it belongs to.
       const empLines = ctx.lines.map(l => {
-        const seqStr = `${prefix}${ctx.shortYear}${ctx.monthRaw}E${l.empCode}`;
+        const seqStr = `${ctx.batchId}E${l.empCode}`;
         return `${d(l.acc)}#${d(l.ifsc)}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
       });
       const header = `${d(ctx.companyProfile.accountNumber)}#${d(ctx.companyProfile.sysId)}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${d(ctx.companyProfile.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;

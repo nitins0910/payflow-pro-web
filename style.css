@@ -1,10 +1,10 @@
 /* ============================================================
    PayFlow Pro — Web Edition
-   A ledger-grade payroll console. Dark, precise auth screens carry
-   the brand; the working dashboard lives on a calm paper-white
-   surface with tabular figures, a small accent palette per data
-   type (people / bank / money / batches), and quiet depth instead
-   of flat grey boxes.
+   A ledger-grade payroll console. Dark navy throughout, sharp
+   rectangular edges (Windows 10 inspired), and a monochrome
+   palette — no colorful accents, no circular chrome. Green/red
+   are kept ONLY as functional validation states (match/mismatch,
+   success/error toasts), never as decoration.
    ============================================================ */
 
 :root{
@@ -13,47 +13,49 @@
   --surface2:  #182338;
   --surface3:  #202D47;
   --border:    #243349;
-  --border-soft: rgba(148,163,184,0.14);
-  --grey:      #94A3B8;
-  --grey-dim:  #64748B;
+  --border-soft: rgba(208,208,208,0.14);
+  --grey:      rgb(208,208,208);
+  --grey-dim:  rgba(208,208,208,0.65);
   --grey-line: #1C2740;
   --blue:      #3B82F6;
   --blue-dim:  #2563EB;
   --blue-bright:#60A5FA;
   --blue-glow: rgba(59,130,246,0.35);
   --text:      #E3E8F0;
-  --text2:     #94A3B8;
-  --text3:     #5B6B85;
+  --text2:     rgb(208,208,208);
+  --text3:     rgba(208,208,208,0.55);
   --success:   #22C55E;
   --success-bg:rgba(34,197,94,0.1);
   --danger:    #F43F5E;
   --danger-bg: rgba(244,63,94,0.1);
   --warning:   #F59E0B;
-  /* Accent family used for KPI icon chips / activity dots — gives
-     each data type (people, bank, money, batches) its own quiet
-     identity without turning the UI into a color wheel. */
-  --accent-indigo: #6366F1;
-  --accent-indigo-bg: rgba(99,102,241,0.12);
-  --accent-violet: #8B5CF6;
-  --accent-violet-bg: rgba(139,92,246,0.12);
-  --accent-teal: #0D9488;
-  --accent-teal-bg: rgba(13,148,136,0.12);
-  --accent-amber-bg: rgba(245,158,11,0.12);
-  --accent-emerald-bg: rgba(34,197,94,0.12);
-  --accent-rose-bg: rgba(244,63,94,0.12);
+  /* Monochrome accent family — every KPI icon / status chip shares
+     the same navy surface + secondary-grey treatment instead of a
+     rainbow of hues, per the dark/monochrome brief. */
+  --accent-indigo: var(--blue-bright);
+  --accent-indigo-bg: var(--surface3);
+  --accent-violet: var(--text2);
+  --accent-violet-bg: var(--surface3);
+  --accent-teal: var(--text2);
+  --accent-teal-bg: var(--surface3);
+  --accent-amber-bg: var(--surface3);
+  --accent-emerald-bg: var(--surface3);
+  --accent-rose-bg: var(--danger-bg);
   /* legacy aliases — anything still referencing the old token names
      (incl. inline styles in index.html) resolves to the new palette */
   --cyan:      var(--blue-bright);
   --cyan-dim:  var(--blue-dim);
   --border2:   var(--blue-dim);
-  --radius:    12px;
-  --radius-sm: 9px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --shadow-sm: 0 1px 2px rgba(15,23,42,0.06), 0 1px 1px rgba(15,23,42,0.08);
-  --shadow-md: 0 8px 20px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06);
-  --shadow-lg: 0 20px 48px rgba(15,23,42,0.18), 0 6px 16px rgba(15,23,42,0.08);
-  --shadow-glow: 0 0 0 3px var(--blue-glow);
+  /* Sharp, rectangular edges everywhere (Windows 10 inspired) — no
+     rounded cards, buttons, or inputs. */
+  --radius:    0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.20);
+  --shadow-md: 0 4px 10px rgba(0,0,0,0.24);
+  --shadow-lg: 0 10px 24px rgba(0,0,0,0.32);
+  --shadow-glow: 0 0 0 2px var(--blue-glow);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Consolas', monospace;
@@ -77,34 +79,15 @@ a{color:var(--blue-bright); text-decoration:none;}
 
 ::selection{ background:var(--blue-dim); color:#fff; }
 
-:focus-visible{ outline:2px solid var(--blue-bright); outline-offset:2px; border-radius:4px; }
+:focus-visible{ outline:2px solid var(--blue-bright); outline-offset:2px; border-radius:0; }
 
 @media (prefers-reduced-motion: reduce){
   *, *::before, *::after{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
 }
 
-/* ---------------- Dashboard: calm, paper-white working area —
-   scoped entirely to #screen-dashboard by re-declaring the shared
-   surface/text tokens here. Every existing rule (and every inline
-   style in the markup) that already reads var(--surface2), var(--text)
-   etc. re-themes automatically for free; nothing outside this screen
-   is touched, so the Auth screens keep their original dark look. ---------------- */
+/* ---------------- App shell (post-login) — stays on the same dark
+   navy palette as the auth screens; no separate light theme. ---------------- */
 #screen-dashboard{
-  --bg:          #EEF1F7;
-  --surface:     #FFFFFF;
-  --surface2:    #F5F7FB;
-  --surface3:    #EBEEF5;
-  --border:      #DEE3ED;
-  --border-soft: rgba(30,41,59,0.08);
-  --grey-line:   #EEF1F6;
-  --text:        #16213A;
-  --text2:       #5B6B87;
-  --text3:       #93A0B7;
-  --success-bg:  rgba(22,163,74,0.10);
-  --danger-bg:   rgba(225,29,72,0.10);
-  --shadow-sm: 0 1px 2px rgba(22,33,58,0.05);
-  --shadow-md: 0 10px 24px rgba(22,33,58,0.08), 0 2px 6px rgba(22,33,58,0.05);
-  --shadow-lg: 0 24px 56px rgba(22,33,58,0.16), 0 6px 18px rgba(22,33,58,0.08);
   background:var(--bg);
   height:100vh;
   color:var(--text);
@@ -116,10 +99,7 @@ a{color:var(--blue-bright); text-decoration:none;}
 /* ---------------- Ambient backdrop ---------------- */
 .ledger-bg{
   position:fixed; inset:0; z-index:-1;
-  background:
-    radial-gradient(760px 480px at 12% -10%, rgba(59,130,246,0.10), transparent 60%),
-    radial-gradient(640px 420px at 100% 10%, rgba(139,92,246,0.07), transparent 55%),
-    var(--bg);
+  background:var(--bg);
 }
 
 /* ---------------- Auth screen ---------------- */
@@ -148,7 +128,7 @@ a{color:var(--blue-bright); text-decoration:none;}
 
 .auth-card__strip{
   height:3px;
-  background:linear-gradient(90deg, var(--blue-bright), var(--accent-violet), var(--blue-dim));
+  background:var(--blue-bright);
 }
 
 .auth-card__body{ padding:38px 34px 34px; }
@@ -162,11 +142,11 @@ a{color:var(--blue-bright); text-decoration:none;}
   font-size:13px;
   font-weight:700;
   letter-spacing:1px;
-  background:linear-gradient(155deg, var(--blue-bright), var(--blue-dim) 65%, var(--accent-violet));
-  border-radius:8px;
+  background:var(--blue-dim);
+  border:1px solid var(--blue-bright);
+  border-radius:0;
   width:30px; height:30px;
   display:inline-flex; align-items:center; justify-content:center;
-  box-shadow:0 4px 12px rgba(37,99,235,0.35);
 }
 .brand h1{
   font-family:var(--font-display);
@@ -232,7 +212,7 @@ a{color:var(--blue-bright); text-decoration:none;}
   background:none; border:none; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
   color:var(--text3);
-  border-radius:6px;
+  border-radius:0;
   transition:color .15s var(--ease), background .15s var(--ease);
 }
 .pw-toggle:hover{ color:var(--blue-bright); background:rgba(59,130,246,0.08); }
@@ -283,7 +263,7 @@ input.input-match{
 
 /* ---------------- Info (i) button + popover ---------------- */
 .info-btn{
-  width:16px; height:16px; border-radius:50%; border:1px solid var(--text3);
+  width:16px; height:16px; border-radius:0; border:1px solid var(--text3);
   background:none; color:var(--text3); font-size:10.5px; font-weight:700; line-height:1;
   cursor:pointer; padding:0; display:inline-flex; align-items:center; justify-content:center;
   font-style:italic; font-family:Georgia, serif;
@@ -301,7 +281,7 @@ input.input-match{
 
 .security-badge{
   display:inline-flex; align-items:center; gap:6px;
-  font-size:11px; font-weight:700; padding:5px 11px; border-radius:100px;
+  font-size:11px; font-weight:700; padding:5px 11px; border-radius:0;
   border:1px solid var(--border); background:var(--surface2); color:var(--text2); margin-bottom:14px;
   font-family:var(--font-mono); letter-spacing:0.3px;
 }
@@ -347,9 +327,8 @@ input.input-match{
 .btn:disabled{ opacity:0.5; cursor:not-allowed; }
 
 .btn-primary{
-  background:linear-gradient(180deg, var(--blue-bright), var(--blue-dim));
+  background:var(--blue-dim);
   color:#fff; font-weight:700;
-  box-shadow:0 4px 14px rgba(37,99,235,0.35);
 }
 
 .btn-google{
@@ -408,15 +387,10 @@ input.input-match{
   align-items:center;
   gap:8px;
   padding:0 22px;
-  background:linear-gradient(180deg, #16244A, #0C1730);
-  box-shadow:0 2px 18px rgba(0,0,0,0.28);
+  background:#0C1730;
+  border-bottom:1px solid var(--border);
   position:relative;
   z-index:6;
-}
-.topbar::after{
-  content:"";
-  position:absolute; left:0; right:0; bottom:0; height:1px;
-  background:linear-gradient(90deg, rgba(96,165,250,0.5), rgba(139,92,246,0.35), transparent);
 }
 .topbar .brand{ padding:0; margin-right:20px; flex-shrink:0; }
 .topbar .brand h1{ font-size:15.5px; color:#fff; }
@@ -466,20 +440,19 @@ input.input-match{
   width:44px; height:44px;
   display:flex; align-items:center; justify-content:center;
   margin:0; padding:0;
-  border-radius:12px;
+  border-radius:0;
   background:var(--surface2);
   border:1px solid var(--border-soft);
   color:var(--text2);
   position:relative;
-  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease), transform .1s var(--ease);
+  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
 }
 .sidebar-icons .nav-item svg{ width:19px; height:19px; opacity:.9; }
-.sidebar-icons .nav-item:hover{ color:var(--text); background:var(--surface3); transform:translateY(-1px); }
+.sidebar-icons .nav-item:hover{ color:var(--text); background:var(--surface3); }
 .sidebar-icons .nav-item.active{
   color:#fff;
-  background:linear-gradient(155deg, var(--blue-bright), var(--blue-dim));
-  border-color:transparent;
-  box-shadow:0 4px 12px rgba(37,99,235,0.3);
+  background:var(--blue-dim);
+  border-color:var(--blue-bright);
 }
 
 /* Hover tooltip for icon-only nav items — name only shows on hover,
@@ -490,7 +463,7 @@ input.input-match{
   transform:translateY(-50%) translateX(-4px);
   background:#0F172A; color:#fff;
   font-size:11.5px; font-weight:600; white-space:nowrap;
-  padding:6px 10px; border-radius:6px;
+  padding:6px 10px; border-radius:0;
   box-shadow:0 6px 16px rgba(0,0,0,0.3);
   opacity:0; pointer-events:none;
   transition:opacity .12s var(--ease), transform .12s var(--ease);
@@ -504,17 +477,16 @@ input.input-match{
 .user-chip__text{ min-width:0; overflow:hidden; }
 .user-chip__text span{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .user-avatar{
-  width:36px; height:36px; border-radius:50%; flex-shrink:0;
-  object-fit:cover; border:2px solid var(--surface2);
+  width:36px; height:36px; border-radius:0; flex-shrink:0;
+  object-fit:cover; border:1px solid var(--border);
   background:var(--surface2);
-  box-shadow:0 0 0 1px var(--border);
 }
 .user-avatar-fallback{
-  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  width:36px; height:36px; border-radius:0; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
-  background:linear-gradient(155deg, var(--accent-indigo-bg), var(--accent-violet-bg));
+  background:var(--surface3);
   border:1px solid var(--border);
-  color:var(--accent-indigo); font-family:var(--font-mono); font-size:13px; font-weight:700;
+  color:var(--blue-bright); font-family:var(--font-mono); font-size:13px; font-weight:700;
 }
 .settings-notice{
   padding:16px 20px; font-size:12.5px; color:var(--text2); line-height:1.6;
@@ -548,7 +520,7 @@ input.input-match{
 }
 .kpi-card:hover{ box-shadow:var(--shadow-md); transform:translateY(-2px); border-color:var(--border); }
 .kpi-card__icon{
-  width:34px; height:34px; border-radius:10px;
+  width:34px; height:34px; border-radius:var(--radius-sm);
   display:flex; align-items:center; justify-content:center;
   margin-bottom:14px;
 }
@@ -600,27 +572,28 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 .row-actions button:hover{ color:var(--blue-bright); border-color:var(--blue); background:rgba(59,130,246,0.08); }
 .row-actions button.danger:hover{ color:var(--danger); border-color:var(--danger); background:var(--danger-bg); }
 
-/* ---------------- Status / mode badges ---------------- */
+/* ---------------- Status / mode badges — monochrome: differentiated
+   by label text only, not by a rainbow of hues. ---------------- */
 .badge{
   display:inline-flex; align-items:center; gap:5px;
-  padding:3px 9px; border-radius:100px;
+  padding:3px 9px; border-radius:0;
   font-size:11px; font-weight:700; letter-spacing:0.2px;
   white-space:nowrap;
+  background:var(--surface3); color:var(--text2); border:1px solid var(--border);
 }
-.badge-blue{  background:rgba(59,130,246,0.12);  color:var(--blue-bright); }
-.badge-green{ background:var(--success-bg); color:var(--success); }
-.badge-amber{ background:rgba(217,119,6,0.1); color:var(--warning); }
+.badge-blue{  color:var(--blue-bright); border-color:var(--blue-dim); }
+.badge-green{ color:var(--success); border-color:rgba(34,197,94,0.35); }
+.badge-amber{ color:var(--text); }
 .badge-grey{  background:var(--surface2); color:var(--text2); border:1px solid var(--border); }
 
 .btn-inline{
-  background:linear-gradient(180deg, var(--blue-bright), var(--blue-dim));
+  background:var(--blue-dim);
   color:#fff; border:none; padding:10px 18px;
   border-radius:var(--radius-sm);
   font-family:var(--font-body); font-size:13px; letter-spacing:0.2px; cursor:pointer; font-weight:700;
-  box-shadow:0 3px 10px rgba(37,99,235,0.3);
-  transition:filter .15s var(--ease), box-shadow .15s var(--ease), transform .05s var(--ease);
+  transition:filter .15s var(--ease), transform .05s var(--ease);
 }
-.btn-inline:hover{ filter:brightness(1.08); box-shadow:var(--shadow-md); }
+.btn-inline:hover{ filter:brightness(1.1); }
 .btn-inline:active{ transform:translateY(1px); }
 .btn-inline.secondary{ background:var(--surface2); border:1px solid var(--border); color:var(--text2); box-shadow:none; }
 .btn-inline.secondary:hover{ color:var(--text); border-color:var(--grey-dim); background:var(--surface3); filter:none; }
@@ -673,8 +646,6 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
   .user-chip{ margin-bottom:0; }
   .user-chip__text{ display:none; }
   .main{ padding:18px; }
-  .dash-welcome{ flex-direction:column; align-items:flex-start !important; }
-  .dash-grid{ grid-template-columns:1fr !important; }
 }
 
 /* ---------------------------------------------------------
@@ -689,7 +660,7 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
    SKELETON LOADING ROWS
 --------------------------------------------------------- */
 .skeleton-bar{
-  display:block; height:12px; border-radius:4px;
+  display:block; height:12px; border-radius:0;
   background:linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
   background-size:200% 100%;
   animation:skeleton-shimmer 1.3s ease-in-out infinite;
@@ -726,7 +697,7 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 /* ---------------------------------------------------------
    DANGER BUTTON VARIANT (used by the confirmDialog() delete prompt)
 --------------------------------------------------------- */
-.btn-inline.danger{ background:linear-gradient(180deg, #F87171, var(--danger)); box-shadow:0 3px 10px rgba(244,63,94,0.3); }
+.btn-inline.danger{ background:var(--danger); }
 
 /* ---------------------------------------------------------
    SORTABLE TABLE HEADERS
@@ -766,75 +737,40 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 .export-batch-breakdown__table td{ padding:8px 12px; font-size:12.5px; }
 .export-batch-breakdown__table tbody tr:last-child td{ border-bottom:none; }
 
+
 /* ---------------------------------------------------------
-   DASHBOARD OVERVIEW — welcome header, quick actions, recent
-   exports + activity feed. Previously unstyled (raw browser
-   defaults); this is the actual "empty-looking" screen the
-   redesign is meant to fix.
+   COMPANY DETAILS — read-only summary view (default) and the
+   4-bank selector button group used in the edit view. Sharp,
+   rectangular, monochrome — consistent with the rest of the app.
 --------------------------------------------------------- */
-.dash-welcome{
-  display:flex; align-items:flex-end; justify-content:space-between;
-  gap:20px; margin-bottom:24px; flex-wrap:wrap;
+.back-link{
+  display:inline-block; font-size:12px; color:var(--text2); margin-bottom:10px;
+  text-decoration:none;
 }
-.dash-welcome h2{
-  font-family:var(--font-display); font-size:26px; font-weight:700;
-  color:var(--text); letter-spacing:-0.4px;
-}
-.dash-welcome h2 span{ color:var(--blue-dim); }
-.dash-welcome p{ color:var(--text2); font-size:13.5px; margin-top:6px; }
+.back-link:hover{ color:var(--blue-bright); text-decoration:underline; }
 
-.dash-quick-actions{ display:flex; gap:10px; flex-wrap:wrap; }
-.dash-quick-actions button{
-  display:flex; align-items:center; gap:8px;
-  background:var(--surface); border:1px solid var(--border);
-  color:var(--text); padding:10px 16px; border-radius:100px;
-  font-family:var(--font-body); font-size:13px; font-weight:600; cursor:pointer;
-  box-shadow:var(--shadow-sm);
-  transition:border-color .15s var(--ease), box-shadow .15s var(--ease), transform .1s var(--ease), background .15s var(--ease);
+.company-summary-row{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 4px; border-bottom:1px solid var(--border-soft);
 }
-.dash-quick-actions button svg{ width:15px; height:15px; color:var(--text2); transition:color .15s var(--ease); }
-.dash-quick-actions button:hover{ border-color:var(--blue); box-shadow:var(--shadow-md); transform:translateY(-1px); }
-.dash-quick-actions button:hover svg{ color:var(--blue-dim); }
-.dash-quick-actions button:first-child{
-  background:linear-gradient(180deg, var(--blue-bright), var(--blue-dim));
-  border-color:transparent; color:#fff;
-  box-shadow:0 4px 14px rgba(37,99,235,0.28);
+.company-summary-row:last-of-type{ border-bottom:none; }
+.company-summary-row__label{
+  font-size:11.5px; color:var(--text2); text-transform:uppercase; letter-spacing:0.4px;
+  font-family:var(--font-mono);
 }
-.dash-quick-actions button:first-child svg{ color:#fff; }
-.dash-quick-actions button:first-child:hover{ filter:brightness(1.06); }
+.company-summary-row__value{
+  font-size:14px; color:var(--text); font-weight:600; font-family:var(--font-mono);
+}
 
-.dash-grid{
-  display:grid; grid-template-columns:1.3fr 1fr; gap:20px;
+.bank-select-group{ display:flex; gap:8px; flex-wrap:wrap; }
+.bank-select-btn{
+  flex:1; min-width:70px;
+  background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+  border-radius:var(--radius-sm); padding:10px 12px; cursor:pointer;
+  font-family:var(--font-mono); font-size:12.5px; font-weight:700; letter-spacing:0.3px;
+  transition:color .15s var(--ease), border-color .15s var(--ease), background .15s var(--ease);
 }
-@media (max-width: 1100px){ .dash-grid{ grid-template-columns:1fr; } }
-
-.dash-panel-head{
-  display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;
+.bank-select-btn:hover{ color:var(--text); border-color:var(--grey-dim); }
+.bank-select-btn.active{
+  color:#fff; background:var(--blue-dim); border-color:var(--blue-bright);
 }
-.dash-panel-head h3{ margin-bottom:0; }
-.dash-panel-head a{ font-size:12px; font-weight:600; color:var(--blue-dim); }
-.dash-panel-head a:hover{ text-decoration:underline; }
-
-.dash-activity-list{ list-style:none; display:flex; flex-direction:column; }
-.dash-activity-item{
-  display:flex; align-items:flex-start; gap:12px;
-  padding:12px 2px; border-bottom:1px solid var(--border-soft);
-  font-size:13px;
-}
-.dash-activity-item:last-child{ border-bottom:none; padding-bottom:2px; }
-.dash-activity-item--loading, .dash-activity-item--empty{
-  color:var(--text3); justify-content:center; padding:28px 0;
-}
-.dash-activity-dot{
-  width:9px; height:9px; border-radius:50%; margin-top:5px; flex-shrink:0;
-  background:var(--blue-dim);
-}
-.dash-activity-dot[data-action*="delete"]{ background:var(--danger); }
-.dash-activity-dot[data-action*="export"]{ background:var(--accent-violet); }
-.dash-activity-dot[data-action*="add"]{ background:var(--success); }
-.dash-activity-dot[data-action*="import"]{ background:var(--success); }
-.dash-activity-dot[data-action*="update"], .dash-activity-dot[data-action*="edit"]{ background:var(--warning); }
-.dash-activity-body{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
-.dash-activity-action{ font-weight:600; color:var(--text); }
-.dash-activity-detail{ color:var(--text2); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.dash-activity-time{ color:var(--text3); font-size:11.5px; font-family:var(--font-mono); flex-shrink:0; white-space:nowrap; }

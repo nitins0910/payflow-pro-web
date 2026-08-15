@@ -274,26 +274,16 @@ function confirmDialog(message, { title = 'Please confirm', danger = true } = {}
 // bank needs to be added — nothing else in the export pipeline is
 // bank-specific.
 //
-// NOTE: the exact CSV column layouts below follow the specs supplied
-// for SBI, PNB, BOB, HDFC, ICICI, Axis and Kotak. Canara, Union,
-// IndusInd and Yes Bank don't have a distinct spec on file, so they
-// fall back to a generic standard CSV layout —
-// confirm the live column order with each bank's CMS/corporate net
-// banking portal before using those in production.
+// NOTE: the exact CSV/TXT column layouts below follow the specs
+// supplied for SBI, HDFC, ICICI and PNB — the only 4 banks this app
+// supports. Confirm the live column order with each bank's CMS /
+// corporate net banking portal before using these in production.
 // ---------------------------------------------------------
 const BANKS = [
-  { key: 'SBI',      label: 'State Bank of India (SBI)',   ifscPrefix: 'SBIN' },
-  { key: 'PNB',      label: 'Punjab National Bank (PNB)',  ifscPrefix: 'PUNB' },
-  { key: 'BOB',      label: 'Bank of Baroda (BOB)',        ifscPrefix: 'BARB' },
-  { key: 'CNRB',     label: 'Canara Bank (CNRB)',          ifscPrefix: 'CNRB' },
-  { key: 'UBI',      label: 'Union Bank of India (UBI)',   ifscPrefix: 'UBIN' },
-  { key: 'INDB',     label: 'Indian Bank (IDIB)',           ifscPrefix: 'IDIB' },
-  { key: 'HDFC',     label: 'HDFC Bank (HDFC)',            ifscPrefix: 'HDFC' },
-  { key: 'ICIC',     label: 'ICICI Bank (ICIC)',           ifscPrefix: 'ICIC' },
-  { key: 'UTIB',     label: 'Axis Bank (UTIB)',            ifscPrefix: 'UTIB' },
-  { key: 'KKBK',     label: 'Kotak Mahindra Bank (KKBK)',  ifscPrefix: 'KKBK' },
-  { key: 'INDUSIND', label: 'IndusInd Bank (INDB)',        ifscPrefix: 'INDB' },
-  { key: 'YESB',     label: 'Yes Bank (YESB)',             ifscPrefix: 'YESB' },
+  { key: 'SBI',   label: 'State Bank of India (SBI)',  ifscPrefix: 'SBIN' },
+  { key: 'HDFC',  label: 'HDFC Bank (HDFC)',            ifscPrefix: 'HDFC' },
+  { key: 'ICICI', label: 'ICICI Bank (ICICI)',          ifscPrefix: 'ICIC' },
+  { key: 'PNB',   label: 'Punjab National Bank (PNB)',  ifscPrefix: 'PUNB' },
 ];
 const BANK_BY_KEY = Object.fromEntries(BANKS.map(b => [b.key, b]));
 
@@ -365,50 +355,6 @@ const BankFormatters = {
       return [header, ...rows].join('\r\n') + '\r\n';
     }
   },
-  BOB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'PaymentType,DebitAcc,BenAcc,BenName,Amount,IFSC,Remarks,TxnDate';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        `SALARY OF ${ctx.monthName} ${ctx.year}`, ctx.txnDate
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  CNRB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  UBI: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  INDB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
   HDFC: {
     ext: 'csv', mime: 'text/csv;charset=utf-8',
     generate(ctx) {
@@ -420,7 +366,7 @@ const BankFormatters = {
       return [header, ...rows].join('\r\n') + '\r\n';
     }
   },
-  ICIC: {
+  ICICI: {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
       const d = v => sanitizeForDelimitedFile(v, '^');
@@ -430,47 +376,23 @@ const BankFormatters = {
       return rows.join('\n') + '\n';
     }
   },
-  UTIB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'PaymentType,DebitAcc,BenAcc,BenName,Amount,IFSC,Remarks,TxnDate';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        `SALARY OF ${ctx.monthName} ${ctx.year}`, ctx.txnDate
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  KKBK: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'ClientCode,DebitAcc,BenAcc,Amount,BenName,IFSC,TxnType,ValueDate,Narration';
-      const rows = ctx.lines.map(l => csvRow([
-        ctx.companyProfile.sysId, ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2),
-        l.name, l.ifsc, l.mode, ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  // Generic standard CSV layout — used for banks without a distinct
-  // spec supplied (IndusInd, Yes Bank).
-  INDUSIND: { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
-  YESB:     { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
 };
-function genericCsv(ctx) {
-  const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-  const rows = ctx.lines.map(l => csvRow([
-    l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-    ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-  ]));
-  return [header, ...rows].join('\r\n') + '\r\n';
-}
 
-function populateCompanyBankSelect() {
-  const sel = document.getElementById('companyBankInput');
-  if (!sel || sel.dataset.populated) return;
-  sel.dataset.populated = '1';
-  sel.innerHTML = BANKS.map(b => `<option value="${b.key}">${escapeHtml(b.label)}</option>`).join('');
+// Wires up the 4-bank selector button group in the Company Details
+// edit view (SBI / HDFC / ICICI / PNB). Replaces the old <select>
+// dropdown with a clear set of buttons — only one is ever active.
+let selectedCompanyBankKey = 'SBI';
+function setSelectedCompanyBank(key) {
+  if (!BANK_BY_KEY[key]) return;
+  selectedCompanyBankKey = key;
+  document.querySelectorAll('#companyBankGroup .bank-select-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.bank === key);
+  });
+}
+function wireCompanyBankButtons() {
+  document.querySelectorAll('#companyBankGroup .bank-select-btn').forEach(btn => {
+    btn.addEventListener('click', () => setSelectedCompanyBank(btn.dataset.bank));
+  });
 }
 
 // ---------------------------------------------------------
@@ -1065,7 +987,6 @@ async function bootDashboard(user) {
   initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
   renderEmployeeKpis();
-  renderDashboardOverview();
 
   if (!dashboardBooted) {
     dashboardBooted = true;
@@ -1080,7 +1001,6 @@ async function bootDashboard(user) {
     wireSettingsForms();
     wirePasswordToggles();
     wireModalCloseButtons();
-    wireDashboardOverview();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
   }
@@ -1149,144 +1069,30 @@ async function renderEmployeeKpis() {
   }
 }
 
-function goToPage(page) {
-  const item = document.querySelector(`.nav-item[data-page="${page}"]`);
-  if (item) item.click();
+// Generic page navigation, shared by the topbar tabs, the Settings
+// list items (Edit Company Details), and any code that needs to jump
+// to a specific page programmatically (e.g. redirecting to Company
+// Details when the profile is incomplete).
+function showAppPage(page) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navItem) navItem.classList.add('active');
+  document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
+  const section = document.getElementById('page-' + page);
+  if (section) section.classList.remove('hidden');
+  if (page === 'audit') loadAuditTrail();
+  if (page === 'exports') loadExportHistory();
 }
+function goToPage(page) { showAppPage(page); }
 
 function wireNav() {
   document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-      document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
-      document.getElementById('page-' + item.dataset.page).classList.remove('hidden');
-      if (item.dataset.page === 'audit') loadAuditTrail();
-      if (item.dataset.page === 'exports') loadExportHistory();
-      if (item.dataset.page === 'dashboard') renderDashboardOverview();
-    });
+    item.addEventListener('click', () => showAppPage(item.dataset.page));
   });
-}
-
-// ---------------------------------------------------------
-// DASHBOARD OVERVIEW — the landing tab. Reuses data already fetched
-// for the Employee Ledger / Exports / Audit pages (headcount, company
-// profile, disbursement history, audit trail) into one at-a-glance
-// summary, so nothing new needs to be tracked just for this screen.
-// ---------------------------------------------------------
-function wireDashboardOverview() {
-  const addBtn = document.getElementById('dashQuickAddEmployee');
-  if (addBtn) addBtn.onclick = () => { goToPage('employees'); document.getElementById('addEmployeeBtn').click(); };
-
-  const disburseBtn = document.getElementById('dashQuickDisburse');
-  if (disburseBtn) disburseBtn.onclick = () => goToPage('disbursement');
-
-  const exportsBtn = document.getElementById('dashQuickExports');
-  if (exportsBtn) exportsBtn.onclick = () => goToPage('exports');
-
-  document.querySelectorAll('[data-page-link]').forEach(a => {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      goToPage(a.dataset.pageLink);
-    });
+  document.getElementById('companyBackToSettings').addEventListener('click', (e) => {
+    e.preventDefault();
+    showAppPage('settings');
   });
-}
-
-async function renderDashboardOverview() {
-  const empEl = document.getElementById('dashKpiEmployees');
-  if (!empEl) return; // Overview page not present
-
-  const nameEl = document.getElementById('dashWelcomeName');
-  if (nameEl) {
-    const first = currentUser && currentUser.displayName ? currentUser.displayName.trim().split(/\s+/)[0] : '';
-    nameEl.textContent = first ? `, ${first}` : '';
-  }
-
-  empEl.textContent = employees.length;
-  const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
-  document.getElementById('dashKpiBank').textContent = bank.label;
-
-  const monthEl = document.getElementById('dashKpiMonth');
-  const exportsEl = document.getElementById('dashKpiExports');
-  const exportsTbody = document.getElementById('dashRecentExports');
-  const activityList = document.getElementById('dashRecentActivity');
-
-  monthEl.textContent = '…';
-  exportsEl.textContent = '…';
-  renderSkeletonRows(exportsTbody, 4, 3);
-  activityList.innerHTML = '<li class="dash-activity-item dash-activity-item--loading">Loading…</li>';
-
-  let history = [], audit = [];
-  try {
-    [history, audit] = await Promise.all([Api.getDisbursementHistory(), Api.getAuditTrail()]);
-  } catch (err) {
-    console.error(err);
-    monthEl.textContent = '₹ 0.00';
-    exportsEl.textContent = '0';
-    exportsTbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger);">Could not load recent exports.</td></tr>`;
-    activityList.innerHTML = `<li class="dash-activity-item dash-activity-item--empty">Could not load recent activity.</li>`;
-    return;
-  }
-
-  const now = new Date();
-  let monthTotal = 0;
-  history.forEach(row => {
-    const created = row.createdAt && row.createdAt.toDate ? row.createdAt.toDate() : null;
-    if (created && created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()) {
-      const amt = parseFloat(row.amount);
-      if (!isNaN(amt)) monthTotal += amt;
-    }
-  });
-  monthEl.textContent = `₹ ${monthTotal.toFixed(2)}`;
-
-  const byBatch = new Map();
-  history.forEach(r => {
-    if (!byBatch.has(r.batchId)) {
-      byBatch.set(r.batchId, { batchId: r.batchId, transferDate: r.transferDate, createdAt: r.createdAt, rows: [] });
-    }
-    byBatch.get(r.batchId).rows.push(r);
-  });
-  const batches = [...byBatch.values()].sort((a, b) => {
-    const ta = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
-    const tb = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
-    return tb - ta;
-  });
-  exportsEl.textContent = batches.length;
-
-  exportsTbody.innerHTML = '';
-  if (!batches.length) {
-    exportsTbody.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="padding:26px 10px;"><div class="empty-state__icon">📦</div>No exports yet — batches will appear here after you export a payment file.</div></td></tr>`;
-  } else {
-    batches.slice(0, 5).forEach(b => {
-      const total = b.rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="font-family:var(--font-mono);">${escapeHtml(b.batchId)}</td>
-        <td>${escapeHtml(b.transferDate || '—')}</td>
-        <td>${b.rows.length}</td>
-        <td style="text-align:right; font-family:var(--font-mono);">₹${total.toFixed(2)}</td>`;
-      exportsTbody.appendChild(tr);
-    });
-  }
-
-  activityList.innerHTML = '';
-  if (!audit.length) {
-    activityList.innerHTML = `<li class="dash-activity-item dash-activity-item--empty">No activity yet — actions you take will show up here.</li>`;
-  } else {
-    audit.slice(0, 5).forEach(r => {
-      const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : null;
-      const li = document.createElement('li');
-      li.className = 'dash-activity-item';
-      li.innerHTML = `
-        <span class="dash-activity-dot" data-action="${escapeHtml((r.action || '').toLowerCase())}"></span>
-        <span class="dash-activity-body">
-          <span class="dash-activity-action">${escapeHtml(r.action || '')}</span>
-          <span class="dash-activity-detail">${escapeHtml(r.details || '')}</span>
-        </span>
-        <span class="dash-activity-time">${ts ? escapeHtml(ts.toLocaleDateString()) : ''}</span>`;
-      activityList.appendChild(li);
-    });
-  }
 }
 
 // Renders N placeholder rows into a <tbody> while a Firestore read is
@@ -1955,12 +1761,15 @@ function getTransferDateDDMMYYYY() {
   return `${d}/${m}/${y}`;
 }
 
-function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
+// Validates a Payroll Run amount field using the same clean
+// validation-style UI as the Account Number / IFSC confirmation
+// fields elsewhere in the app (input-match / input-mismatch classes)
+// instead of a separate red/green status dot.
+function validateLiveAmountEntry(inputEl, warnEl) {
   const v = inputEl.value.trim();
   warnEl.textContent = '';
-  inputEl.classList.remove('input-mismatch');
+  inputEl.classList.remove('input-mismatch', 'input-match');
   if (!v) {
-    lightEl.style.background = '#FF4757';
     updateBatchTotal();
     return;
   }
@@ -1973,14 +1782,14 @@ function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
     if (!ok) break;
   }
   if (!ok) {
-    lightEl.style.background = '#FF4757';
+    inputEl.classList.add('input-mismatch');
     warnEl.textContent = '⚠ INVALID FORMAT';
   } else {
     const val = parseFloat(v);
     if (!isNaN(val) && val > 0) {
-      lightEl.style.background = '#00E676';
+      inputEl.classList.add('input-match');
     } else {
-      lightEl.style.background = '#FF4757';
+      inputEl.classList.add('input-mismatch');
       warnEl.textContent = '⚠ MUST BE > 0';
     }
   }
@@ -2055,18 +1864,17 @@ function renderDisbursementList() {
       <td style="text-align:right;">
         <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
           <span style="font-size:10px; color:var(--danger); font-weight:700;" data-warn></span>
-          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#FF4757;" data-light title="${prefill ? 'Pre-filled from last export — review before sending' : ''}"></span>
           <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00" value="${escapeHtml(prefill)}"
-            style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--success); padding:6px 8px;">
+            title="${prefill ? 'Pre-filled from last export — review before sending' : ''}"
+            style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;">
         </div>
       </td>`;
     tbody.appendChild(tr);
     const inputEl = tr.querySelector('input');
-    const lightEl = tr.querySelector('[data-light]');
     const warnEl  = tr.querySelector('[data-warn]');
     const modeEl  = tr.querySelector('[data-mode]');
     inputEl.addEventListener('input', () => {
-      validateLiveAmountEntry(inputEl, lightEl, warnEl);
+      validateLiveAmountEntry(inputEl, warnEl);
       if (!isSbi) {
         const v = parseFloat(inputEl.value);
         modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, isNaN(v) ? 0 : v));
@@ -2074,7 +1882,7 @@ function renderDisbursementList() {
     });
     const prefillAmt = parseFloat(prefill);
     if (!isSbi) modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, isNaN(prefillAmt) ? 0 : prefillAmt));
-    if (prefill) validateLiveAmountEntry(inputEl, lightEl, warnEl);
+    if (prefill) validateLiveAmountEntry(inputEl, warnEl);
     salaryInputs[emp.accountNumber] = { inputEl, modeEl, name: emp.name, ifsc: emp.ifsc, empCode: emp.empCode };
   });
   wireMaskedAccountToggles(tbody);
@@ -2097,10 +1905,8 @@ function wireDisbursement() {
   document.getElementById('disbClearBtn').addEventListener('click', () => {
     document.querySelectorAll('#disbTableBody tr').forEach(tr => {
       const inputEl = tr.querySelector('input');
-      const lightEl = tr.querySelector('[data-light]');
       const warnEl  = tr.querySelector('[data-warn]');
-      if (inputEl) inputEl.value = '';
-      if (lightEl) lightEl.style.background = '#FF4757';
+      if (inputEl) { inputEl.value = ''; inputEl.classList.remove('input-match', 'input-mismatch'); }
       if (warnEl)  warnEl.textContent = '';
     });
     updateBatchTotal();
@@ -2138,14 +1944,17 @@ function collectBatchLines() {
 // account row, which the bank portal will reject. So export must be
 // blocked (not just discouraged) until the Company Profile is saved.
 function isCompanyProfileComplete() {
-  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.ifsc && companyProfile.sysId && companyProfile.bankName);
+  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.sysId && companyProfile.bankName);
 }
+// Company Details no longer has its own top-level nav tab (it lives
+// under Settings), so jumping there just shows the page section
+// directly and opens it in Edit mode, since the caller only does
+// this when the profile still needs to be filled in.
 function goToCompanyPage() {
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  const navItem = document.querySelector('.nav-item[data-page="company"]');
-  if (navItem) navItem.classList.add('active');
   document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
   document.getElementById('page-company').classList.remove('hidden');
+  setCompanyEditMode(true);
 }
 
 // A basic IFSC format check — 4 letters, a fixed 0, then 6 alphanumerics.
@@ -2186,9 +1995,9 @@ function buildExportWarnings(isSbi, tft, lines) {
   return warnings;
 }
 
-function openExportPreview() {
+async function openExportPreview() {
   if (!isCompanyProfileComplete()) {
-    toast('Please fill company details to continue. Company Name, Account Number, IFSC Code, Branch/Sys Code and Bank are required before you can export a payment file.', 'error');
+    toast('Please fill company details to continue. Company Name, Account Number, Branch/Sys Code and Bank are required before you can export a payment file.', 'error');
     goToCompanyPage();
     return;
   }
@@ -2198,6 +2007,29 @@ function openExportPreview() {
 
   const txnDate = getTransferDateDDMMYYYY();
   if (!txnDate) { toast('Please select a Transfer Date before exporting.', 'error'); return; }
+
+  // Re-resolve the company's IFSC from its Branch/System Code right
+  // before the file is generated, so the exported file always carries
+  // a freshly-verified IFSC rather than a possibly-stale cached one.
+  const exportBtn = document.getElementById('disbExportBtn');
+  const prevLabel = exportBtn.textContent;
+  exportBtn.disabled = true;
+  exportBtn.textContent = 'Verifying IFSC...';
+  try {
+    const freshIfsc = await resolveCompanyIfsc(companyProfile.bankName, companyProfile.sysId);
+    if (freshIfsc !== companyProfile.ifsc) {
+      companyProfile = { ...companyProfile, ifsc: freshIfsc };
+      await Api.updateCompanyProfile(companyProfile);
+      renderCompanySummary();
+    }
+  } catch (err) {
+    exportBtn.disabled = false;
+    exportBtn.textContent = prevLabel;
+    toast(err.message, 'error');
+    return;
+  }
+  exportBtn.disabled = false;
+  exportBtn.textContent = prevLabel;
 
   const bankKey = companyProfile.bankName || 'SBI';
   const isSbi = bankKey === 'SBI';
@@ -2326,7 +2158,6 @@ async function executeExport() {
       lines.map(l => ({ accountNumber: l.acc, amount: l.amount }))
     );
     renderEmployeeKpis();
-    renderDashboardOverview();
   } catch (err) {
     toast('File downloaded, but logging to the ledger failed: ' + err.message, 'error');
   }
@@ -2552,58 +2383,98 @@ function wireExportHistory() {
 }
 
 async function loadCompanyProfile() {
-  populateCompanyBankSelect();
   try {
     const p = await Api.getCompanyProfile();
     companyProfile = { ...companyProfile, ...p };
     document.getElementById('companyNameInput').value = p.name || '';
     document.getElementById('companyAccInput').value = p.accountNumber || '';
     document.getElementById('companyAccConfirmInput').value = p.accountNumber || '';
-    document.getElementById('companyIfscInput').value = p.ifsc || '';
-    document.getElementById('companyIfscConfirmInput').value = p.ifsc || '';
     document.getElementById('companySysInput').value = p.sysId || '';
-    document.getElementById('companyBankInput').value = p.bankName || 'SBI';
+    setSelectedCompanyBank(p.bankName || 'SBI');
   } catch (err) {
     console.error(err);
   }
+  renderCompanySummary();
   updateDisbursementModeUI();
 }
 
-// The Sys/Branch Code is, for most banks, literally the branch
-// portion of the IFSC (everything after the 4-letter bank code and
-// the fixed 5th "0" — e.g. SBIN0001234 -> 001234). Deriving it live
-// from the IFSC removes a manual-entry step and a chance to typo it,
-// while still letting the user overwrite it for banks (like Kotak)
-// whose bulk-upload spec wants a separate Client/Corporate ID instead
-// of a real branch code.
-function deriveBranchCodeFromIfsc(ifsc) {
-  const s = String(ifsc || '').toUpperCase();
-  return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(s) ? s.slice(5) : '';
+// Renders the 4-line read-only Company Details summary (Company Name,
+// Bank Name, Account Number, IFSC). This is the default view — the
+// full double-entry edit fields only appear after clicking Edit.
+function renderCompanySummary() {
+  const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
+  const nameEl = document.getElementById('coSummaryName');
+  if (!nameEl) return; // Company page not present yet
+  nameEl.textContent = companyProfile.name || '—';
+  document.getElementById('coSummaryBank').textContent = bank.label;
+  document.getElementById('coSummaryAcc').textContent = companyProfile.accountNumber ? maskAccount(companyProfile.accountNumber) : '—';
+  document.getElementById('coSummaryIfsc').textContent = companyProfile.ifsc || '—';
+}
+
+function setCompanyEditMode(editing) {
+  document.getElementById('companyReadOnlyView').classList.toggle('hidden', editing);
+  document.getElementById('companyEditView').classList.toggle('hidden', !editing);
+  if (editing) {
+    // Re-sync the edit fields with the last-saved profile every time
+    // Edit is opened, so a Cancel afterwards can't leave stale input.
+    document.getElementById('companyNameInput').value = companyProfile.name || '';
+    document.getElementById('companyAccInput').value = companyProfile.accountNumber || '';
+    document.getElementById('companyAccConfirmInput').value = companyProfile.accountNumber || '';
+    document.getElementById('companySysInput').value = companyProfile.sysId || '';
+    document.getElementById('companyIfscPreview').textContent = '';
+    setSelectedCompanyBank(companyProfile.bankName || 'SBI');
+  }
+}
+
+// ---------------------------------------------------------
+// AUTOMATIC IFSC LOOKUP
+// The user only ever enters the Branch/System Code and picks the
+// bank — the IFSC itself is resolved automatically via the public
+// Razorpay IFSC directory (https://ifsc.razorpay.com/<code>), which
+// mirrors the RBI's own IFSC database. We build a candidate code
+// from the selected bank's 4-letter prefix + the branch code, then
+// verify/resolve it through the API. This runs both when the profile
+// is saved and again right before a bulk payment file is generated,
+// so the IFSC that lands in the exported file is always freshly
+// confirmed — never hand-typed.
+// ---------------------------------------------------------
+async function resolveCompanyIfsc(bankKey, sysId) {
+  const bank = BANK_BY_KEY[bankKey];
+  const branch = String(sysId || '').trim().toUpperCase();
+  if (!bank || !branch) {
+    throw new Error('Select a bank and enter the Branch/System Code first.');
+  }
+  const candidate = `${bank.ifscPrefix}0${branch}`;
+  let res;
+  try {
+    res = await fetch(`https://ifsc.razorpay.com/${candidate}`);
+  } catch (err) {
+    throw new Error('Could not reach the IFSC lookup service. Check your connection and try again.');
+  }
+  if (!res.ok) {
+    throw new Error(`No IFSC found for branch/system code "${branch}" at ${bank.label}. Please check the code.`);
+  }
+  const data = await res.json();
+  return (data && data.IFSC) ? data.IFSC : candidate;
 }
 
 function wireCompanyForm() {
-  populateCompanyBankSelect();
+  wireCompanyBankButtons();
 
   const accInput        = document.getElementById('companyAccInput');
   const accConfirmInput = document.getElementById('companyAccConfirmInput');
   const accMismatchLbl  = document.getElementById('companyAccMismatchLbl');
-  const ifscInput        = document.getElementById('companyIfscInput');
-  const ifscConfirmInput = document.getElementById('companyIfscConfirmInput');
-  const ifscMismatchLbl  = document.getElementById('companyIfscMismatchLbl');
-  const sysInput = document.getElementById('companySysInput');
+  const sysInput        = document.getElementById('companySysInput');
+  const ifscPreviewEl   = document.getElementById('companyIfscPreview');
+  const saveBtn         = document.getElementById('saveCompanyBtn');
 
-  // Account Number and IFSC pairs: no spaces, and — critically — no
-  // pasting. Blocking paste is what makes "type it twice" actually
-  // catch typos; without it someone can paste the same wrong value
-  // into both boxes and it will "match" perfectly. This mirrors the
-  // Employee form's Account Number / IFSC confirmation fields exactly.
-  [accInput, accConfirmInput, ifscInput, ifscConfirmInput].forEach(el => {
+  // Account Number: no spaces, no pasting — blocking paste is what
+  // makes "type it twice" actually catch typos.
+  [accInput, accConfirmInput].forEach(el => {
     blockSpaceKey(el);
     blockPasteAndRightClick(el);
+    digitsOnlyLive(el);
   });
-  // Company Account Number is numeric only; IFSC stays alphanumeric.
-  [accInput, accConfirmInput].forEach(el => digitsOnlyLive(el));
-  [ifscInput, ifscConfirmInput].forEach(el => autoUpperCaseLive(el));
 
   // Live double-entry check — mirrors the Employee form's Account
   // Number confirmation, so a mistyped digit is caught immediately
@@ -2622,24 +2493,6 @@ function wireCompanyForm() {
     }
   }
   [accInput, accConfirmInput].forEach(el => el.addEventListener('input', () => checkPair(accInput, accConfirmInput, accMismatchLbl)));
-  [ifscInput, ifscConfirmInput].forEach(el => el.addEventListener('input', () => checkPair(ifscInput, ifscConfirmInput, ifscMismatchLbl)));
-
-  // Auto-fill Branch/Sys Code from the (confirmed) IFSC, but only
-  // while the field still holds a value we auto-filled ourselves —
-  // the moment the user types their own value in, we stop touching it.
-  let lastAutoSysValue = sysInput.value;
-  ifscConfirmInput.addEventListener('input', () => {
-    if (ifscInput.value.trim().toUpperCase() !== ifscConfirmInput.value.trim().toUpperCase()) return;
-    const derived = deriveBranchCodeFromIfsc(ifscConfirmInput.value);
-    if (!derived) return;
-    if (sysInput.value.trim() === '' || sysInput.value === lastAutoSysValue) {
-      sysInput.value = derived;
-      lastAutoSysValue = derived;
-    }
-  });
-  sysInput.addEventListener('input', () => {
-    if (sysInput.value !== lastAutoSysValue) lastAutoSysValue = '__manual__';
-  });
 
   const infoBtn = document.getElementById('sysCodeInfoBtn');
   const infoText = document.getElementById('sysCodeInfoText');
@@ -2648,15 +2501,16 @@ function wireCompanyForm() {
     infoBtn.classList.toggle('is-open');
   });
 
-  document.getElementById('saveCompanyBtn').addEventListener('click', async () => {
+  document.getElementById('editCompanyBtn').addEventListener('click', () => setCompanyEditMode(true));
+  document.getElementById('cancelCompanyEditBtn').addEventListener('click', () => setCompanyEditMode(false));
+
+  saveBtn.addEventListener('click', async () => {
     const name = document.getElementById('companyNameInput').value.trim().toUpperCase();
     const accountNumber = accInput.value.trim();
     const accountNumberConfirm = accConfirmInput.value.trim();
-    const ifsc = ifscInput.value.trim().toUpperCase();
-    const ifscConfirm = ifscConfirmInput.value.trim().toUpperCase();
-    const sysId = sysInput.value.trim();
-    const bankName = document.getElementById('companyBankInput').value;
-    if (!name || !accountNumber || !accountNumberConfirm || !ifsc || !ifscConfirm || !sysId || !bankName) {
+    const sysId = sysInput.value.trim().toUpperCase();
+    const bankName = selectedCompanyBankKey;
+    if (!name || !accountNumber || !accountNumberConfirm || !sysId || !bankName) {
       toast('Please fill all fields.', 'error'); return;
     }
     if (!/^[0-9]+$/.test(accountNumber) || !/^[0-9]+$/.test(accountNumberConfirm)) {
@@ -2667,21 +2521,26 @@ function wireCompanyForm() {
       toast('Company Account Number and its confirmation do not match.', 'error');
       return;
     }
-    if (ifsc !== ifscConfirm) {
-      toast('Bank IFSC Code and its confirmation do not match.', 'error');
-      return;
-    }
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Resolving IFSC...';
+    ifscPreviewEl.textContent = '';
     try {
+      const ifsc = await resolveCompanyIfsc(bankName, sysId);
+      ifscPreviewEl.textContent = `Resolved IFSC: ${ifsc}`;
       await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName });
       companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName };
       await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Branch: ${sysId} | Bank: ${bankName}`);
+      renderCompanySummary();
       updateDisbursementModeUI();
       renderDisbursementList();
       renderEmployeeKpis();
-      renderDashboardOverview();
+      setCompanyEditMode(false);
       toast('Company profile updated.', 'success');
     } catch (err) {
-      toast('Save failed: ' + err.message, 'error');
+      toast(err.message, 'error');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Company Profile';
     }
   });
 }
@@ -2732,6 +2591,11 @@ function wireSettingsForms() {
     openSettingsModal('changePasswordModal', 'changePasswordForm', 'settingsPasswordMsg'));
   document.getElementById('cancelChangePasswordBtn').addEventListener('click', () =>
     closeSettingsModal('changePasswordModal'));
+
+  document.getElementById('openEditCompanyBtn').addEventListener('click', () => {
+    showAppPage('company');
+    setCompanyEditMode(false);
+  });
 
   // ---- Change email ----
   document.getElementById('changeEmailForm').addEventListener('submit', async (e) => {

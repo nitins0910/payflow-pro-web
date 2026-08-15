@@ -96,6 +96,115 @@ const SITE_URL = "https://nitins0910.github.io/payflow-pro-web/";
 const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 
 // ---------------------------------------------------------
+// 1b. BILLING CONFIG — pay-per-export
+// First export ever is free; every export after that costs ₹50.
+// The functions below live on Netlify (see /netlify/functions) and do
+// the actual enforcement + Razorpay verification server-side, so none
+// of this can be bypassed by editing this file in devtools.
+//
+// IMPORTANT: point this at wherever the Netlify functions are actually
+// deployed. If this static site is hosted on the SAME Netlify site as
+// the functions, "" (relative) is correct as-is. If the site stays on
+// GitHub Pages (or anywhere else) while only the functions live on
+// Netlify, replace this with the full Netlify site URL, e.g.
+// "https://payflow-pro-billing.netlify.app".
+// ---------------------------------------------------------
+const FUNCTIONS_BASE_URL = ""; // "" = same origin, or "https://your-site.netlify.app"
+
+async function callBillingFunction(name, body) {
+  const idToken = await auth.currentUser.getIdToken();
+  const res = await fetch(`${FUNCTIONS_BASE_URL}/.netlify/functions/${name}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${idToken}`
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let data;
+  try { data = await res.json(); } catch (e) { data = {}; }
+  return { ok: res.ok, status: res.status, data };
+}
+
+// Checks (and atomically consumes) the user's free export or a paid
+// credit. Returns true if the caller may proceed with generating the
+// file right now. If payment is required, opens the Razorpay checkout
+// and — only on a verified successful payment — consumes the newly
+// granted credit and returns true. Returns false if the user cancels
+// payment or something goes wrong (a toast is already shown).
+async function ensureExportAllowed() {
+  const first = await callBillingFunction('consume-export');
+  if (first.ok && first.data.allowed) return true;
+
+  if (first.status !== 402) {
+    toast((first.data && first.data.error) || 'Could not verify export eligibility. Please try again.', 'error');
+    return false;
+  }
+
+  // Payment required — run the Razorpay checkout, then re-check.
+  const paid = await runRazorpayCheckout();
+  if (!paid) return false;
+
+  const second = await callBillingFunction('consume-export');
+  if (second.ok && second.data.allowed) return true;
+
+  toast('Payment succeeded but the credit could not be applied. Please try exporting again — you will not be charged twice.', 'error');
+  return false;
+}
+
+// Opens Razorpay's hosted checkout for a single ₹50 export credit.
+// Resolves true only after the payment has been verified server-side
+// (verify-payment.js) — never on the client-side success callback alone.
+function runRazorpayCheckout() {
+  return new Promise(async (resolve) => {
+    const order = await callBillingFunction('create-order');
+    if (!order.ok) {
+      toast((order.data && order.data.error) || 'Could not start payment. Please try again.', 'error');
+      resolve(false);
+      return;
+    }
+    if (typeof Razorpay === 'undefined') {
+      toast('Payment library failed to load. Please check your connection and try again.', 'error');
+      resolve(false);
+      return;
+    }
+
+    const rzp = new Razorpay({
+      key: order.data.keyId,
+      order_id: order.data.orderId,
+      amount: order.data.amount,
+      currency: order.data.currency,
+      name: 'PayFlow Pro',
+      description: 'Payroll export file credit',
+      prefill: { email: currentUser ? currentUser.email : '' },
+      theme: { color: '#2563EB' },
+      handler: async function (response) {
+        const verify = await callBillingFunction('verify-payment', {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature
+        });
+        if (verify.ok && verify.data.verified) {
+          toast('Payment successful — exporting your file...', 'success');
+          resolve(true);
+        } else {
+          toast((verify.data && verify.data.error) || 'Payment verification failed.', 'error');
+          resolve(false);
+        }
+      },
+      modal: {
+        ondismiss: function () { resolve(false); }
+      }
+    });
+    rzp.on('payment.failed', function () {
+      toast('Payment failed. Please try again.', 'error');
+      resolve(false);
+    });
+    rzp.open();
+  });
+}
+
+// ---------------------------------------------------------
 // 2. FIRESTORE DATA LAYER (unchanged from firestore-api.js)
 // ---------------------------------------------------------
 let currentUserId = null;
@@ -2463,6 +2572,18 @@ async function openExportPreview() {
     // so a duplicate click would otherwise produce two "real" exports.
     if (confirmBtn.disabled) return;
     confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Checking...';
+
+    // Billing gate: consumes the free export (first time ever) or a
+    // paid credit; if neither is available, this opens Razorpay
+    // checkout and only continues after a verified ₹50 payment.
+    const allowed = await ensureExportAllowed();
+    if (!allowed) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Confirm → Export';
+      return;
+    }
+
     confirmBtn.textContent = 'Exporting...';
     document.getElementById('exportPreviewModal').classList.add('hidden');
     await executeExport();

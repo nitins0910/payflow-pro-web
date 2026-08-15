@@ -1187,6 +1187,7 @@ async function bootDashboard(user) {
     wireSettingsForms();
     wirePasswordToggles();
     wireModalCloseButtons();
+    wireHelpSupport();
     wireGuidedTour();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
@@ -1389,6 +1390,56 @@ function wireModalCloseButtons() {
   });
 }
 
+// Help & Support: a simple one-way message form. Submits to the
+// send-support-message Netlify function, which emails the site owner
+// with the signed-in user's email set as Reply-To — no ticket storage,
+// no dashboard, just "it lands in the inbox."
+function wireHelpSupport() {
+  const modal = document.getElementById('helpSupportModal');
+  const openBtn = document.getElementById('helpSupportBtn');
+  const cancelBtn = document.getElementById('cancelHelpSupportBtn');
+  const form = document.getElementById('helpSupportForm');
+  const submitBtn = document.getElementById('submitHelpSupportBtn');
+  const msgEl = document.getElementById('helpSupportMsg');
+
+  function closeModal() {
+    modal.classList.add('hidden');
+  }
+
+  openBtn.addEventListener('click', () => {
+    form.reset();
+    msgEl.innerHTML = '';
+    modal.classList.remove('hidden');
+  });
+  cancelBtn.addEventListener('click', closeModal);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const subject = document.getElementById('supportSubject').value.trim();
+    const message = document.getElementById('supportMessage').value.trim();
+    if (!subject || !message) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending...';
+    msgEl.innerHTML = '';
+
+    try {
+      const result = await callBillingFunction('send-support-message', { subject, message });
+      if (result.ok && result.data.sent) {
+        toast('Message sent — we\'ll get back to you by email.', 'success');
+        closeModal();
+      } else {
+        msgEl.innerHTML = `<p class="field-hint" style="color:var(--danger);">${escapeHtml((result.data && result.data.error) || 'Could not send your message. Please try again.')}</p>`;
+      }
+    } catch (err) {
+      msgEl.innerHTML = `<p class="field-hint" style="color:var(--danger);">Something went wrong: ${escapeHtml(err.message || String(err))}</p>`;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send Message';
+    }
+  });
+}
+
 // Populates the KPI summary row at the top of the Employee Ledger page:
 // headcount, the company's configured bank, this calendar month's total
 // disbursed amount, and the most recent export batch — all derived from
@@ -1458,7 +1509,13 @@ function goToPage(page) { showAppPage(page); }
 
 function wireNav() {
   document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => showAppPage(item.dataset.page));
+    item.addEventListener('click', () => {
+      // The Help & Support sidebar icon reuses .nav-item styling but has
+      // no data-page — it opens a modal instead, wired separately in
+      // wireHelpSupport(). Nothing to do for it here.
+      if (!item.dataset.page) return;
+      showAppPage(item.dataset.page);
+    });
   });
   document.getElementById('companyBackToSettings').addEventListener('click', (e) => {
     e.preventDefault();

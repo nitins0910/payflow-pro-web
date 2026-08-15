@@ -301,6 +301,9 @@
         <div class="nav-item" data-page="settings" data-tooltip="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </div>
+        <div class="nav-item" id="helpSupportBtn" data-tooltip="Help &amp; Support">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
       </div>
 
       <div class="sidebar-footer">
@@ -847,6 +850,34 @@
         <button type="button" class="btn-inline secondary" id="cancelExportBtn">Cancel</button>
         <button type="button" class="btn-inline" id="confirmExportBtn" style="flex:1;">Confirm → Export</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Help & Support — sends a message to the site owner's inbox via the
+       send-support-message Netlify function. No ticket storage, just a
+       one-way message with the user's email set as Reply-To. -->
+  <div id="helpSupportModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Help &amp; Support</h3>
+        <button type="button" class="modal-close" data-modal="helpSupportModal" aria-label="Close">×</button>
+      </div>
+      <p class="field-hint" style="margin-top:-6px;">Facing an issue or have feedback? Send us a message — we'll reply to your account email.</p>
+      <div id="helpSupportMsg"></div>
+      <form id="helpSupportForm">
+        <div class="field">
+          <label>Subject</label>
+          <input type="text" id="supportSubject" required maxlength="120" placeholder="e.g. Export button not working">
+        </div>
+        <div class="field">
+          <label>Message</label>
+          <textarea id="supportMessage" required maxlength="4000" rows="5" placeholder="Describe the issue in as much detail as you can..."></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-inline secondary" id="cancelHelpSupportBtn">Cancel</button>
+          <button type="submit" class="btn-inline" id="submitHelpSupportBtn" style="flex:1;">Send Message</button>
+        </div>
+      </form>
     </div>
   </div>
 

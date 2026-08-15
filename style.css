@@ -217,6 +217,27 @@ a{color:var(--blue-bright); text-decoration:none;}
   background:var(--surface3);
 }
 .field input::placeholder{ color:var(--text3); }
+.field textarea{
+  width:100%;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:11px 12px;
+  font-size:14px;
+  border-radius:var(--radius-sm);
+  font-family:var(--font-body);
+  resize:vertical;
+  min-height:90px;
+  transition:border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
+}
+.field textarea:hover{ border-color:#33455F; }
+.field textarea:focus{
+  outline:none;
+  border-color:var(--blue);
+  box-shadow:var(--shadow-glow);
+  background:var(--surface3);
+}
+.field textarea::placeholder{ color:var(--text3); }
 /* Native date/month pickers pick up the same field styling */
 .field input[type="date"],
 .field input[type="month"]{ accent-color:var(--blue-dim); }

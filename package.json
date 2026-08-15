@@ -5,6 +5,7 @@
   "description": "Serverless functions for PayFlow Pro's pay-per-export billing (Razorpay + Firebase Admin).",
   "dependencies": {
     "firebase-admin": "^12.1.0",
-    "razorpay": "^2.9.4"
+    "razorpay": "^2.9.4",
+    "nodemailer": "^6.9.14"
   }
 }

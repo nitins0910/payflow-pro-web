@@ -275,6 +275,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
         Disbursement
       </div>
+      <div class="nav-item" data-page="exports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export History
+      </div>
       <div class="nav-item" data-page="audit">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Audit Trail
@@ -309,7 +313,9 @@
             <h2>Employee Ledger</h2>
             <p>Add, edit, and manage employee payout records.</p>
           </div>
-          <div style="display:flex; gap:8px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <a href="#" id="downloadSampleCsvLink" style="font-size:12px; color:var(--text2); text-decoration:underline; margin-right:4px;">Download sample CSV</a>
+            <button class="btn-inline secondary" id="exportLedgerCsvBtn">Export Ledger CSV</button>
             <button class="btn-inline secondary" id="bulkImportBtn">Bulk Import CSV</button>
             <input type="file" id="bulkImportInput" accept=".csv" class="hidden">
             <button class="btn-inline" id="addEmployeeBtn">+ Add Employee</button>
@@ -340,15 +346,21 @@
           <input type="text" id="employeeSearch" placeholder="Search by name or account no..."
             style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
             color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
+          <div id="employeeBulkBar" class="bulk-actions-bar hidden">
+            <span><strong id="employeeSelectedCount">0</strong> selected</span>
+            <button type="button" class="btn-inline secondary" id="employeeBulkDeleteBtn" style="padding:6px 14px; font-size:12px;">Delete Selected</button>
+            <button type="button" class="btn-inline secondary" id="employeeBulkClearBtn" style="padding:6px 14px; font-size:12px;">Clear Selection</button>
+          </div>
           <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Employee Name</th>
-                <th>Account Number</th>
-                <th>IFSC / Branch Code</th>
-                <th>Transfer Type</th>
-                <th>Emp Code</th>
+                <th class="row-select-cell"><input type="checkbox" id="employeeSelectAll" aria-label="Select all"></th>
+                <th class="sortable" data-sort="name">Employee Name<span class="sort-arrow">▲</span></th>
+                <th class="sortable" data-sort="accountNumber">Account Number<span class="sort-arrow">▲</span></th>
+                <th class="sortable" data-sort="ifsc">IFSC / Branch Code<span class="sort-arrow">▲</span></th>
+                <th class="sortable" data-sort="transferType">Transfer Type<span class="sort-arrow">▲</span></th>
+                <th class="sortable" data-sort="empCode">Emp Code<span class="sort-arrow">▲</span></th>
                 <th></th>
               </tr>
             </thead>
@@ -426,6 +438,42 @@
         </div>
       </section>
 
+      <section id="page-exports" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Export History</h2>
+            <p>Every exported batch, grouped for review and re-download.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <input type="text" id="exportsSearch" placeholder="Search by batch ID or bank..."
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
+          <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Batch ID</th>
+                <th>Bank</th>
+                <th>Transfer Date</th>
+                <th>Employees</th>
+                <th style="text-align:right;">Total (₹)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="exportsTableBody"></tbody>
+          </table>
+          </div>
+          <div id="exportsEmptyState" class="empty-state hidden">
+            <div class="empty-state__icon">📦</div>
+            No exports yet — batches will appear here after you export a payment file.
+          </div>
+          <p style="font-size:11.5px; color:var(--text3); margin-top:12px;">
+            Shows batches reconstructed from the most recent 500 disbursement rows. Re-downloaded files use the company profile and IFSC as they were at the time of that export, not your current settings.
+          </p>
+        </div>
+      </section>
+
       <section id="page-audit" class="hidden">
         <div class="page-head">
           <div>
@@ -439,7 +487,12 @@
             color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
           <div class="table-wrap">
           <table>
-            <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+            <thead><tr>
+              <th class="sortable" data-audit-sort="timestamp">Timestamp<span class="sort-arrow">▲</span></th>
+              <th class="sortable" data-audit-sort="userEmail">User<span class="sort-arrow">▲</span></th>
+              <th class="sortable" data-audit-sort="action">Action<span class="sort-arrow">▲</span></th>
+              <th>Details</th>
+            </tr></thead>
             <tbody id="auditTableBody"></tbody>
           </table>
           </div>
@@ -686,6 +739,37 @@
       </div>
     </div>
   </div>
+
+  <!-- Bulk import result summary -->
+  <div id="importResultModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-head">
+        <h3>Import Results</h3>
+        <button type="button" class="modal-close" data-modal="importResultModal" aria-label="Close">×</button>
+      </div>
+      <div id="importResultBody" style="font-size:13px; line-height:1.7;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-inline" id="importResultCloseBtn" style="flex:1;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic confirm dialog, used by confirmDialog() in place of window.confirm() -->
+  <div id="confirmModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-head">
+        <h3 id="confirmModalTitle">Please confirm</h3>
+      </div>
+      <div id="confirmModalBody" style="font-size:13.5px; color:var(--text2); line-height:1.6;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-inline secondary" id="confirmModalCancelBtn">Cancel</button>
+        <button type="button" class="btn-inline danger" id="confirmModalOkBtn" style="flex:1;">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification host, used by toast() in place of window.alert() -->
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>

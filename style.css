@@ -523,3 +523,73 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
   .sidebar .brand, .sidebar-footer{ display:none; }
   .main{ padding:20px; }
 }
+
+/* ---------------------------------------------------------
+   TABLE HORIZONTAL SCROLL (mobile / narrow viewports)
+   Previously .table-wrap used overflow:hidden, which just clipped
+   wide tables on small screens instead of letting them scroll.
+--------------------------------------------------------- */
+.table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.table-wrap table{ min-width:640px; }
+
+/* ---------------------------------------------------------
+   SKELETON LOADING ROWS
+--------------------------------------------------------- */
+.skeleton-bar{
+  display:block; height:12px; border-radius:4px;
+  background:linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
+  background-size:200% 100%;
+  animation:skeleton-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer{
+  0%{ background-position:200% 0; }
+  100%{ background-position:-200% 0; }
+}
+
+/* ---------------------------------------------------------
+   TOASTS (replaces window.alert())
+--------------------------------------------------------- */
+.toast-host{
+  position:fixed; bottom:20px; right:20px; z-index:200;
+  display:flex; flex-direction:column; gap:10px;
+  max-width:360px;
+}
+.toast{
+  background:var(--surface3); border:1px solid var(--border-soft); color:var(--text);
+  padding:13px 16px; border-radius:var(--radius-md); box-shadow:var(--shadow-lg);
+  font-size:13px; line-height:1.5; cursor:pointer;
+  opacity:0; transform:translateY(8px);
+  transition:opacity .2s var(--ease), transform .2s var(--ease);
+}
+.toast-show{ opacity:1; transform:translateY(0); }
+.toast-success{ border-left:3px solid var(--success); }
+.toast-error{ border-left:3px solid var(--danger); }
+.toast-info{ border-left:3px solid var(--blue); }
+
+@media (max-width: 560px){
+  .toast-host{ left:16px; right:16px; bottom:16px; max-width:none; }
+}
+
+/* ---------------------------------------------------------
+   DANGER BUTTON VARIANT (used by the confirmDialog() delete prompt)
+--------------------------------------------------------- */
+.btn-inline.danger{ background:linear-gradient(180deg, #F87171, var(--danger)); box-shadow:0 3px 10px rgba(244,63,94,0.3); }
+
+/* ---------------------------------------------------------
+   SORTABLE TABLE HEADERS
+--------------------------------------------------------- */
+th.sortable{ cursor:pointer; user-select:none; white-space:nowrap; }
+th.sortable:hover{ color:var(--text); }
+th.sortable .sort-arrow{ display:inline-block; margin-left:4px; opacity:.5; font-size:10px; }
+th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
+
+/* ---------------------------------------------------------
+   ROW SELECTION (bulk actions)
+--------------------------------------------------------- */
+.row-select-cell{ width:34px; }
+.bulk-actions-bar{
+  display:flex; align-items:center; gap:12px; margin-bottom:12px;
+  background:var(--surface2); border:1px solid var(--border-soft); border-radius:var(--radius-sm);
+  padding:10px 14px; font-size:13px; color:var(--text2);
+}
+.bulk-actions-bar strong{ color:var(--text); }

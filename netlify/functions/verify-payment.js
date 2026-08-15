@@ -14,7 +14,7 @@
 // else's wallet.
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
-const { db, requireUser, json, handleOptions } = require('./_firebaseAdmin');
+const { admin, db, requireUser, json, handleOptions } = require('./_firebaseAdmin');
 
 exports.handler = async (event) => {
   const preflight = handleOptions(event);
@@ -76,16 +76,46 @@ exports.handler = async (event) => {
   // Credits the account. Uses a transaction (even though it's a simple
   // increment) so this can never race with consume-credits.js
   // decrementing the same field.
+  //
+  // SECURITY: this must also be idempotent per razorpay_payment_id.
+  // The (order_id, payment_id, signature) triple is a deterministic
+  // HMAC — once a payment has succeeded once, that exact triple stays
+  // valid forever and can be replayed (e.g. captured from the network
+  // tab and POSTed again). Without a guard, every replay would credit
+  // the wallet again for the SAME payment — free, unlimited credits.
+  // We record a `processed_payments/{payment_id}` doc in the SAME
+  // transaction as the credit update, so a payment can only ever be
+  // applied once, even under concurrent/duplicate requests.
   const userRef = db.collection('users').doc(decoded.uid);
+  const paymentRef = db.collection('processed_payments').doc(razorpay_payment_id);
   try {
-    const newBalance = await db.runTransaction(async (tx) => {
+    const result = await db.runTransaction(async (tx) => {
+      const paymentSnap = await tx.get(paymentRef);
+      if (paymentSnap.exists) {
+        // Already credited by an earlier call — return the same
+        // outcome without adding credits again.
+        return { alreadyProcessed: true, creditsRemaining: paymentSnap.data().creditsRemaining };
+      }
       const snap = await tx.get(userRef);
       const current = Number((snap.exists && snap.data().credits) || 0);
       const updated = current + credits;
       tx.set(userRef, { credits: updated }, { merge: true });
-      return updated;
+      tx.set(paymentRef, {
+        uid: decoded.uid,
+        orderId: razorpay_order_id,
+        credits,
+        creditsRemaining: updated,
+        processedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return { alreadyProcessed: false, creditsRemaining: updated };
     });
-    return json(200, { verified: true, creditsAdded: credits, creditsRemaining: newBalance }, event);
+
+    return json(200, {
+      verified: true,
+      creditsAdded: result.alreadyProcessed ? 0 : credits,
+      creditsRemaining: result.creditsRemaining,
+      alreadyProcessed: result.alreadyProcessed
+    }, event);
   } catch (err) {
     return json(500, { error: 'Payment verified but could not credit your account. Contact support with payment ID: ' + razorpay_payment_id }, event);
   }

@@ -1065,6 +1065,7 @@ async function bootDashboard(user) {
   initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
   renderEmployeeKpis();
+  renderDashboardOverview();
 
   if (!dashboardBooted) {
     dashboardBooted = true;
@@ -1079,6 +1080,7 @@ async function bootDashboard(user) {
     wireSettingsForms();
     wirePasswordToggles();
     wireModalCloseButtons();
+    wireDashboardOverview();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
   }
@@ -1161,8 +1163,130 @@ function wireNav() {
       document.getElementById('page-' + item.dataset.page).classList.remove('hidden');
       if (item.dataset.page === 'audit') loadAuditTrail();
       if (item.dataset.page === 'exports') loadExportHistory();
+      if (item.dataset.page === 'dashboard') renderDashboardOverview();
     });
   });
+}
+
+// ---------------------------------------------------------
+// DASHBOARD OVERVIEW — the landing tab. Reuses data already fetched
+// for the Employee Ledger / Exports / Audit pages (headcount, company
+// profile, disbursement history, audit trail) into one at-a-glance
+// summary, so nothing new needs to be tracked just for this screen.
+// ---------------------------------------------------------
+function wireDashboardOverview() {
+  const addBtn = document.getElementById('dashQuickAddEmployee');
+  if (addBtn) addBtn.onclick = () => { goToPage('employees'); document.getElementById('addEmployeeBtn').click(); };
+
+  const disburseBtn = document.getElementById('dashQuickDisburse');
+  if (disburseBtn) disburseBtn.onclick = () => goToPage('disbursement');
+
+  const exportsBtn = document.getElementById('dashQuickExports');
+  if (exportsBtn) exportsBtn.onclick = () => goToPage('exports');
+
+  document.querySelectorAll('[data-page-link]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      goToPage(a.dataset.pageLink);
+    });
+  });
+}
+
+async function renderDashboardOverview() {
+  const empEl = document.getElementById('dashKpiEmployees');
+  if (!empEl) return; // Overview page not present
+
+  const nameEl = document.getElementById('dashWelcomeName');
+  if (nameEl) {
+    const first = currentUser && currentUser.displayName ? currentUser.displayName.trim().split(/\s+/)[0] : '';
+    nameEl.textContent = first ? `, ${first}` : '';
+  }
+
+  empEl.textContent = employees.length;
+  const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
+  document.getElementById('dashKpiBank').textContent = bank.label;
+
+  const monthEl = document.getElementById('dashKpiMonth');
+  const exportsEl = document.getElementById('dashKpiExports');
+  const exportsTbody = document.getElementById('dashRecentExports');
+  const activityList = document.getElementById('dashRecentActivity');
+
+  monthEl.textContent = '…';
+  exportsEl.textContent = '…';
+  renderSkeletonRows(exportsTbody, 4, 3);
+  activityList.innerHTML = '<li class="dash-activity-item dash-activity-item--loading">Loading…</li>';
+
+  let history = [], audit = [];
+  try {
+    [history, audit] = await Promise.all([Api.getDisbursementHistory(), Api.getAuditTrail()]);
+  } catch (err) {
+    console.error(err);
+    monthEl.textContent = '₹ 0.00';
+    exportsEl.textContent = '0';
+    exportsTbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger);">Could not load recent exports.</td></tr>`;
+    activityList.innerHTML = `<li class="dash-activity-item dash-activity-item--empty">Could not load recent activity.</li>`;
+    return;
+  }
+
+  const now = new Date();
+  let monthTotal = 0;
+  history.forEach(row => {
+    const created = row.createdAt && row.createdAt.toDate ? row.createdAt.toDate() : null;
+    if (created && created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()) {
+      const amt = parseFloat(row.amount);
+      if (!isNaN(amt)) monthTotal += amt;
+    }
+  });
+  monthEl.textContent = `₹ ${monthTotal.toFixed(2)}`;
+
+  const byBatch = new Map();
+  history.forEach(r => {
+    if (!byBatch.has(r.batchId)) {
+      byBatch.set(r.batchId, { batchId: r.batchId, transferDate: r.transferDate, createdAt: r.createdAt, rows: [] });
+    }
+    byBatch.get(r.batchId).rows.push(r);
+  });
+  const batches = [...byBatch.values()].sort((a, b) => {
+    const ta = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
+    const tb = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
+    return tb - ta;
+  });
+  exportsEl.textContent = batches.length;
+
+  exportsTbody.innerHTML = '';
+  if (!batches.length) {
+    exportsTbody.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="padding:26px 10px;"><div class="empty-state__icon">📦</div>No exports yet — batches will appear here after you export a payment file.</div></td></tr>`;
+  } else {
+    batches.slice(0, 5).forEach(b => {
+      const total = b.rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-family:var(--font-mono);">${escapeHtml(b.batchId)}</td>
+        <td>${escapeHtml(b.transferDate || '—')}</td>
+        <td>${b.rows.length}</td>
+        <td style="text-align:right; font-family:var(--font-mono);">₹${total.toFixed(2)}</td>`;
+      exportsTbody.appendChild(tr);
+    });
+  }
+
+  activityList.innerHTML = '';
+  if (!audit.length) {
+    activityList.innerHTML = `<li class="dash-activity-item dash-activity-item--empty">No activity yet — actions you take will show up here.</li>`;
+  } else {
+    audit.slice(0, 5).forEach(r => {
+      const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : null;
+      const li = document.createElement('li');
+      li.className = 'dash-activity-item';
+      li.innerHTML = `
+        <span class="dash-activity-dot" data-action="${escapeHtml((r.action || '').toLowerCase())}"></span>
+        <span class="dash-activity-body">
+          <span class="dash-activity-action">${escapeHtml(r.action || '')}</span>
+          <span class="dash-activity-detail">${escapeHtml(r.details || '')}</span>
+        </span>
+        <span class="dash-activity-time">${ts ? escapeHtml(ts.toLocaleDateString()) : ''}</span>`;
+      activityList.appendChild(li);
+    });
+  }
 }
 
 // Renders N placeholder rows into a <tbody> while a Firestore read is
@@ -2202,6 +2326,7 @@ async function executeExport() {
       lines.map(l => ({ accountNumber: l.acc, amount: l.amount }))
     );
     renderEmployeeKpis();
+    renderDashboardOverview();
   } catch (err) {
     toast('File downloaded, but logging to the ledger failed: ' + err.message, 'error');
   }
@@ -2553,6 +2678,7 @@ function wireCompanyForm() {
       updateDisbursementModeUI();
       renderDisbursementList();
       renderEmployeeKpis();
+      renderDashboardOverview();
       toast('Company profile updated.', 'success');
     } catch (err) {
       toast('Save failed: ' + err.message, 'error');

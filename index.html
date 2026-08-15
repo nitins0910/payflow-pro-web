@@ -565,7 +565,7 @@
           <div>
             <a href="#" id="companyBackToSettings" class="back-link">← Back to Settings</a>
             <h2>Company Details</h2>
-            <p>These details print on every exported bulk file. The IFSC is resolved automatically from your Branch/System Code — you never type it in.</p>
+            <p>These details print on every exported bulk file. Enter your full IFSC — we automatically pull the 6-digit branch code out of it for the file.</p>
           </div>
         </div>
 
@@ -607,12 +607,15 @@
           </div>
           <div class="field">
             <label style="display:flex; align-items:center; gap:6px;">
-              Branch / System Code
-              <button type="button" class="info-btn" id="sysCodeInfoBtn" aria-label="What goes in this field?">i</button>
+              IFSC Code
+              <button type="button" class="info-btn" id="sysCodeInfoBtn" aria-label="Where do I find this?">i</button>
             </label>
-            <input type="text" id="companySysInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            <input type="text" id="companyIfscInput" maxlength="11" placeholder="e.g. SBIN0001234" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
             <div class="field-hint info-popover hidden" id="sysCodeInfoText">
-              This is the branch portion of your account's IFSC code — for most banks, the last 6 characters (e.g. the "001234" in SBIN0001234). We look up and fill in the full IFSC for you automatically when you save, and again each time you generate a payment file, so you never need to type it in.
+              Enter your company bank account's full 11-character IFSC code — printed on your
+              chequebook or visible in your bank's net-banking/app. We automatically pull out
+              the 6-character branch code from it for the payment file, so you never need to
+              enter that separately.
             </div>
             <div class="field-hint" id="companyIfscPreview"></div>
           </div>

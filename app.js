@@ -2645,7 +2645,7 @@ function collectBatchLines() {
 // account row, which the bank portal will reject. So export must be
 // blocked (not just discouraged) until the Company Profile is saved.
 function isCompanyProfileComplete() {
-  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.sysId && companyProfile.bankName);
+  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.ifsc && companyProfile.bankName);
 }
 // Company Details no longer has its own top-level nav tab (it lives
 // under Settings), so jumping there just shows the page section
@@ -2698,7 +2698,7 @@ function buildExportWarnings(isSbi, tft, lines) {
 
 async function openExportPreview() {
   if (!isCompanyProfileComplete()) {
-    toast('Please fill company details to continue. Company Name, Account Number, Branch/Sys Code and Bank are required before you can export a payment file.', 'error');
+    toast('Please fill company details to continue. Company Name, Account Number, IFSC and Bank are required before you can export a payment file.', 'error');
     goToCompanyPage();
     return;
   }
@@ -2709,28 +2709,20 @@ async function openExportPreview() {
   const txnDate = getTransferDateDDMMYYYY();
   if (!txnDate) { toast('Please select a Transfer Date before exporting.', 'error'); return; }
 
-  // Re-resolve the company's IFSC from its Branch/System Code right
-  // before the file is generated, so the exported file always carries
-  // a freshly-verified IFSC rather than a possibly-stale cached one.
-  const exportBtn = document.getElementById('disbExportBtn');
-  const prevLabel = exportBtn.textContent;
-  exportBtn.disabled = true;
-  exportBtn.textContent = 'Verifying IFSC...';
-  try {
-    const freshIfsc = await resolveCompanyIfsc(companyProfile.bankName, companyProfile.sysId);
-    if (freshIfsc !== companyProfile.ifsc) {
-      companyProfile = { ...companyProfile, ifsc: freshIfsc };
-      await Api.updateCompanyProfile(companyProfile);
-      renderCompanySummary();
-    }
-  } catch (err) {
-    exportBtn.disabled = false;
-    exportBtn.textContent = prevLabel;
-    toast(err.message, 'error');
+  // Re-derive the company's branch code from its saved IFSC right
+  // before the file is generated — purely local (no network lookup),
+  // so it always matches whatever IFSC is currently saved.
+  if (!isValidIfscFormat(companyProfile.ifsc)) {
+    toast('Company IFSC looks invalid. Please re-check it in Company Details.', 'error');
+    goToCompanyPage();
     return;
   }
-  exportBtn.disabled = false;
-  exportBtn.textContent = prevLabel;
+  const freshSysId = branchCodeFromIfsc(companyProfile.ifsc);
+  if (freshSysId !== companyProfile.sysId) {
+    companyProfile = { ...companyProfile, sysId: freshSysId };
+    await Api.updateCompanyProfile(companyProfile);
+    renderCompanySummary();
+  }
 
   const bankKey = companyProfile.bankName || 'SBI';
   const isSbi = bankKey === 'SBI';
@@ -3131,7 +3123,7 @@ async function loadCompanyProfile() {
     document.getElementById('companyNameInput').value = p.name || '';
     document.getElementById('companyAccInput').value = p.accountNumber || '';
     document.getElementById('companyAccConfirmInput').value = p.accountNumber || '';
-    document.getElementById('companySysInput').value = p.sysId || '';
+    document.getElementById('companyIfscInput').value = p.ifsc || '';
     setSelectedCompanyBank(p.bankName || 'SBI');
   } catch (err) {
     console.error(err);
@@ -3162,42 +3154,26 @@ function setCompanyEditMode(editing) {
     document.getElementById('companyNameInput').value = companyProfile.name || '';
     document.getElementById('companyAccInput').value = companyProfile.accountNumber || '';
     document.getElementById('companyAccConfirmInput').value = companyProfile.accountNumber || '';
-    document.getElementById('companySysInput').value = companyProfile.sysId || '';
+    document.getElementById('companyIfscInput').value = companyProfile.ifsc || '';
     document.getElementById('companyIfscPreview').textContent = '';
     setSelectedCompanyBank(companyProfile.bankName || 'SBI');
   }
 }
 
 // ---------------------------------------------------------
-// AUTOMATIC IFSC LOOKUP
-// The user only ever enters the Branch/System Code and picks the
-// bank — the IFSC itself is resolved automatically via the public
-// Razorpay IFSC directory (https://ifsc.razorpay.com/<code>), which
-// mirrors the RBI's own IFSC database. We build a candidate code
-// from the selected bank's 4-letter prefix + the branch code, then
-// verify/resolve it through the API. This runs both when the profile
-// is saved and again right before a bulk payment file is generated,
-// so the IFSC that lands in the exported file is always freshly
-// confirmed — never hand-typed.
+// COMPANY IFSC
+// The user types their full 11-character IFSC directly (no external
+// lookup). We validate its format locally and pull out the 6-character
+// branch code from it — everything after the 4-letter bank code and
+// the reserved '0' that always follows it, e.g. SBIN0001234 -> "001234"
+// — which is what the bank file formats actually need (see
+// BankFormatters.SBI, which writes this branch code into the file).
 // ---------------------------------------------------------
-async function resolveCompanyIfsc(bankKey, sysId) {
-  const bank = BANK_BY_KEY[bankKey];
-  const branch = String(sysId || '').trim().toUpperCase();
-  if (!bank || !branch) {
-    throw new Error('Select a bank and enter the Branch/System Code first.');
-  }
-  const candidate = `${bank.ifscPrefix}0${branch}`;
-  let res;
-  try {
-    res = await fetch(`https://ifsc.razorpay.com/${candidate}`);
-  } catch (err) {
-    throw new Error('Could not reach the IFSC lookup service. Check your connection and try again.');
-  }
-  if (!res.ok) {
-    throw new Error(`No IFSC found for branch/system code "${branch}" at ${bank.label}. Please check the code.`);
-  }
-  const data = await res.json();
-  return (data && data.IFSC) ? data.IFSC : candidate;
+function isValidIfscFormat(ifsc) {
+  return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(String(ifsc || '').trim().toUpperCase());
+}
+function branchCodeFromIfsc(ifsc) {
+  return String(ifsc || '').trim().toUpperCase().slice(5);
 }
 
 function wireCompanyForm() {
@@ -3206,7 +3182,7 @@ function wireCompanyForm() {
   const accInput        = document.getElementById('companyAccInput');
   const accConfirmInput = document.getElementById('companyAccConfirmInput');
   const accMismatchLbl  = document.getElementById('companyAccMismatchLbl');
-  const sysInput        = document.getElementById('companySysInput');
+  const ifscInput       = document.getElementById('companyIfscInput');
   const ifscPreviewEl   = document.getElementById('companyIfscPreview');
   const saveBtn         = document.getElementById('saveCompanyBtn');
 
@@ -3243,6 +3219,17 @@ function wireCompanyForm() {
     infoBtn.classList.toggle('is-open');
   });
 
+  // Live preview of the 6-digit branch code as the user types their
+  // full IFSC, so they can see exactly what will land in the file.
+  ifscInput.addEventListener('input', () => {
+    const raw = ifscInput.value.trim().toUpperCase();
+    ifscInput.value = raw;
+    if (raw.length < 11) { ifscPreviewEl.textContent = ''; return; }
+    ifscPreviewEl.textContent = isValidIfscFormat(raw)
+      ? `Branch code for the file: ${branchCodeFromIfsc(raw)}`
+      : 'That doesn\'t look like a valid IFSC — check the format (e.g. SBIN0001234).';
+  });
+
   document.getElementById('editCompanyBtn').addEventListener('click', () => setCompanyEditMode(true));
   document.getElementById('cancelCompanyEditBtn').addEventListener('click', () => setCompanyEditMode(false));
 
@@ -3250,9 +3237,9 @@ function wireCompanyForm() {
     const name = document.getElementById('companyNameInput').value.trim().toUpperCase();
     const accountNumber = accInput.value.trim();
     const accountNumberConfirm = accConfirmInput.value.trim();
-    const sysId = sysInput.value.trim().toUpperCase();
+    const ifsc = ifscInput.value.trim().toUpperCase();
     const bankName = selectedCompanyBankKey;
-    if (!name || !accountNumber || !accountNumberConfirm || !sysId || !bankName) {
+    if (!name || !accountNumber || !accountNumberConfirm || !ifsc || !bankName) {
       toast('Please fill all fields.', 'error'); return;
     }
     if (!/^[0-9]+$/.test(accountNumber) || !/^[0-9]+$/.test(accountNumberConfirm)) {
@@ -3263,15 +3250,23 @@ function wireCompanyForm() {
       toast('Company Account Number and its confirmation do not match.', 'error');
       return;
     }
+    if (!isValidIfscFormat(ifsc)) {
+      toast('Please enter a valid 11-character IFSC code, e.g. SBIN0001234.', 'error');
+      return;
+    }
+    const bank = BANK_BY_KEY[bankName];
+    if (bank.ifscPrefix && !ifsc.startsWith(bank.ifscPrefix)) {
+      toast(`This IFSC doesn't look like a ${bank.label} code (expected it to start with "${bank.ifscPrefix}"). Check the code or select the matching bank.`, 'error');
+      return;
+    }
     saveBtn.disabled = true;
-    saveBtn.textContent = 'Resolving IFSC...';
-    ifscPreviewEl.textContent = '';
+    saveBtn.textContent = 'Saving...';
     try {
-      const ifsc = await resolveCompanyIfsc(bankName, sysId);
-      ifscPreviewEl.textContent = `Resolved IFSC: ${ifsc}`;
+      const sysId = branchCodeFromIfsc(ifsc);
+      ifscPreviewEl.textContent = `Branch code for the file: ${sysId}`;
       await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName });
       companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName };
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Branch: ${sysId} | Bank: ${bankName}`);
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Bank: ${bankName}`);
       renderCompanySummary();
       updateDisbursementModeUI();
       renderDisbursementList();

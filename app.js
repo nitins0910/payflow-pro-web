@@ -219,20 +219,46 @@ function escapeHtml(value) {
 // `if (!confirm(...)) return;` call sites become
 // `if (!(await confirmDialog(...))) return;` with minimal disruption.
 // ---------------------------------------------------------
-function toast(message, kind) {
+// `options` (optional) supports an inline action button, e.g.
+// toast('Employee deleted.', 'success', { actionLabel: 'Undo', duration: 5000, onAction: fn })
+function toast(message, kind, options) {
+  const opts = options || {};
   const host = document.getElementById('toastHost');
   if (!host) { console.warn('[toast]', message); return; }
   const el = document.createElement('div');
   el.className = `toast toast-${kind || 'info'}`;
-  el.textContent = message;
-  host.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('toast-show'));
+
   const remove = () => {
     el.classList.remove('toast-show');
     setTimeout(() => el.remove(), 200);
   };
-  el.addEventListener('click', remove);
-  setTimeout(remove, kind === 'error' ? 6000 : 4000);
+
+  if (opts.actionLabel && typeof opts.onAction === 'function') {
+    const row = document.createElement('div');
+    row.className = 'toast-actions';
+    const textEl = document.createElement('span');
+    textEl.className = 'toast-text';
+    textEl.textContent = message;
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'toast-undo-btn';
+    actionBtn.textContent = opts.actionLabel;
+    actionBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      opts.onAction();
+      remove();
+    });
+    row.appendChild(textEl);
+    row.appendChild(actionBtn);
+    el.appendChild(row);
+  } else {
+    el.textContent = message;
+    el.addEventListener('click', remove);
+  }
+
+  host.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('toast-show'));
+  setTimeout(remove, opts.duration || (kind === 'error' ? 6000 : 4000));
 }
 
 function confirmDialog(message, { title = 'Please confirm', danger = true } = {}) {
@@ -1116,7 +1142,7 @@ function renderSkeletonRows(tbody, colCount, rowCount) {
 
 async function loadEmployees() {
   const tbody = document.getElementById('employeeTableBody');
-  renderSkeletonRows(tbody, 6, 4);
+  renderSkeletonRows(tbody, 9, 4);
   try {
     employees = await Api.getEmployees();
   } catch (err) {
@@ -1163,6 +1189,65 @@ function badgeForMode(mode) {
 // chosen order doesn't reset itself every time the table redraws.
 let employeeSort = { key: null, dir: 1 };
 let selectedEmployeeIds = new Set();
+
+// ---------------------------------------------------------
+// SOFT DELETE + UNDO (Employees)
+// The row is removed from the UI (and from `employees`) immediately,
+// but the actual Firestore delete is delayed by UNDO_WINDOW_MS. If the
+// user hits "Undo" on the toast within that window, the row is simply
+// put back and Firestore is never touched. Otherwise the delete is
+// committed silently once the window elapses.
+// ---------------------------------------------------------
+const UNDO_WINDOW_MS = 5000;
+let pendingEmployeeDeletions = new Map(); // id -> { emp, timer }
+
+function refreshAfterEmployeeListChange() {
+  renderEmployeeTable();
+  renderDisbursementList();
+  renderEmployeeKpis();
+}
+
+function softDeleteEmployees(ids, emps) {
+  employees = employees.filter(e => !ids.includes(e.id));
+  refreshAfterEmployeeListChange();
+
+  const timer = setTimeout(async () => {
+    ids.forEach(id => pendingEmployeeDeletions.delete(id));
+    try {
+      await Promise.all(ids.map(id => Api.deleteEmployee(id)));
+      const names = emps.map(e => e && e.name).filter(Boolean);
+      if (ids.length > 1) {
+        await Api.logAudit(currentUser.email, currentUser.displayName, 'BULK DELETE EMPLOYEES',
+          `Deleted ${ids.length}: ${names.join(', ')}`);
+      } else {
+        const emp = emps[0];
+        await Api.logAudit(currentUser.email, currentUser.displayName, 'DELETE EMPLOYEE',
+          `Deleted: ${emp ? emp.name : ''} | Acc: ${emp ? emp.accountNumber : ids[0]}`);
+      }
+    } catch (err) {
+      toast('Delete failed: ' + err.message, 'error');
+      await loadEmployees();
+      renderEmployeeKpis();
+    }
+  }, UNDO_WINDOW_MS);
+
+  ids.forEach(id => pendingEmployeeDeletions.set(id, { timer }));
+
+  const label = ids.length > 1 ? `${ids.length} employees deleted.` : `${(emps[0] && emps[0].name) || 'Employee'} deleted.`;
+  toast(label, 'success', {
+    actionLabel: 'Undo',
+    duration: UNDO_WINDOW_MS,
+    onAction: () => {
+      const stillPending = ids.some(id => pendingEmployeeDeletions.has(id));
+      if (!stillPending) return; // window already elapsed / already committed
+      clearTimeout(timer);
+      ids.forEach(id => pendingEmployeeDeletions.delete(id));
+      emps.forEach(emp => { if (emp && !employees.some(e => e.id === emp.id)) employees.push(emp); });
+      refreshAfterEmployeeListChange();
+      toast(ids.length > 1 ? `${ids.length} employees restored.` : `${(emps[0] && emps[0].name) || 'Employee'} restored.`, 'info');
+    }
+  });
+}
 
 function sortRows(rows, key, dir) {
   if (!key) return rows;
@@ -1269,25 +1354,13 @@ function wireEmployeeTableControls() {
     const ids = [...selectedEmployeeIds];
     if (!ids.length) return;
     const ok = await confirmDialog(
-      `Delete ${ids.length} selected employee${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
+      `Delete ${ids.length} selected employee${ids.length === 1 ? '' : 's'}? You'll have a few seconds to undo.`,
       { title: 'Delete Selected Employees' }
     );
     if (!ok) return;
-    const btn = document.getElementById('employeeBulkDeleteBtn');
-    btn.disabled = true; btn.textContent = 'Deleting...';
-    try {
-      const names = ids.map(id => employees.find(e => e.id === id)?.name).filter(Boolean);
-      await Promise.all(ids.map(id => Api.deleteEmployee(id)));
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'BULK DELETE EMPLOYEES',
-        `Deleted ${ids.length}: ${names.join(', ')}`);
-      selectedEmployeeIds.clear();
-      await loadEmployees();
-      toast(`${ids.length} employee${ids.length === 1 ? '' : 's'} deleted.`, 'success');
-    } catch (err) {
-      toast('Bulk delete failed: ' + err.message, 'error');
-    } finally {
-      btn.disabled = false; btn.textContent = 'Delete Selected';
-    }
+    const emps = ids.map(id => employees.find(e => e.id === id)).filter(Boolean);
+    selectedEmployeeIds.clear();
+    softDeleteEmployees(ids, emps);
   });
 }
 
@@ -1583,17 +1656,9 @@ function wireEmployeeForm() {
 
   window.handleDelete = async (id) => {
     const emp = employees.find(e => e.id === id);
-    const ok = await confirmDialog(`Delete ${emp ? emp.name : id}? This cannot be undone.`, { title: 'Delete Employee' });
+    const ok = await confirmDialog(`Delete ${emp ? emp.name : id}? You'll have a few seconds to undo.`, { title: 'Delete Employee' });
     if (!ok) return;
-    try {
-      await Api.deleteEmployee(id);
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'DELETE EMPLOYEE',
-        `Deleted: ${emp ? emp.name : ''} | Acc: ${emp ? emp.accountNumber : id}`);
-      await loadEmployees();
-      toast(`${emp ? emp.name : 'Employee'} deleted.`, 'success');
-    } catch (err) {
-      toast('Delete failed: ' + err.message, 'error');
-    }
+    softDeleteEmployees([id], [emp]);
   };
 }
 
@@ -1972,6 +2037,23 @@ function renderDisbursementList() {
       if (!isSbi) {
         const v = parseFloat(inputEl.value);
         modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, isNaN(v) ? 0 : v));
+      }
+    });
+    // Keyboard-driven bulk entry: Tab and Enter both jump straight to
+    // the next row's amount field (skipping the "Show" account-reveal
+    // button in between), so a payroll clerk can key through the whole
+    // batch without reaching for the mouse. Shift+Tab / Shift+Enter
+    // goes back a row.
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' && e.key !== 'Enter') return;
+      e.preventDefault();
+      const inputs = Array.from(tbody.querySelectorAll('input[data-acc]'));
+      const idx = inputs.indexOf(inputEl);
+      const nextIdx = e.shiftKey ? idx - 1 : idx + 1;
+      const nextInput = inputs[nextIdx];
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
       }
     });
     const prefillAmt = parseFloat(prefill);
@@ -2796,3 +2878,39 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) checkInactivity();
 });
 window.addEventListener('focus', checkInactivity);
+
+// ---------------------------------------------------------
+// 12. "/" KEYBOARD SHORTCUT — jump to the current page's search box
+// Works on any dashboard page that has one (Employees, Audit Trail,
+// Payroll Run, Exports). Ignored while already typing in a field, so
+// it never steals a literal "/" from user input.
+// ---------------------------------------------------------
+const PAGE_SEARCH_INPUT_ID = {
+  employees: 'employeeSearch',
+  audit: 'auditSearch',
+  disbursement: 'disbSearch',
+  exports: 'exportsSearch'
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '/') return;
+  const target = e.target;
+  const tag = (target.tagName || '').toLowerCase();
+  const isEditable = tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  if (isEditable) return;
+
+  const dashboardScreen = document.getElementById('screen-dashboard');
+  if (!dashboardScreen || dashboardScreen.classList.contains('hidden')) return;
+
+  const activeSection = document.querySelector('#screen-dashboard main > section:not(.hidden)');
+  if (!activeSection) return;
+  const pageId = activeSection.id.replace('page-', '');
+  const inputId = PAGE_SEARCH_INPUT_ID[pageId];
+  if (!inputId) return;
+
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  e.preventDefault();
+  input.focus();
+  input.select();
+});

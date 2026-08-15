@@ -657,6 +657,35 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 .table-wrap table{ min-width:640px; }
 
 /* ---------------------------------------------------------
+   STICKY TABLE HEADER — Employee Ledger
+   Keeps column names visible while scrolling a long employee list.
+   Sticks relative to .main (the page's own scroll container).
+--------------------------------------------------------- */
+#page-employees .table-wrap thead th{
+  position:sticky; top:0; z-index:3;
+  background:var(--surface2);
+  box-shadow:0 1px 0 var(--border-soft);
+}
+
+/* ---------------------------------------------------------
+   PAYROLL RUN — sticky batch-total footer
+   Keeps the running total (and Export/Clear actions) visible
+   while scrolling a long amount-entry table.
+--------------------------------------------------------- */
+#disbFooterPanel{
+  position:sticky; bottom:0; z-index:10;
+  background:var(--surface);
+  box-shadow:0 -6px 16px rgba(0,0,0,0.35);
+}
+
+/* ---------------------------------------------------------
+   PAYROLL RUN — keyboard-focused amount field
+--------------------------------------------------------- */
+#disbTableBody input[data-acc]:focus{
+  outline:2px solid var(--blue); outline-offset:-1px;
+}
+
+/* ---------------------------------------------------------
    SKELETON LOADING ROWS
 --------------------------------------------------------- */
 .skeleton-bar{
@@ -689,6 +718,17 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 .toast-success{ border-left:3px solid var(--success); }
 .toast-error{ border-left:3px solid var(--danger); }
 .toast-info{ border-left:3px solid var(--blue); }
+
+/* Toast with an inline "Undo" (or similar) action button */
+.toast-actions{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.toast-text{ flex:1; }
+.toast-undo-btn{
+  flex-shrink:0; background:none; border:1px solid var(--blue-bright); color:var(--blue-bright);
+  padding:5px 12px; border-radius:var(--radius-sm); font-size:11.5px; font-weight:700;
+  letter-spacing:0.3px; text-transform:uppercase; cursor:pointer;
+  transition:background .15s var(--ease), color .15s var(--ease);
+}
+.toast-undo-btn:hover{ background:rgba(59,130,246,0.15); }
 
 @media (max-width: 560px){
   .toast-host{ left:16px; right:16px; bottom:16px; max-width:none; }

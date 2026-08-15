@@ -1067,9 +1067,194 @@ async function bootDashboard(user) {
     wireSettingsForms();
     wirePasswordToggles();
     wireModalCloseButtons();
+    wireGuidedTour();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
+
+    // First-ever dashboard visit for this browser: auto-start the tour.
+    // Small delay so the employee table/KPIs have finished rendering and
+    // the topbar/sidebar are laid out before we measure element rects.
+    // localStorage can throw in private-browsing/locked-down contexts —
+    // fall back to just always showing the tour rather than erroring out.
+    let tourAlreadySeen = false;
+    try { tourAlreadySeen = !!localStorage.getItem('payflow-tour-seen'); } catch (e) { /* ignore */ }
+    if (!tourAlreadySeen) {
+      setTimeout(() => startTour(), 600);
+    }
   }
+}
+
+// ---------------------------------------------------------
+// GUIDED TOUR — first-login spotlight walkthrough.
+// Each step points at a real, always-visible element (topbar tabs,
+// sidebar icons, the Employees-page action buttons) so nothing needs
+// to be faked — no page switch required since the Employees page is
+// already the default active page when the tour starts.
+// ---------------------------------------------------------
+const TOUR_STEPS = [
+  {
+    target: '.nav-item[data-page="settings"]',
+    title: 'Company Details se shuru karein',
+    body: 'Sabse pehle yahan aakar apni company ka naam, bank aur account number bhar dein. Yehi details har exported payment file par print hoti hain.'
+  },
+  {
+    target: '#addEmployeeBtn',
+    title: 'Employee add karein',
+    body: 'Yahan click karke ek-ek employee ka naam, account number, IFSC, mobile aur email daalein.'
+  },
+  {
+    target: '#bulkImportBtn',
+    title: 'Ek saath bahut se employees add karein',
+    body: 'Poori list ek baar me chahiye to sample CSV download karein, use bharein, aur yahan se bulk import kar dein. Import se pehle ek preview dikhega jisme galat rows highlight ho jaati hain.'
+  },
+  {
+    target: '.topbar__tabs .nav-item[data-page="disbursement"]',
+    title: 'Payroll Run',
+    body: 'Har employee ke saamne is mahine ka amount bharein, transfer type chunein aur bank-ready file export karein.'
+  },
+  {
+    target: '.topbar__tabs .nav-item[data-page="exports"]',
+    title: 'Exports',
+    body: 'Pehle export ki hui saari batches yahan milengi — dobara download bhi kar sakte hain.'
+  },
+  {
+    target: '.sidebar-icons .nav-item[data-page="audit"]',
+    title: 'Activity Log',
+    body: 'Har add, edit, delete aur export yahan automatically track hota hai — kisne kab kya kiya.'
+  },
+  {
+    target: '.user-chip',
+    title: 'Aapka profile',
+    body: 'Yahan aapka naam/email dikhta hai, aur neeche Logout button bhi hai. Bas ho gaya — ab explore karein!'
+  }
+];
+
+let tourStepIndex = 0;
+let tourEls = null; // { backdrop, spotlight, card }
+
+function wireGuidedTour() {
+  const helpBtn = document.getElementById('tourHelpBtn');
+  if (helpBtn) helpBtn.addEventListener('click', () => startTour());
+
+  const replayBtn = document.getElementById('replayTourBtn');
+  if (replayBtn) replayBtn.addEventListener('click', () => {
+    showAppPage('employees'); // tour steps assume the Employees page is active
+    startTour();
+  });
+}
+
+function startTour() {
+  if (tourEls) endTour(); // guard against double-start
+  tourStepIndex = 0;
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'tour-backdrop';
+  const spotlight = document.createElement('div');
+  spotlight.className = 'tour-spotlight';
+  const card = document.createElement('div');
+  card.className = 'tour-card';
+
+  document.body.append(backdrop, spotlight, card);
+  tourEls = { backdrop, spotlight, card };
+
+  window.addEventListener('resize', repositionTourStep);
+  renderTourStep();
+}
+
+function endTour() {
+  if (!tourEls) return;
+  window.removeEventListener('resize', repositionTourStep);
+  tourEls.backdrop.remove();
+  tourEls.spotlight.remove();
+  tourEls.card.remove();
+  tourEls = null;
+  try { localStorage.setItem('payflow-tour-seen', '1'); } catch (e) { /* ignore */ }
+}
+
+function renderTourStep() {
+  if (!tourEls) return;
+  const step = TOUR_STEPS[tourStepIndex];
+  const target = document.querySelector(step.target);
+
+  // If a target isn't in the DOM for some reason, skip straight past
+  // it rather than leaving the spotlight stuck on nothing.
+  if (!target) {
+    if (tourStepIndex < TOUR_STEPS.length - 1) { tourStepIndex++; renderTourStep(); }
+    else endTour();
+    return;
+  }
+
+  const isLast = tourStepIndex === TOUR_STEPS.length - 1;
+  const isFirst = tourStepIndex === 0;
+
+  tourEls.card.innerHTML = `
+    <div class="tour-card__step">Step ${tourStepIndex + 1} of ${TOUR_STEPS.length}</div>
+    <div class="tour-card__title">${step.title}</div>
+    <div class="tour-card__body">${step.body}</div>
+    <div class="tour-card__actions">
+      <div class="tour-card__dots">
+        ${TOUR_STEPS.map((_, i) => `<span class="tour-card__dot${i === tourStepIndex ? ' active' : ''}"></span>`).join('')}
+      </div>
+      <div class="tour-card__nav">
+        <button type="button" class="tour-card__skip" id="tourSkipBtn">Skip</button>
+        ${!isFirst ? '<button type="button" class="tour-card__back" id="tourBackBtn">Back</button>' : ''}
+        <button type="button" class="tour-card__next" id="tourNextBtn">${isLast ? 'Done' : 'Next'}</button>
+      </div>
+    </div>
+  `;
+
+  tourEls.card.querySelector('#tourSkipBtn').onclick = endTour;
+  tourEls.card.querySelector('#tourNextBtn').onclick = () => {
+    if (isLast) { endTour(); return; }
+    tourStepIndex++;
+    renderTourStep();
+  };
+  const backBtn = tourEls.card.querySelector('#tourBackBtn');
+  if (backBtn) backBtn.onclick = () => { tourStepIndex--; renderTourStep(); };
+
+  positionTourAround(target);
+}
+
+// Positions the spotlight cutout directly over the target's bounding
+// box (with a small padding), then places the tooltip card below it
+// if there's room, or above it if the target is near the bottom of
+// the viewport — clamped horizontally so it never runs off-screen.
+function positionTourAround(target) {
+  const rect = target.getBoundingClientRect();
+  const pad = 6;
+
+  tourEls.spotlight.style.top = (rect.top - pad) + 'px';
+  tourEls.spotlight.style.left = (rect.left - pad) + 'px';
+  tourEls.spotlight.style.width = (rect.width + pad * 2) + 'px';
+  tourEls.spotlight.style.height = (rect.height + pad * 2) + 'px';
+
+  const card = tourEls.card;
+  const cardWidth = 290;
+  const gap = 14;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const cardHeight = card.offsetHeight || 160;
+
+  let top;
+  if (spaceBelow > cardHeight + gap) {
+    top = rect.bottom + gap;
+  } else if (rect.top > cardHeight + gap) {
+    top = rect.top - cardHeight - gap;
+  } else {
+    top = Math.max(12, window.innerHeight / 2 - cardHeight / 2);
+  }
+
+  let left = rect.left + rect.width / 2 - cardWidth / 2;
+  left = Math.max(12, Math.min(left, window.innerWidth - cardWidth - 12));
+
+  card.style.top = top + 'px';
+  card.style.left = left + 'px';
+}
+
+function repositionTourStep() {
+  if (!tourEls) return;
+  const step = TOUR_STEPS[tourStepIndex];
+  const target = document.querySelector(step.target);
+  if (target) positionTourAround(target);
 }
 
 // Generic "×" close button on every modal — just hides the backdrop,

@@ -856,3 +856,71 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 .bank-select-btn.active{
   color:#fff; background:var(--blue-dim); border-color:var(--blue-bright);
 }
+/* ---------------------------------------------------------
+   GUIDED TOUR — first-login spotlight walkthrough. A dark
+   backdrop with a "cutout" spotlight around the current target
+   element, plus a small tooltip card with Back/Next/Skip.
+   Triggered from app.js (startTour / renderTourStep).
+--------------------------------------------------------- */
+.tour-help-btn{
+  width:28px; height:28px; margin-left:10px;
+  border-radius:50%; border:1px solid var(--border); background:var(--surface2);
+  color:var(--text2); font-family:var(--font-display); font-weight:700; font-size:13px;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:color .15s var(--ease), border-color .15s var(--ease), background .15s var(--ease);
+  position:relative;
+}
+.tour-help-btn:hover{ color:var(--text); border-color:var(--blue-bright); background:var(--surface3); }
+
+.tour-backdrop{
+  position:fixed; inset:0; z-index:400;
+  background:transparent;
+}
+
+.tour-spotlight{
+  position:fixed; z-index:401; pointer-events:none;
+  border-radius:10px;
+  box-shadow:0 0 0 9999px rgba(6,9,16,0.72);
+  border:2px solid var(--blue-bright);
+  transition:top .25s var(--ease), left .25s var(--ease), width .25s var(--ease), height .25s var(--ease);
+}
+
+.tour-card{
+  position:fixed; z-index:402; width:290px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg); padding:18px 18px 16px;
+  transition:top .25s var(--ease), left .25s var(--ease);
+}
+.tour-card__step{
+  font-family:var(--font-mono); font-size:10.5px; color:var(--blue-bright);
+  text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:8px;
+}
+.tour-card__title{
+  font-family:var(--font-display); font-size:15px; font-weight:700; color:var(--text);
+  margin-bottom:6px;
+}
+.tour-card__body{ font-size:13px; color:var(--text2); line-height:1.55; margin-bottom:16px; }
+.tour-card__actions{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.tour-card__dots{ display:flex; gap:5px; }
+.tour-card__dot{ width:5px; height:5px; border-radius:50%; background:var(--border); }
+.tour-card__dot.active{ background:var(--blue-bright); }
+.tour-card__nav{ display:flex; gap:8px; }
+.tour-card__skip{
+  background:none; border:none; color:var(--text3); font-size:12px; cursor:pointer;
+  padding:8px 2px;
+}
+.tour-card__skip:hover{ color:var(--text2); }
+.tour-card__back{
+  background:none; border:1px solid var(--border); color:var(--text2);
+  border-radius:var(--radius-sm); padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer;
+}
+.tour-card__back:hover{ color:var(--text); border-color:var(--grey-dim); }
+.tour-card__next{
+  background:var(--blue-dim); border:1px solid var(--blue-bright); color:#fff;
+  border-radius:var(--radius-sm); padding:8px 14px; font-size:12px; font-weight:700; cursor:pointer;
+}
+.tour-card__next:hover{ filter:brightness(1.1); }
+
+@media (max-width:640px){
+  .tour-card{ width:min(290px, calc(100vw - 32px)); }
+}

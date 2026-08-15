@@ -5,807 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PayFlow Pro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-/* ============================================================
-   PayFlow Pro — Dark, sharp-edged, Windows 10 inspired UI
-   ============================================================ */
-
-:root{
-  --bg:        #0A0F1E;
-  --surface:   #111A2E;
-  --surface2:  #182338;
-  --surface3:  #202D47;
-  --border:    #243349;
-  --border-soft: rgba(148,163,184,0.12);
-  --grey:      #D0D0D0;
-  --grey-dim:  #8A8A8A;
-  --grey-line: #1C2740;
-  --blue:      #3B82F6;
-  --blue-dim:  #2563EB;
-  --blue-bright:#60A5FA;
-  --text:      #E3E8F0;
-  --text2:     #D0D0D0;
-  --text3:     #8A8A8A;
-  --success:   #22C55E;
-  --success-bg:rgba(34,197,94,0.08);
-  --danger:    #F43F5E;
-  --danger-bg: rgba(244,63,94,0.08);
-  --warning:   #F59E0B;
-  --warning-bg:rgba(245,158,11,0.08);
-  --radius:    0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 8px 20px rgba(0,0,0,0.4);
-  --shadow-lg: 0 20px 48px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 0 2px var(--blue);
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --font-display: 'Inter', 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
-  --font-body: 'Inter', 'Segoe UI', sans-serif;
-}
-
-*{box-sizing:border-box; margin:0; padding:0;}
-
-html{ color-scheme: dark; }
-
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--font-body);
-  min-height:100vh;
-  -webkit-font-smoothing:antialiased;
-  font-variant-numeric: tabular-nums;
-}
-
-a{color:var(--blue-bright); text-decoration:none;}
-
-::selection{ background:var(--blue-dim); color:#fff; }
-
-:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
-
-@media (prefers-reduced-motion: reduce){
-  *, *::before, *::after{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
-}
-
-/* ---------------- All screens use dark theme ---------------- */
-#screen-dashboard{
-  --bg:          #0A0F1E;
-  --surface:     #111A2E;
-  --surface2:    #182338;
-  --surface3:    #202D47;
-  --border:      #243349;
-  --border-soft: rgba(148,163,184,0.12);
-  --grey-line:   #1C2740;
-  --text:        #E3E8F0;
-  --text2:       #D0D0D0;
-  --text3:       #8A8A8A;
-  --success-bg:  rgba(34,197,94,0.08);
-  --danger-bg:   rgba(244,63,94,0.08);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 8px 20px rgba(0,0,0,0.4);
-  --shadow-lg: 0 20px 48px rgba(0,0,0,0.5);
-  background:var(--bg);
-  height:100vh;
-  color:var(--text);
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-}
-
-.ledger-bg{
-  position:fixed; inset:0; z-index:-1;
-  background:var(--bg);
-}
-
-/* ---------------- Auth screen ---------------- */
-.auth-wrap{
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:24px;
-}
-
-.auth-card{
-  width:100%;
-  max-width:420px;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:0;
-  overflow:hidden;
-  box-shadow:var(--shadow-lg);
-  animation:auth-card-in .45s var(--ease);
-}
-@keyframes auth-card-in{
-  from{ opacity:0; transform:translateY(10px); }
-  to{ opacity:1; transform:translateY(0); }
-}
-
-.auth-card__strip{
-  height:3px;
-  background:var(--blue);
-}
-
-.auth-card__body{ padding:38px 34px 34px; }
-
-.brand{
-  display:flex; align-items:center; gap:11px; margin-bottom:4px;
-}
-.brand .mark{
-  font-family:var(--font-mono);
-  color:#fff;
-  font-size:13px;
-  font-weight:700;
-  letter-spacing:1px;
-  background:var(--blue-dim);
-  width:30px; height:30px;
-  display:inline-flex; align-items:center; justify-content:center;
-}
-.brand h1{
-  font-family:var(--font-display);
-  font-size:22px;
-  font-weight:700;
-  letter-spacing:-0.5px;
-}
-.tagline{
-  color:var(--text2);
-  font-size:12.5px;
-  margin-top:8px;
-  margin-bottom:28px;
-  font-family:var(--font-mono);
-  letter-spacing:0.2px;
-}
-
-.field{ margin-bottom:16px; }
-.field label{
-  display:block;
-  font-size:11px;
-  letter-spacing:0.6px;
-  text-transform:uppercase;
-  color:var(--text2);
-  margin-bottom:7px;
-  font-family:var(--font-mono);
-  font-weight:500;
-}
-.field input, .field select{
-  width:100%;
-  background:var(--surface2);
-  border:1px solid var(--border);
-  color:var(--text);
-  padding:11px 12px;
-  font-size:14px;
-  border-radius:0;
-  font-family:var(--font-body);
-  transition:border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
-}
-.field input:hover, .field select:hover{ border-color:#33455F; }
-.field input:focus, .field select:focus{
-  outline:none;
-  border-color:var(--blue);
-  box-shadow:var(--shadow-glow);
-  background:var(--surface3);
-}
-.field input::placeholder{ color:var(--text3); }
-.field input[type="date"],
-.field input[type="month"]{ accent-color:var(--blue-dim); }
-.field input[type="date"]::-webkit-calendar-picker-indicator,
-.field input[type="month"]::-webkit-calendar-picker-indicator{
-  filter:invert(72%) sepia(28%) saturate(1200%) hue-rotate(178deg) brightness(103%);
-  cursor:pointer;
-}
-
-.field.password-field{ position:relative; }
-.field.password-field input{ padding-right:40px; }
-.pw-toggle{
-  position:absolute;
-  right:2px; top:26px;
-  width:36px; height:38px;
-  background:none; border:none; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  color:var(--text3);
-  border-radius:0;
-  transition:color .15s var(--ease), background .15s var(--ease);
-}
-.pw-toggle:hover{ color:var(--blue-bright); background:rgba(59,130,246,0.08); }
-.pw-toggle svg{ width:18px; height:18px; }
-.pw-toggle .eye-off{ display:none; }
-.pw-toggle.is-visible .eye{ display:none; }
-.pw-toggle.is-visible .eye-off{ display:block; }
-
-.field-hint{
-  font-size:11px; color:var(--text3); margin-top:5px; line-height:1.5;
-}
-
-.forgot-link-row{ display:flex; justify-content:flex-end; margin:-8px 0 16px; }
-.forgot-link-row button{
-  background:none; border:none; color:var(--blue-bright);
-  font-size:12px; cursor:pointer; padding:0;
-}
-.forgot-link-row button:hover{ text-decoration:underline; }
-
-.success-msg{
-  background:var(--success-bg);
-  border:1px solid rgba(34,197,94,0.35);
-  color:var(--success);
-  font-size:12.5px;
-  padding:10px 12px;
-  margin-bottom:16px;
-  border-radius:0;
-  display:none;
-}
-.success-msg.show{ display:block; }
-
-.error-msg{
-  background:var(--danger-bg);
-  border:1px solid rgba(244,63,94,0.35);
-  color:var(--danger);
-  font-size:12.5px;
-  padding:10px 12px;
-  margin-bottom:16px;
-  border-radius:0;
-  display:none;
-}
-.error-msg.show{ display:block; }
-
-.field-row-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.field-row-3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
-@media (max-width: 560px){
-  .field-row-2, .field-row-3{ grid-template-columns:1fr; }
-}
-.field-mismatch{
-  font-size:11px; font-weight:700; color:var(--danger); min-height:14px; margin-top:5px;
-}
-input.input-mismatch{
-  background:var(--danger-bg) !important; border-color:var(--danger) !important;
-}
-input.input-match{
-  background:var(--success-bg) !important; border-color:var(--success) !important;
-}
-
-.info-btn{
-  width:16px; height:16px; border:1px solid var(--text3);
-  background:none; color:var(--text3); font-size:10.5px; font-weight:700; line-height:1;
-  cursor:pointer; padding:0; display:inline-flex; align-items:center; justify-content:center;
-  font-style:italic; font-family:Georgia, serif;
-  transition:color .15s var(--ease), border-color .15s var(--ease);
-}
-.info-btn:hover, .info-btn.is-open{ color:var(--blue-bright); border-color:var(--blue-bright); }
-.info-popover{
-  background:var(--surface2); border:1px solid var(--border); border-radius:0;
-  padding:10px 12px; margin-top:8px;
-}
-
-.btn{
-  width:100%;
-  padding:12px;
-  border:none;
-  border-radius:0;
-  font-family:var(--font-mono);
-  font-size:12.5px;
-  letter-spacing:1px;
-  text-transform:uppercase;
-  cursor:pointer;
-  transition:filter .15s var(--ease), transform .1s var(--ease), box-shadow .15s var(--ease);
-}
-.btn:hover{ filter:brightness(1.1); }
-.btn:active{ transform:translateY(1px); filter:brightness(0.9); }
-.btn:disabled{ opacity:0.5; cursor:not-allowed; }
-
-.btn-primary{
-  background:var(--blue-dim);
-  color:#fff; font-weight:700;
-}
-
-.btn-google{
-  background:var(--surface2);
-  border:1px solid var(--border);
-  color:var(--text);
-  display:flex; align-items:center; justify-content:center; gap:10px;
-  text-transform:none;
-  letter-spacing:0;
-  font-family:var(--font-body);
-  font-size:14px;
-}
-.btn-google:hover{ border-color:var(--grey-dim); filter:none; background:var(--surface3); }
-.btn-google svg{ width:16px; height:16px; }
-
-.divider{
-  display:flex; align-items:center; gap:12px;
-  margin:22px 0;
-  color:var(--text3);
-  font-size:11px;
-  font-family:var(--font-mono);
-}
-.divider::before, .divider::after{
-  content:""; flex:1; height:1px; background:var(--border);
-}
-
-.switch-mode{
-  text-align:center;
-  margin-top:20px;
-  font-size:13px;
-  color:var(--text2);
-}
-.switch-mode button{
-  background:none; border:none; color:var(--blue-bright);
-  cursor:pointer; font-size:13px; font-weight:600;
-}
-
-/* ---------------- Top bar ---------------- */
-.topbar{
-  flex-shrink:0;
-  height:52px;
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:0 20px;
-  background:#0C1730;
-  border-bottom:1px solid var(--border);
-  position:relative;
-  z-index:6;
-}
-.topbar .brand{ padding:0; margin-right:16px; flex-shrink:0; }
-.topbar .brand h1{ font-size:15px; color:#fff; }
-.topbar .brand .mark{ background:var(--blue-dim); }
-
-.topbar__tabs{
-  display:flex; align-items:center; height:100%;
-  overflow-x:auto; flex:1;
-}
-.topbar__tabs .nav-item{
-  height:100%;
-  display:flex; align-items:center; gap:8px;
-  margin:0; padding:0 16px;
-  border-radius:0;
-  border-bottom:2px solid transparent;
-  color:rgba(255,255,255,0.6);
-  font-size:12.5px; font-weight:600; letter-spacing:0.1px;
-  white-space:nowrap;
-  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
-}
-.topbar__tabs .nav-item svg{ width:15px; height:15px; opacity:.7; transition:opacity .15s var(--ease); }
-.topbar__tabs .nav-item:hover{ color:#fff; background:rgba(255,255,255,0.04); }
-.topbar__tabs .nav-item.active{
-  color:#fff;
-  background:rgba(255,255,255,0.06);
-  border-bottom-color:var(--blue);
-}
-.topbar__tabs .nav-item.active svg{ opacity:1; }
-
-/* ---------------- Dashboard shell ---------------- */
-.app-shell{ display:flex; flex:1; min-height:0; }
-
-.sidebar{
-  width:52px;
-  background:var(--surface);
-  border-right:1px solid var(--border);
-  padding:12px 8px;
-  display:flex; flex-direction:column;
-  flex-shrink:0;
-  align-items:center;
-  gap:6px;
-}
-.sidebar-icons{ display:flex; flex-direction:column; gap:6px; }
-.sidebar-icons .nav-item{
-  width:36px; height:36px;
-  display:flex; align-items:center; justify-content:center;
-  margin:0; padding:0;
-  border-radius:0;
-  background:transparent;
-  border:1px solid transparent;
-  color:var(--text2);
-  position:relative;
-  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
-}
-.sidebar-icons .nav-item svg{ width:17px; height:17px; opacity:.8; }
-.sidebar-icons .nav-item:hover{ color:var(--text); background:var(--surface2); border-color:var(--border); }
-.sidebar-icons .nav-item.active{
-  color:var(--blue-bright);
-  background:rgba(59,130,246,0.08);
-  border-color:var(--blue);
-}
-
-.sidebar-footer{ margin-top:auto; padding-top:12px; border-top:1px solid var(--border); }
-.sidebar-footer .btn-inline{ width:36px; height:36px; padding:0; display:flex; align-items:center; justify-content:center; background:transparent; border:1px solid var(--border); color:var(--text2); box-shadow:none; }
-.sidebar-footer .btn-inline:hover{ border-color:var(--grey-dim); color:var(--text); background:var(--surface2); }
-.user-avatar{
-  width:32px; height:32px; border-radius:0; flex-shrink:0;
-  object-fit:cover; border:1px solid var(--border);
-  background:var(--surface2);
-}
-.user-avatar-fallback{
-  width:32px; height:32px; border-radius:0; flex-shrink:0;
-  display:flex; align-items:center; justify-content:center;
-  background:var(--surface2); border:1px solid var(--border);
-  color:var(--text2); font-family:var(--font-mono); font-size:12px; font-weight:700;
-}
-
-.main{ flex:1; padding:24px 32px; overflow-y:auto; }
-.main > section{ animation:page-in .28s var(--ease); }
-@keyframes page-in{
-  from{ opacity:0; transform:translateY(6px); }
-  to{ opacity:1; transform:translateY(0); }
-}
-
-.page-head{
-  display:flex; justify-content:space-between; align-items:flex-start;
-  margin-bottom:20px; flex-wrap:wrap; gap:12px;
-  padding-bottom:12px;
-  border-bottom:1px solid var(--border);
-}
-.page-head h2{
-  font-family:var(--font-display);
-  font-size:22px;
-  font-weight:700;
-  color:var(--text);
-  letter-spacing:-0.3px;
-}
-.page-head p{
-  color:var(--text2);
-  font-size:13px;
-  margin-top:4px;
-}
-
-.security-badge{
-  display:inline-flex; align-items:center; gap:6px;
-  font-size:11px; font-weight:600; padding:5px 12px;
-  border:1px solid var(--border); background:var(--surface2); color:var(--text2);
-  font-family:var(--font-mono); letter-spacing:0.3px;
-}
-
-/* ---------------- KPI summary cards ---------------- */
-.kpi-grid{
-  display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:20px;
-}
-@media (max-width: 1000px){ .kpi-grid{ grid-template-columns:repeat(2, 1fr); } }
-.kpi-card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  padding:16px 18px;
-}
-.kpi-card__icon{
-  width:28px; height:28px;
-  display:flex; align-items:center; justify-content:center;
-  margin-bottom:10px;
-  border:1px solid var(--border);
-}
-.kpi-card__icon svg{ width:15px; height:15px; color:var(--text2); }
-.kpi-card__label{
-  font-size:10.5px; letter-spacing:0.5px; text-transform:uppercase;
-  color:var(--text2); font-weight:600; margin-bottom:6px;
-}
-.kpi-card__value{ font-family:var(--font-mono); font-size:20px; font-weight:700; color:var(--text); letter-spacing:-0.2px; }
-.kpi-card__sub{ font-size:11px; color:var(--text3); margin-top:4px; }
-
-.panel{
-  background:var(--surface);
-  border:1px solid var(--border);
-  padding:18px;
-  margin-bottom:16px;
-}
-.panel h3{
-  font-size:11.5px; text-transform:uppercase; letter-spacing:0.5px;
-  color:var(--text2); font-weight:700; margin-bottom:14px;
-}
-
-.table-wrap{ border:1px solid var(--border); overflow-x:auto; }
-.table-wrap table{ min-width:640px; width:100%; border-collapse:collapse; }
-th{
-  text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px;
-  color:var(--text2); font-weight:700; padding:10px 12px; border-bottom:1px solid var(--border);
-  background:var(--surface2);
-}
-td{ padding:11px 12px; border-bottom:1px solid var(--border); font-size:13px; }
-tbody tr:last-child td{ border-bottom:none; }
-tbody tr:hover td{ background:rgba(59,130,246,0.04); }
-
-.row-actions{ display:flex; gap:6px; }
-.row-actions button{
-  background:var(--surface2); border:1px solid var(--border); color:var(--text2);
-  border-radius:0;
-  padding:5px 10px; font-size:11px; cursor:pointer; font-weight:600;
-  transition:color .15s var(--ease), border-color .15s var(--ease), background .15s var(--ease);
-}
-.row-actions button:hover{ color:var(--blue-bright); border-color:var(--blue); background:rgba(59,130,246,0.08); }
-.row-actions button.danger:hover{ color:var(--danger); border-color:var(--danger); background:var(--danger-bg); }
-
-.badge{
-  display:inline-flex; align-items:center; gap:4px;
-  padding:2px 8px;
-  font-size:10.5px; font-weight:700; letter-spacing:0.2px;
-  white-space:nowrap;
-  border:1px solid var(--border);
-}
-.badge-blue{  border-color:var(--blue); color:var(--blue-bright); }
-.badge-green{ border-color:var(--success); color:var(--success); }
-.badge-amber{ border-color:var(--warning); color:var(--warning); }
-.badge-grey{  border-color:var(--border); color:var(--text2); }
-
-.btn-inline{
-  background:var(--blue-dim);
-  color:#fff; border:none; padding:8px 16px;
-  border-radius:0;
-  font-family:var(--font-body); font-size:12.5px; letter-spacing:0.2px; cursor:pointer; font-weight:600;
-  transition:filter .15s var(--ease), box-shadow .15s var(--ease), transform .05s var(--ease);
-}
-.btn-inline:hover{ filter:brightness(1.1); }
-.btn-inline:active{ transform:translateY(1px); }
-.btn-inline.secondary{ background:var(--surface2); border:1px solid var(--border); color:var(--text2); }
-.btn-inline.secondary:hover{ color:var(--text); border-color:var(--grey-dim); background:var(--surface3); filter:none; }
-.btn-inline.danger{ background:var(--danger); }
-
-.empty-state{ text-align:center; padding:36px 16px; color:var(--text3); font-size:13px; }
-.empty-state__icon{ font-size:24px; margin-bottom:8px; opacity:.5; }
-
-.hidden{ display:none !important; }
-
-.modal-backdrop{
-  position:fixed; inset:0; background:rgba(0,0,0,0.7);
-  display:flex; align-items:center; justify-content:center; z-index:50;
-  padding:20px;
-  animation:modal-fade .15s var(--ease);
-}
-@keyframes modal-fade{ from{ opacity:0; } to{ opacity:1; } }
-.modal{
-  background:var(--surface); border:1px solid var(--border);
-  box-shadow:var(--shadow-lg);
-  width:100%; max-width:480px; padding:22px;
-  animation:modal-in .2s var(--ease);
-}
-@keyframes modal-in{
-  from{ opacity:0; transform:translateY(8px); }
-  to{ opacity:1; transform:translateY(0); }
-}
-.modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-.modal-head h3{ margin-bottom:0; font-size:15px; font-weight:700; }
-.modal-close{
-  background:none; border:none; color:var(--text3); font-size:20px; line-height:1;
-  cursor:pointer; padding:4px;
-  transition:color .15s var(--ease), background .15s var(--ease);
-}
-.modal-close:hover{ color:var(--text); background:var(--surface2); }
-.modal-actions{ display:flex; gap:10px; margin-top:18px; }
-
-.masked-acc{ display:flex; align-items:center; gap:6px; font-family:var(--font-mono); }
-.masked-acc button{
-  background:var(--surface2); border:1px solid var(--border); color:var(--text2);
-  border-radius:0;
-  font-size:10px; padding:2px 8px; cursor:pointer; font-family:var(--font-mono);
-  transition:color .15s var(--ease), border-color .15s var(--ease);
-}
-.masked-acc button:hover{ color:var(--blue-bright); border-color:var(--blue); }
-
-@media (max-width: 800px){
-  .topbar{ padding:0 10px; }
-  .topbar__tabs .nav-item{ padding:0 10px; font-size:11.5px; }
-  .app-shell{ flex-direction:column; }
-  .sidebar{
-    width:100%; flex-direction:row; align-items:center; justify-content:space-between;
-    padding:8px 12px; border-right:none; border-bottom:1px solid var(--border);
-  }
-  .sidebar-icons{ flex-direction:row; }
-  .sidebar-footer{ margin-top:0; padding-top:0; border-top:none; flex-direction:row; gap:8px; }
-  .main{ padding:16px; }
-  .dash-grid{ grid-template-columns:1fr !important; }
-  .kpi-grid{ grid-template-columns:1fr 1fr; }
-}
-
-/* ---------------- Toast ---------------- */
-.toast-host{
-  position:fixed; bottom:20px; right:20px; z-index:200;
-  display:flex; flex-direction:column; gap:8px;
-  max-width:360px;
-}
-.toast{
-  background:var(--surface3); border:1px solid var(--border); color:var(--text);
-  padding:12px 16px; box-shadow:var(--shadow-lg);
-  font-size:13px; line-height:1.5; cursor:pointer;
-  opacity:0; transform:translateY(6px);
-  transition:opacity .2s var(--ease), transform .2s var(--ease);
-}
-.toast-show{ opacity:1; transform:translateY(0); }
-.toast-success{ border-left:3px solid var(--success); }
-.toast-error{ border-left:3px solid var(--danger); }
-.toast-info{ border-left:3px solid var(--blue); }
-
-@media (max-width: 560px){
-  .toast-host{ left:16px; right:16px; bottom:16px; max-width:none; }
-}
-
-/* ---------------- Sortable headers ---------------- */
-th.sortable{ cursor:pointer; user-select:none; white-space:nowrap; }
-th.sortable:hover{ color:var(--text); }
-th.sortable .sort-arrow{ display:inline-block; margin-left:4px; opacity:.4; font-size:10px; }
-th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
-
-/* ---------------- Bulk actions ---------------- */
-.row-select-cell{ width:34px; }
-.bulk-actions-bar{
-  display:flex; align-items:center; gap:10px; margin-bottom:10px;
-  background:var(--surface2); border:1px solid var(--border);
-  padding:8px 12px; font-size:13px; color:var(--text2);
-}
-.bulk-actions-bar strong{ color:var(--text); }
-
-/* ---------------- Export history expandable ---------------- */
-.row-expand-toggle{
-  background:none; border:none; padding:0; cursor:pointer;
-  color:var(--text); font-family:var(--font-mono); font-size:13px;
-  display:inline-flex; align-items:center; gap:6px;
-}
-.row-expand-arrow{ display:inline-block; transition:transform .15s var(--ease); color:var(--text3); }
-.export-batch-row.is-expanded .row-expand-arrow{ transform:rotate(90deg); }
-.export-batch-detail td{ border-bottom:1px solid var(--border); }
-.export-batch-breakdown{ background:var(--surface2); padding:12px 16px 16px; }
-.export-batch-breakdown__head{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--text2); margin-bottom:8px; }
-.export-batch-breakdown__table{ width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); }
-.export-batch-breakdown__table th{ font-size:10px; padding:6px 10px; background:var(--surface3); }
-.export-batch-breakdown__table td{ padding:6px 10px; font-size:12px; }
-
-/* ---------------- Skeleton ---------------- */
-.skeleton-bar{
-  display:block; height:10px;
-  background:linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
-  background-size:200% 100%;
-  animation:skeleton-shimmer 1.3s ease-in-out infinite;
-}
-@keyframes skeleton-shimmer{
-  0%{ background-position:200% 0; }
-  100%{ background-position:-200% 0; }
-}
-
-/* ---------------- Company Profile ---------------- */
-.company-detail-line{
-  display:flex; padding:6px 0; border-bottom:1px solid var(--border-soft);
-  font-size:13px;
-}
-.company-detail-line:last-child{ border-bottom:none; }
-.company-detail-line .label{ color:var(--text2); width:120px; flex-shrink:0; }
-.company-detail-line .value{ color:var(--text); font-family:var(--font-mono); }
-
-/* ---------------- Settings list ---------------- */
-.settings-list-item{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:14px 16px; cursor:pointer; border-bottom:1px solid var(--border);
-  transition:background .15s var(--ease);
-}
-.settings-list-item:last-child{ border-bottom:none; }
-.settings-list-item:hover{ background:rgba(59,130,246,0.04); }
-.settings-list-item__title{ font-size:13.5px; color:var(--text); font-weight:600; }
-.settings-list-item__subtitle{ font-size:11.5px; color:var(--text2); margin-top:2px; }
-.settings-list-item__chevron{ font-size:18px; color:var(--text3); transition:transform .15s var(--ease); }
-.settings-list-item:hover .settings-list-item__chevron{ transform:translateX(2px); color:var(--blue-bright); }
-
-.settings-notice{
-  padding:14px 16px; font-size:12.5px; color:var(--text2); line-height:1.6;
-  display:flex; align-items:center; gap:10px;
-}
-
-/* ---------------- Dashboard Overview ---------------- */
-.dash-welcome{
-  display:flex; align-items:flex-end; justify-content:space-between;
-  gap:16px; margin-bottom:20px; flex-wrap:wrap;
-}
-.dash-welcome h2{
-  font-family:var(--font-display); font-size:24px; font-weight:700;
-  color:var(--text); letter-spacing:-0.3px;
-}
-.dash-welcome h2 span{ color:var(--blue-bright); }
-.dash-welcome p{ color:var(--text2); font-size:13px; margin-top:4px; }
-
-.dash-quick-actions{ display:flex; gap:8px; flex-wrap:wrap; }
-.dash-quick-actions button{
-  display:flex; align-items:center; gap:6px;
-  background:var(--surface); border:1px solid var(--border);
-  color:var(--text); padding:8px 14px;
-  font-family:var(--font-body); font-size:12.5px; font-weight:600; cursor:pointer;
-  transition:border-color .15s var(--ease), background .15s var(--ease);
-}
-.dash-quick-actions button svg{ width:14px; height:14px; color:var(--text2); }
-.dash-quick-actions button:hover{ border-color:var(--blue); background:var(--surface2); }
-.dash-quick-actions button:first-child{
-  background:var(--blue-dim); border-color:var(--blue-dim); color:#fff;
-}
-.dash-quick-actions button:first-child svg{ color:#fff; }
-.dash-quick-actions button:first-child:hover{ filter:brightness(1.1); }
-
-.dash-grid{
-  display:grid; grid-template-columns:1.3fr 1fr; gap:16px;
-}
-@media (max-width: 1100px){ .dash-grid{ grid-template-columns:1fr; } }
-
-.dash-panel-head{
-  display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;
-}
-.dash-panel-head h3{ margin-bottom:0; font-size:11.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); font-weight:700; }
-.dash-panel-head a{ font-size:11.5px; font-weight:600; color:var(--blue-bright); }
-
-.dash-activity-list{ list-style:none; display:flex; flex-direction:column; }
-.dash-activity-item{
-  display:flex; align-items:flex-start; gap:10px;
-  padding:10px 0; border-bottom:1px solid var(--border-soft);
-  font-size:13px;
-}
-.dash-activity-item:last-child{ border-bottom:none; padding-bottom:0; }
-.dash-activity-item--loading, .dash-activity-item--empty{
-  color:var(--text3); justify-content:center; padding:24px 0;
-}
-.dash-activity-dot{
-  width:8px; height:8px; margin-top:5px; flex-shrink:0;
-  background:var(--blue);
-}
-.dash-activity-dot[data-action*="delete"]{ background:var(--danger); }
-.dash-activity-dot[data-action*="export"]{ background:var(--blue-dim); }
-.dash-activity-dot[data-action*="add"]{ background:var(--success); }
-.dash-activity-dot[data-action*="import"]{ background:var(--success); }
-.dash-activity-dot[data-action*="update"], .dash-activity-dot[data-action*="edit"]{ background:var(--warning); }
-.dash-activity-body{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
-.dash-activity-action{ font-weight:600; color:var(--text); }
-.dash-activity-detail{ color:var(--text2); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.dash-activity-time{ color:var(--text3); font-size:11px; font-family:var(--font-mono); flex-shrink:0; }
-
-/* ---------------- Payroll Run amount input validation ---------------- */
-.amount-input-wrap{
-  display:flex; align-items:center; gap:6px; justify-content:flex-end;
-}
-.amount-input-wrap input{
-  width:120px; text-align:right;
-  background:var(--surface2); border:1px solid var(--border);
-  color:var(--text); padding:6px 8px;
-  font-size:13px; font-family:var(--font-mono);
-  border-radius:0;
-  transition:border-color .15s var(--ease);
-}
-.amount-input-wrap input:focus{
-  outline:none;
-  border-color:var(--blue);
-  box-shadow:var(--shadow-glow);
-}
-.amount-input-wrap .amount-status{
-  width:12px; height:12px;
-  border:1px solid var(--border);
-  flex-shrink:0;
-}
-.amount-input-wrap .amount-status.valid{
-  border-color:var(--success);
-  background:var(--success);
-}
-.amount-input-wrap .amount-status.invalid{
-  border-color:var(--danger);
-  background:var(--danger);
-}
-.amount-input-wrap .amount-status.empty{
-  border-color:var(--border);
-  background:transparent;
-}
-.amount-warn{
-  font-size:10px; font-weight:700; color:var(--danger); min-width:14px;
-}
-
-/* ---------------- Bank selection tiles ---------------- */
-.bank-select-grid{
-  display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:16px;
-}
-.bank-tile{
-  padding:10px 8px; text-align:center;
-  background:var(--surface2); border:1px solid var(--border);
-  cursor:pointer; font-weight:600; font-size:13px; color:var(--text2);
-  transition:border-color .15s var(--ease), background .15s var(--ease), color .15s var(--ease);
-}
-.bank-tile:hover{ border-color:var(--grey-dim); background:var(--surface3); }
-.bank-tile.active{ border-color:var(--blue); background:rgba(59,130,246,0.08); color:var(--blue-bright); }
-
-.company-readonly{
-  opacity:0.7;
-  pointer-events:none;
-}
-.company-readonly input, .company-readonly select{
-  opacity:0.6;
-}
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="ledger-bg"></div>
@@ -912,77 +113,89 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 </div>
 
 <!-- ============================================================
-     SCREEN: VERIFY-PENDING
+     SCREEN: VERIFY-PENDING (shown right after signup)
      ============================================================ -->
 <div id="screen-verify-pending" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body" style="text-align:center;">
+
         <div class="brand" style="justify-content:center;">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
+
         <div style="font-size:40px; margin:24px 0 10px;">📧</div>
         <p style="color:var(--text); font-size:15px; font-weight:600; margin-bottom:6px;">Verify your email</p>
         <p style="color:var(--text2); font-size:13.5px; line-height:1.6; margin-bottom:6px;">
           We sent a verification link to<br>
-          <strong id="verifyPendingEmail" style="color:var(--blue-bright);">—</strong>
+          <strong id="verifyPendingEmail" style="color:var(--cyan);">—</strong>
         </p>
         <p style="color:var(--text3); font-size:12px; line-height:1.6; margin-bottom:24px;">
           Not in your inbox? Check your Spam / Promotions folder.
         </p>
+
         <button id="verifyPendingRefreshBtn" class="btn btn-primary" style="margin-bottom:10px;">I've verified — Continue</button>
         <button id="resendVerifyBtn" class="btn btn-google" style="margin-bottom:10px;">Resend verification email</button>
         <button id="verifyPendingLogoutBtn" class="btn btn-google">Use a different account</button>
+
       </div>
     </div>
   </div>
 </div>
 
 <!-- ============================================================
-     SCREEN: VERIFYING
+     SCREEN: VERIFYING (handles the link clicked from the email)
      ============================================================ -->
 <div id="screen-verifying" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body" style="text-align:center;">
+
         <div class="brand" style="justify-content:center;">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
+
         <div id="verifyIcon" style="font-size:40px; margin:24px 0 10px;">⏳</div>
         <p id="verifyText" style="color:var(--text2); font-size:14px; line-height:1.6; margin-bottom:24px;">
           Verifying your email...
         </p>
+
         <button id="verifyContinueBtn" class="btn btn-primary hidden">Continue to Sign In</button>
+
       </div>
     </div>
   </div>
 </div>
 
 <!-- ============================================================
-     SCREEN: RESET PASSWORD
+     SCREEN: RESET PASSWORD (opened from the password-reset email link)
      ============================================================ -->
 <div id="screen-reset-password" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body">
+
         <div class="brand">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
         <p class="tagline">// choose a new password</p>
+
         <div id="resetPwErrorBox" class="error-msg"></div>
         <div id="resetPwSuccessBox" class="success-msg"></div>
+
         <div id="resetPwCheckingMsg" style="color:var(--text2); font-size:13px; margin-bottom:16px;">
           Checking your reset link...
         </div>
+
         <form id="resetPasswordForm" class="hidden">
           <p style="color:var(--text2); font-size:13px; margin-bottom:16px;">
-            Resetting password for <strong id="resetPwEmail" style="color:var(--blue-bright);">—</strong>
+            Resetting password for <strong id="resetPwEmail" style="color:var(--cyan);">—</strong>
           </p>
           <div class="field password-field">
             <label>New Password</label>
@@ -1002,28 +215,33 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
           </div>
           <button type="submit" class="btn btn-primary" id="resetPwSubmitBtn">Set New Password</button>
         </form>
+
         <button id="resetPwBackToSignInBtn" class="btn btn-google hidden" style="margin-top:12px;">Back to Sign In</button>
+
       </div>
     </div>
   </div>
 </div>
 
 <!-- ============================================================
-     SCREEN: COMPLETE PROFILE
+     SCREEN: COMPLETE PROFILE (new Google sign-ups confirm their name)
      ============================================================ -->
 <div id="screen-complete-profile" class="hidden">
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-card__strip"></div>
       <div class="auth-card__body">
+
         <div class="brand">
           <span class="mark">PF</span>
           <h1>PayFlow Pro</h1>
         </div>
         <p class="tagline">// one last step</p>
+
         <p style="color:var(--text2); font-size:13px; margin-bottom:20px;">
           Welcome! Please confirm your full name for your account.
         </p>
+
         <form id="completeProfileForm">
           <div class="field">
             <label>Full Name</label>
@@ -1031,6 +249,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
           </div>
           <button type="submit" class="btn btn-primary" id="completeProfileBtn">Continue</button>
         </form>
+
       </div>
     </div>
   </div>
@@ -1047,7 +266,11 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
       <h1>PayFlow Pro</h1>
     </div>
     <nav class="topbar__tabs">
-      <div class="nav-item active" data-page="employees">
+      <div class="nav-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" data-page="employees">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Employees
       </div>
@@ -1079,50 +302,124 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
       </div>
 
       <div class="sidebar-footer">
-        <img id="userAvatarImg" class="user-avatar hidden" alt="Profile photo">
-        <div id="userAvatarFallback" class="user-avatar-fallback hidden">—</div>
-        <button class="btn-inline secondary" style="width:36px; height:36px; padding:0; display:flex; align-items:center; justify-content:center;" id="logoutBtn" title="Log Out">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <div class="user-chip">
+          <img id="userAvatarImg" class="user-avatar hidden" alt="Profile photo">
+          <div id="userAvatarFallback" class="user-avatar-fallback hidden">—</div>
+          <div class="user-chip__text">
+            <strong id="userName">—</strong>
+            <span id="userEmail">—</span>
+          </div>
+        </div>
+        <button class="btn-inline secondary" style="width:100%;" id="logoutBtn" title="Log Out">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
     </aside>
 
     <main class="main">
 
-      <!-- ===================== EMPLOYEES PAGE ===================== -->
-      <section id="page-employees">
-        <div class="page-head">
+      <section id="page-dashboard">
+        <div class="dash-welcome">
           <div>
-            <h2>Employees</h2>
-            <p>Add, edit, and manage your team's payout details.</p>
+            <h2>Welcome back<span id="dashWelcomeName"></span></h2>
+            <p>Here's what's happening with your payroll today.</p>
           </div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-            <a href="#" id="downloadSampleCsvLink" style="font-size:11.5px; color:var(--text2); text-decoration:underline;">Sample CSV</a>
-            <button class="btn-inline secondary" id="exportLedgerCsvBtn" style="font-size:11.5px; padding:6px 12px;">Export CSV</button>
-            <button class="btn-inline secondary" id="bulkImportBtn" style="font-size:11.5px; padding:6px 12px;">Bulk Import</button>
-            <input type="file" id="bulkImportInput" accept=".csv" class="hidden">
-            <button class="btn-inline" id="addEmployeeBtn" style="font-size:11.5px; padding:6px 14px;">+ Add Employee</button>
+          <div class="dash-quick-actions">
+            <button type="button" id="dashQuickAddEmployee">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
+              Add Employee
+            </button>
+            <button type="button" id="dashQuickDisburse">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              New Payroll Run
+            </button>
+            <button type="button" id="dashQuickExports">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              View Exports
+            </button>
           </div>
         </div>
 
         <div class="kpi-grid">
           <div class="kpi-card">
-            <div class="kpi-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div class="kpi-card__icon kpi-card__icon--indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div class="kpi-card__label">Total Employees</div>
+            <div class="kpi-card__value" id="dashKpiEmployees">0</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9.01"/><line x1="9" y1="12" x2="9" y2="12.01"/><line x1="9" y1="15" x2="9" y2="15.01"/></svg></div>
+            <div class="kpi-card__label">Payout Bank</div>
+            <div class="kpi-card__value" id="dashKpiBank" style="font-size:16px;">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div class="kpi-card__label">Disbursed This Month</div>
+            <div class="kpi-card__value" id="dashKpiMonth">₹ 0.00</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+            <div class="kpi-card__label">Exports Filed</div>
+            <div class="kpi-card__value" id="dashKpiExports">0</div>
+          </div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="panel">
+            <div class="dash-panel-head">
+              <h3>Recent Exports</h3>
+              <a href="#" data-page-link="exports">View all →</a>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Batch ID</th><th>Date</th><th>Employees</th><th style="text-align:right;">Total (₹)</th></tr></thead>
+                <tbody id="dashRecentExports"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="dash-panel-head">
+              <h3>Recent Activity</h3>
+              <a href="#" data-page-link="audit">View all →</a>
+            </div>
+            <ul class="dash-activity-list" id="dashRecentActivity"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-employees" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Employees</h2>
+            <p>Add, edit, and manage your team's payout details.</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <a href="#" id="downloadSampleCsvLink" style="font-size:12px; color:var(--text2); text-decoration:underline; margin-right:4px;">Download sample CSV</a>
+            <button class="btn-inline secondary" id="exportLedgerCsvBtn">Export Ledger CSV</button>
+            <button class="btn-inline secondary" id="bulkImportBtn">Bulk Import CSV</button>
+            <input type="file" id="bulkImportInput" accept=".csv" class="hidden">
+            <button class="btn-inline" id="addEmployeeBtn">+ Add Employee</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
             <div class="kpi-card__label">Total Employees</div>
             <div class="kpi-card__value" id="kpiTotalEmployees">0</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9.01"/><line x1="9" y1="12" x2="9" y2="12.01"/><line x1="9" y1="15" x2="9" y2="15.01"/></svg></div>
+            <div class="kpi-card__icon kpi-card__icon--violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9.01"/><line x1="9" y1="12" x2="9" y2="12.01"/><line x1="9" y1="15" x2="9" y2="15.01"/></svg></div>
             <div class="kpi-card__label">Payout Bank</div>
             <div class="kpi-card__value" id="kpiCompanyBank" style="font-size:16px;">—</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div class="kpi-card__icon kpi-card__icon--emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
             <div class="kpi-card__label">Disbursed This Month</div>
             <div class="kpi-card__value" id="kpiMonthDisbursed">₹ 0.00</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+            <div class="kpi-card__icon kpi-card__icon--amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
             <div class="kpi-card__label">Last Export</div>
             <div class="kpi-card__value" id="kpiLastExport" style="font-size:16px;">—</div>
             <div class="kpi-card__sub" id="kpiLastExportSub"></div>
@@ -1131,12 +428,12 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 
         <div class="panel">
           <input type="text" id="employeeSearch" placeholder="Search by name or account no..."
-            style="width:260px; margin-bottom:12px; background:var(--surface2); border:1px solid var(--border);
-            color:var(--text); padding:8px 12px; font-size:12.5px; border-radius:0;">
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
           <div id="employeeBulkBar" class="bulk-actions-bar hidden">
             <span><strong id="employeeSelectedCount">0</strong> selected</span>
-            <button type="button" class="btn-inline secondary" id="employeeBulkDeleteBtn" style="padding:4px 12px; font-size:11px;">Delete Selected</button>
-            <button type="button" class="btn-inline secondary" id="employeeBulkClearBtn" style="padding:4px 12px; font-size:11px;">Clear Selection</button>
+            <button type="button" class="btn-inline secondary" id="employeeBulkDeleteBtn" style="padding:6px 14px; font-size:12px;">Delete Selected</button>
+            <button type="button" class="btn-inline secondary" id="employeeBulkClearBtn" style="padding:6px 14px; font-size:12px;">Clear Selection</button>
           </div>
           <div class="table-wrap">
           <table>
@@ -1145,7 +442,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
                 <th class="row-select-cell"><input type="checkbox" id="employeeSelectAll" aria-label="Select all"></th>
                 <th class="sortable" data-sort="name">Employee Name<span class="sort-arrow">▲</span></th>
                 <th class="sortable" data-sort="accountNumber">Account Number<span class="sort-arrow">▲</span></th>
-                <th class="sortable" data-sort="ifsc">IFSC<span class="sort-arrow">▲</span></th>
+                <th class="sortable" data-sort="ifsc">IFSC / Branch Code<span class="sort-arrow">▲</span></th>
                 <th class="sortable" data-sort="transferType">Transfer Type<span class="sort-arrow">▲</span></th>
                 <th class="sortable" data-sort="empCode">Emp Code<span class="sort-arrow">▲</span></th>
                 <th>Mobile</th>
@@ -1163,7 +460,6 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
         </div>
       </section>
 
-      <!-- ===================== PAYROLL RUN PAGE ===================== -->
       <section id="page-disbursement" class="hidden">
         <div class="page-head">
           <div>
@@ -1173,47 +469,36 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
           <div class="security-badge" id="disbBankBadge">BANK: —</div>
         </div>
 
-        <!-- Bank Selection -->
         <div class="panel">
-          <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; font-weight:600;">Select Bank</div>
-          <div class="bank-select-grid" id="bankSelectGrid">
-            <div class="bank-tile active" data-bank="SBI">SBI</div>
-            <div class="bank-tile" data-bank="HDFC">HDFC</div>
-            <div class="bank-tile" data-bank="ICICI">ICICI</div>
-            <div class="bank-tile" data-bank="PNB">PNB</div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+          <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end;">
             <div id="disbTransferTypeWrap">
-              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">TRANSFER TYPE</label>
-              <select id="disbTransferType" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:0;">
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">TRANSFER TYPE</label>
+              <select id="disbTransferType" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
                 <option value="Same Bank">Same Bank Transfer</option>
                 <option value="Other Bank">Other Bank Transfer</option>
               </select>
             </div>
             <div id="disbImpsWrap" class="hidden">
-              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">CROSS-BANK MODE</label>
-              <label style="display:flex; align-items:center; gap:6px; padding:8px 10px; background:var(--surface2); border:1px solid var(--border); font-size:13px; cursor:pointer;">
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">CROSS-BANK MODE</label>
+              <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; cursor:pointer;">
                 <input type="checkbox" id="disbUseImps"> Prefer IMPS
               </label>
             </div>
             <div>
-              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">PAYROLL CYCLE</label>
-              <input type="month" id="disbPayrollMonth" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:0; font-family:var(--font-body);">
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">PAYROLL CYCLE</label>
+              <input type="month" id="disbPayrollMonth" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm); font-family:var(--font-body);">
             </div>
             <div>
-              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">TRANSFER DATE</label>
-              <input type="date" id="disbTransferDate" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:0; font-family:var(--font-body);">
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">TRANSFER DATE</label>
+              <input type="date" id="disbTransferDate" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm); font-family:var(--font-body);">
             </div>
           </div>
         </div>
 
         <div class="panel">
           <input type="text" id="disbSearch" placeholder="Search by name or account no..."
-            style="width:260px; margin-bottom:12px; background:var(--surface2); border:1px solid var(--border);
-            color:var(--text); padding:8px 12px; font-size:12.5px; border-radius:0;">
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
           <div class="table-wrap">
           <table>
             <thead>
@@ -1230,16 +515,15 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 
         <div class="panel" style="display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:20px; font-weight:700; color:var(--success);" id="disbTotal">Batch Total: ₹ 0.00</div>
+            <div style="font-size:22px; font-weight:700; color:var(--success);" id="disbTotal">Batch Total: ₹ 0.00</div>
           </div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn-inline secondary" id="disbClearBtn" style="font-size:12px; padding:6px 14px;">Clear All</button>
-            <button class="btn-inline" id="disbExportBtn" style="font-size:12px; padding:6px 16px;">Export File</button>
+          <div style="display:flex; gap:10px;">
+            <button class="btn-inline secondary" id="disbClearBtn">Clear All</button>
+            <button class="btn-inline" id="disbExportBtn">Export File</button>
           </div>
         </div>
       </section>
 
-      <!-- ===================== EXPORTS PAGE ===================== -->
       <section id="page-exports" class="hidden">
         <div class="page-head">
           <div>
@@ -1249,8 +533,8 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
         </div>
         <div class="panel">
           <input type="text" id="exportsSearch" placeholder="Search by batch ID or bank..."
-            style="width:260px; margin-bottom:12px; background:var(--surface2); border:1px solid var(--border);
-            color:var(--text); padding:8px 12px; font-size:12.5px; border-radius:0;">
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
           <div class="table-wrap">
           <table>
             <thead>
@@ -1270,13 +554,12 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
             <div class="empty-state__icon">📦</div>
             No exports yet — batches will appear here after you export a payment file.
           </div>
-          <p style="font-size:11px; color:var(--text3); margin-top:10px;">
-            Shows batches reconstructed from the most recent 500 disbursement rows. Re-downloaded files use the company profile and IFSC as they were at the time of that export.
+          <p style="font-size:11.5px; color:var(--text3); margin-top:12px;">
+            Shows batches reconstructed from the most recent 500 disbursement rows. Re-downloaded files use the company profile and IFSC as they were at the time of that export, not your current settings.
           </p>
         </div>
       </section>
 
-      <!-- ===================== AUDIT PAGE ===================== -->
       <section id="page-audit" class="hidden">
         <div class="page-head">
           <div>
@@ -1286,8 +569,8 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
         </div>
         <div class="panel">
           <input type="text" id="auditSearch" placeholder="Search by user, action, detail..."
-            style="width:280px; margin-bottom:12px; background:var(--surface2); border:1px solid var(--border);
-            color:var(--text); padding:8px 12px; font-size:12.5px; border-radius:0;">
+            style="width:320px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
           <div class="table-wrap">
           <table>
             <thead><tr>
@@ -1306,67 +589,61 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
         </div>
       </section>
 
-      <!-- ===================== COMPANY PAGE ===================== -->
       <section id="page-company" class="hidden">
         <div class="page-head">
           <div>
             <h2>Company Profile</h2>
             <p>These details print on every exported bulk file.</p>
           </div>
-          <button class="btn-inline secondary" id="companyEditToggleBtn" style="font-size:12px; padding:4px 14px;">Edit</button>
         </div>
-
-        <!-- Read-only view -->
-        <div class="panel" id="companyReadonlyView">
-          <div class="company-detail-line"><span class="label">Company Name</span><span class="value" id="companyDisplayName">—</span></div>
-          <div class="company-detail-line"><span class="label">Bank</span><span class="value" id="companyDisplayBank">—</span></div>
-          <div class="company-detail-line"><span class="label">Account Number</span><span class="value" id="companyDisplayAcc">—</span></div>
-          <div class="company-detail-line"><span class="label">IFSC</span><span class="value" id="companyDisplayIfsc">—</span></div>
-        </div>
-
-        <!-- Edit view (hidden by default) -->
-        <div class="panel hidden" id="companyEditView" style="max-width:480px;">
+        <div class="panel" style="max-width:480px;">
           <div class="field">
             <label>Company Name</label>
-            <input type="text" id="companyNameInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:0;">
+            <input type="text" id="companyNameInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
           </div>
-
-          <!-- Bank Selection in edit mode -->
-          <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; font-weight:600;">Bank</div>
-          <div class="bank-select-grid" id="companyBankSelectGrid" style="margin-bottom:16px;">
-            <div class="bank-tile active" data-bank="SBI">SBI</div>
-            <div class="bank-tile" data-bank="HDFC">HDFC</div>
-            <div class="bank-tile" data-bank="ICICI">ICICI</div>
-            <div class="bank-tile" data-bank="PNB">PNB</div>
-          </div>
-
           <div class="field">
             <label>Company Account Number</label>
-            <input type="text" id="companyAccInput" inputmode="numeric" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:0;">
+            <input type="text" id="companyAccInput" inputmode="numeric" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
           </div>
           <div class="field">
-            <label>Confirm Account Number</label>
-            <input type="text" id="companyAccConfirmInput" inputmode="numeric" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:0;">
+            <label>Confirm Company Account Number</label>
+            <input type="text" id="companyAccConfirmInput" inputmode="numeric" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
             <div class="field-hint field-mismatch" id="companyAccMismatchLbl"></div>
           </div>
           <div class="field">
-            <label>Branch / Sys Code</label>
-            <input type="text" id="companySysInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:0;">
-            <div class="field-hint">The last 6 digits of your IFSC branch code (auto-filled).</div>
+            <label>Bank IFSC Code</label>
+            <input type="text" id="companyIfscInput" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            <div class="field-hint">The IFSC of the branch where your Company Account Number is held.</div>
           </div>
-          <div style="display:flex; gap:8px; margin-top:12px;">
-            <button class="btn-inline secondary" id="companyEditCancelBtn" style="font-size:12px; padding:6px 16px;">Cancel</button>
-            <button class="btn-inline" id="saveCompanyBtn" style="font-size:12px; padding:6px 20px;">Save</button>
+          <div class="field">
+            <label>Confirm IFSC Code</label>
+            <input type="text" id="companyIfscConfirmInput" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            <div class="field-hint field-mismatch" id="companyIfscMismatchLbl"></div>
           </div>
+          <div class="field">
+            <label style="display:flex; align-items:center; gap:6px;">
+              Branch / Sys Code
+              <button type="button" class="info-btn" id="sysCodeInfoBtn" aria-label="What goes in this field?">i</button>
+            </label>
+            <input type="text" id="companySysInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            <div class="field-hint info-popover hidden" id="sysCodeInfoText">
+              For most banks this is just the last 6 digits of your branch's IFSC code — as soon as you enter a valid IFSC above, we fill this in for you automatically. A few banks (e.g. Kotak) instead ask for a separate Client/Corporate ID issued by the bank for bulk uploads — if that's what your bank's spec asks for, just type over the auto-filled value; it won't be overwritten again unless you clear this field.
+            </div>
+          </div>
+          <div class="field">
+            <label>Company's Bank</label>
+            <select id="companyBankInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);"></select>
+            <div class="field-hint">Determines the bulk payment file format generated in Payroll Run.</div>
+          </div>
+          <button class="btn-inline" id="saveCompanyBtn">Save Company Profile</button>
         </div>
       </section>
 
-      <!-- ===================== SETTINGS PAGE ===================== -->
       <section id="page-settings" class="hidden">
         <div class="page-head">
           <div>
             <h2>Settings</h2>
-            <p>Manage your sign-in email, password, and company details.</p>
+            <p>Manage your sign-in email and password.</p>
           </div>
         </div>
 
@@ -1386,19 +663,13 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
               </div>
               <span class="settings-list-item__chevron">›</span>
             </div>
-            <div class="settings-list-item" id="openCompanySettingsBtn" role="button" tabindex="0">
-              <div>
-                <div class="settings-list-item__title">Company Details</div>
-                <div class="settings-list-item__subtitle">Update your company payout profile</div>
-              </div>
-              <span class="settings-list-item__chevron">›</span>
-            </div>
           </div>
           <div id="settingsGoogleNotice" class="settings-notice hidden">
             <span style="font-size:18px;">🔒</span>
-            <span>You're signed in with Google. Your email and password are managed through your Google Account.</span>
+            <span>You're signed in with Google. Your email and password are managed through your Google Account, so they can't be changed here.</span>
           </div>
         </div>
+
       </section>
 
       <!-- Change Email modal -->
@@ -1463,7 +734,6 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     </main>
   </div>
 
-  <!-- Employee Modal -->
   <div id="employeeModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:560px;">
       <div class="modal-head">
@@ -1495,7 +765,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
           </div>
           <div class="field">
             <label>Transfer Type</label>
-            <select id="empTransferType" required style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:0;">
+            <select id="empTransferType" required style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
               <option value="Same Bank">Same Bank</option>
               <option value="Other Bank">Other Bank</option>
             </select>
@@ -1555,7 +825,6 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     </div>
   </div>
 
-  <!-- Export Preview Modal -->
   <div id="exportPreviewModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:520px;">
       <div class="modal-head">
@@ -1570,7 +839,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     </div>
   </div>
 
-  <!-- Import Result Modal -->
+  <!-- Bulk import result summary -->
   <div id="importResultModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:520px;">
       <div class="modal-head">
@@ -1584,7 +853,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     </div>
   </div>
 
-  <!-- Confirm Dialog -->
+  <!-- Generic confirm dialog, used by confirmDialog() in place of window.confirm() -->
   <div id="confirmModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:420px;">
       <div class="modal-head">
@@ -1598,7 +867,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     </div>
   </div>
 
-  <!-- Toast Host -->
+  <!-- Toast notification host, used by toast() in place of window.alert() -->
   <div id="toastHost" class="toast-host" aria-live="polite"></div>
 </div>
 

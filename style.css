@@ -62,6 +62,30 @@
   --font-body: 'Inter', 'Segoe UI', sans-serif;
 }
 
+/* ---------------------------------------------------------
+   LIGHT MODE
+   Toggled from Settings → Appearance. Swaps the dark-navy surfaces
+   for a neutral grey (rgb(208,208,208), the same grey already used
+   for secondary text/borders in dark mode) and flips text to dark
+   for readability. Functional colors (blue/green/red) stay put.
+--------------------------------------------------------- */
+html[data-theme="light"]{
+  color-scheme: light;
+  --bg:        rgb(208,208,208);
+  --surface:   #FAFAFA;
+  --surface2:  #EDEDED;
+  --surface3:  #E2E2E2;
+  --border:    #C7C7C7;
+  --border-soft: rgba(20,20,20,0.14);
+  --grey-line: #D3D3D3;
+  --text:      #14181F;
+  --text2:     #454A52;
+  --text3:     rgba(20,24,31,0.6);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 10px rgba(0,0,0,0.10);
+  --shadow-lg: 0 10px 24px rgba(0,0,0,0.14);
+}
+
 *{box-sizing:border-box; margin:0; padding:0;}
 
 html{ color-scheme: dark; scroll-behavior:smooth; }
@@ -309,6 +333,24 @@ input.input-match{
 .settings-list-item__subtitle{ font-size:12px; color:var(--text2); margin-top:3px; }
 .settings-list-item__chevron{ font-size:20px; color:var(--text3); transition:transform .15s var(--ease); }
 .settings-list-item:hover .settings-list-item__chevron{ transform:translateX(2px); color:var(--blue-bright); }
+
+/* ---------------- Theme toggle switch (Settings → Appearance) ---------------- */
+.theme-switch{
+  position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0;
+}
+.theme-switch input{ opacity:0; width:0; height:0; }
+.theme-switch__track{
+  position:absolute; inset:0; cursor:pointer;
+  background:var(--surface3); border:1px solid var(--border);
+  transition:background .15s var(--ease), border-color .15s var(--ease);
+}
+.theme-switch__track::before{
+  content:''; position:absolute; height:16px; width:16px; left:3px; top:2.5px;
+  background:var(--text2); transition:transform .15s var(--ease), background .15s var(--ease);
+}
+.theme-switch input:checked + .theme-switch__track{ background:var(--blue-dim); border-color:var(--blue-dim); }
+.theme-switch input:checked + .theme-switch__track::before{ transform:translateX(18px); background:#fff; }
+.theme-switch input:focus-visible + .theme-switch__track{ outline:2px solid var(--blue-bright); outline-offset:2px; }
 
 .btn{
   width:100%;

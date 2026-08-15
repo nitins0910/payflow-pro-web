@@ -20,6 +20,35 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 // ---------------------------------------------------------
+// 1a. THEME (Dark / Light)
+// Dark navy is the default. Light mode swaps the main dark-blue
+// surfaces for a neutral grey (rgb(208,208,208)) via CSS variables
+// scoped under html[data-theme="light"] — see style.css. The initial
+// theme is already applied by an inline <head> script (before this
+// file loads) to avoid a flash of the wrong theme; this just keeps
+// the Settings toggle in sync and handles switching at runtime.
+// ---------------------------------------------------------
+const THEME_STORAGE_KEY = 'payflow-theme';
+
+function getStoredTheme() {
+  try { return localStorage.getItem(THEME_STORAGE_KEY); } catch (e) { return null; }
+}
+function isLightTheme() { return document.documentElement.getAttribute('data-theme') === 'light'; }
+function applyTheme(theme) {
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch (e) { /* ignore */ }
+}
+function wireThemeToggle() {
+  const toggle = document.getElementById('lightModeToggle');
+  if (!toggle) return;
+  toggle.checked = isLightTheme();
+  toggle.addEventListener('change', () => {
+    applyTheme(toggle.checked ? 'light' : 'dark');
+  });
+}
+
+// ---------------------------------------------------------
 // 1b. APP CHECK — blocks scripted / bot signups & requests
 // that don't come from this real web app, so someone can't
 // just hammer createUserWithEmailAndPassword in a loop and
@@ -2784,6 +2813,8 @@ function closeSettingsModal(modalId) {
 }
 
 function wireSettingsForms() {
+  wireThemeToggle();
+
   document.getElementById('openChangeEmailBtn').addEventListener('click', () =>
     openSettingsModal('changeEmailModal', 'changeEmailForm', 'settingsEmailMsg'));
   document.getElementById('cancelChangeEmailBtn').addEventListener('click', () =>

@@ -7,6 +7,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>
+  // Applied synchronously in <head>, before first paint, so a saved
+  // "light" preference doesn't flash the dark theme for a moment.
+  try {
+    if (localStorage.getItem('payflow-theme') === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  } catch (e) { /* localStorage unavailable (private mode etc.) — default to dark */ }
+</script>
 </head>
 <body>
 <div class="ledger-bg"></div>
@@ -626,6 +635,16 @@
 
         <div class="panel" style="padding:0; overflow:hidden;">
           <div id="settingsCredentialsList">
+            <div class="settings-list-item" style="cursor:default;">
+              <div>
+                <div class="settings-list-item__title">Appearance</div>
+                <div class="settings-list-item__subtitle">Switch to a light, grey interface</div>
+              </div>
+              <label class="theme-switch">
+                <input type="checkbox" id="lightModeToggle" aria-label="Toggle light mode">
+                <span class="theme-switch__track"></span>
+              </label>
+            </div>
             <div class="settings-list-item" id="openChangeEmailBtn" role="button" tabindex="0">
               <div>
                 <div class="settings-list-item__title">Sign-in Email</div>

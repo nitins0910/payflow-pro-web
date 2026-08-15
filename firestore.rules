@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // First-ever write for this user (e.g. signup, first company-details
+      // save). Blocks the client from ever setting freeExportUsed/credits
+      // itself, even on document creation.
+      allow create: if request.auth != null && request.auth.uid == userId
+        && !request.resource.data.keys().hasAny(['freeExportUsed', 'credits']);
+
+      // Every later write (company profile edits, etc.) — allowed as
+      // normal, EXCEPT touching the two billing fields. Those may only
+      // ever be written by the Netlify functions (which use the Admin
+      // SDK and therefore bypass these rules entirely).
+      allow update: if request.auth != null && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['freeExportUsed', 'credits']);
+
+      allow delete: if false;
+
+      match /{subcollection=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}

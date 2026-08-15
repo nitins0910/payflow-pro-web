@@ -6,18 +6,18 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == userId;
 
       // First-ever write for this user (e.g. signup, first company-details
-      // save). Blocks the client from ever setting freeExportUsed/credits
+      // save). Blocks the client from ever setting the wallet fields
       // itself, even on document creation.
       allow create: if request.auth != null && request.auth.uid == userId
-        && !request.resource.data.keys().hasAny(['freeExportUsed', 'credits']);
+        && !request.resource.data.keys().hasAny(['credits', 'walletInitialized']);
 
       // Every later write (company profile edits, etc.) — allowed as
-      // normal, EXCEPT touching the two billing fields. Those may only
-      // ever be written by the Netlify functions (which use the Admin
-      // SDK and therefore bypass these rules entirely).
+      // normal, EXCEPT touching the wallet fields. Those may only ever
+      // be written by the Netlify functions (which use the Admin SDK
+      // and therefore bypass these rules entirely).
       allow update: if request.auth != null && request.auth.uid == userId
         && !request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(['freeExportUsed', 'credits']);
+              .hasAny(['credits', 'walletInitialized']);
 
       allow delete: if false;
 

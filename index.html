@@ -472,8 +472,24 @@
             <div class="field-hint field-mismatch" id="companyAccMismatchLbl"></div>
           </div>
           <div class="field">
-            <label>Branch / Sys Code</label>
+            <label>Bank IFSC Code</label>
+            <input type="text" id="companyIfscInput" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            <div class="field-hint">The IFSC of the branch where your Company Account Number is held.</div>
+          </div>
+          <div class="field">
+            <label>Confirm IFSC Code</label>
+            <input type="text" id="companyIfscConfirmInput" autocomplete="off" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            <div class="field-hint field-mismatch" id="companyIfscMismatchLbl"></div>
+          </div>
+          <div class="field">
+            <label style="display:flex; align-items:center; gap:6px;">
+              Branch / Sys Code
+              <button type="button" class="info-btn" id="sysCodeInfoBtn" aria-label="What goes in this field?">i</button>
+            </label>
             <input type="text" id="companySysInput" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            <div class="field-hint info-popover hidden" id="sysCodeInfoText">
+              For most banks this is just the last 6 digits of your branch's IFSC code — as soon as you enter a valid IFSC above, we fill this in for you automatically. A few banks (e.g. Kotak) instead ask for a separate Client/Corporate ID issued by the bank for bulk uploads — if that's what your bank's spec asks for, just type over the auto-filled value; it won't be overwritten again unless you clear this field.
+            </div>
           </div>
           <div class="field">
             <label>Company's Bank</label>

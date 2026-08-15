@@ -852,7 +852,7 @@ wirePasswordToggles();
 let employees = [];
 let editingEmployeeId = null;
 let salaryInputs = {};
-let companyProfile = { name: '', accountNumber: '', sysId: '', bankName: 'SBI' };
+let companyProfile = { name: '', accountNumber: '', ifsc: '', sysId: '', bankName: 'SBI' };
 let dashboardBooted = false;
 let currentUser = null;
 
@@ -1568,7 +1568,7 @@ function collectBatchLines() {
 // account row, which the bank portal will reject. So export must be
 // blocked (not just discouraged) until the Company Profile is saved.
 function isCompanyProfileComplete() {
-  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.sysId && companyProfile.bankName);
+  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.ifsc && companyProfile.sysId && companyProfile.bankName);
 }
 function goToCompanyPage() {
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
@@ -1580,7 +1580,7 @@ function goToCompanyPage() {
 
 function openExportPreview() {
   if (!isCompanyProfileComplete()) {
-    alert('Please fill company details to continue. Company Name, Account Number, Branch/Sys Code and Bank are required before you can export a payment file.');
+    alert('Please fill company details to continue. Company Name, Account Number, IFSC Code, Branch/Sys Code and Bank are required before you can export a payment file.');
     goToCompanyPage();
     return;
   }
@@ -1719,6 +1719,8 @@ async function loadCompanyProfile() {
     document.getElementById('companyNameInput').value = p.name || '';
     document.getElementById('companyAccInput').value = p.accountNumber || '';
     document.getElementById('companyAccConfirmInput').value = p.accountNumber || '';
+    document.getElementById('companyIfscInput').value = p.ifsc || '';
+    document.getElementById('companyIfscConfirmInput').value = p.ifsc || '';
     document.getElementById('companySysInput').value = p.sysId || '';
     document.getElementById('companyBankInput').value = p.bankName || 'SBI';
   } catch (err) {
@@ -1726,46 +1728,107 @@ async function loadCompanyProfile() {
   }
   updateDisbursementModeUI();
 }
+
+// The Sys/Branch Code is, for most banks, literally the branch
+// portion of the IFSC (everything after the 4-letter bank code and
+// the fixed 5th "0" — e.g. SBIN0001234 -> 001234). Deriving it live
+// from the IFSC removes a manual-entry step and a chance to typo it,
+// while still letting the user overwrite it for banks (like Kotak)
+// whose bulk-upload spec wants a separate Client/Corporate ID instead
+// of a real branch code.
+function deriveBranchCodeFromIfsc(ifsc) {
+  const s = String(ifsc || '').toUpperCase();
+  return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(s) ? s.slice(5) : '';
+}
+
 function wireCompanyForm() {
   populateCompanyBankSelect();
 
-  const accInput = document.getElementById('companyAccInput');
+  const accInput        = document.getElementById('companyAccInput');
   const accConfirmInput = document.getElementById('companyAccConfirmInput');
-  const accMismatchLbl = document.getElementById('companyAccMismatchLbl');
+  const accMismatchLbl  = document.getElementById('companyAccMismatchLbl');
+  const ifscInput        = document.getElementById('companyIfscInput');
+  const ifscConfirmInput = document.getElementById('companyIfscConfirmInput');
+  const ifscMismatchLbl  = document.getElementById('companyIfscMismatchLbl');
+  const sysInput = document.getElementById('companySysInput');
+
+  // Account Number and IFSC pairs: no spaces, and — critically — no
+  // pasting. Blocking paste is what makes "type it twice" actually
+  // catch typos; without it someone can paste the same wrong value
+  // into both boxes and it will "match" perfectly. This mirrors the
+  // Employee form's Account Number / IFSC confirmation fields exactly.
+  [accInput, accConfirmInput, ifscInput, ifscConfirmInput].forEach(el => {
+    blockSpaceKey(el);
+    blockPasteAndRightClick(el);
+  });
+  [ifscInput, ifscConfirmInput].forEach(el => autoUpperCaseLive(el));
 
   // Live double-entry check — mirrors the Employee form's Account
   // Number confirmation, so a mistyped digit is caught immediately
   // instead of silently corrupting every export's debit account.
-  function validateCompanyAccountLive() {
-    const prime = accInput.value.trim();
-    const conf = accConfirmInput.value.trim();
-    accConfirmInput.classList.remove('input-mismatch', 'input-match');
-    if (!conf) { accMismatchLbl.textContent = ''; return; }
+  function checkPair(primeEl, confEl, lbl) {
+    const prime = primeEl.value.trim();
+    const conf = confEl.value.trim();
+    confEl.classList.remove('input-mismatch', 'input-match');
+    if (!conf) { lbl.textContent = ''; return; }
     if (prime !== conf) {
-      accConfirmInput.classList.add('input-mismatch');
-      accMismatchLbl.textContent = 'MISMATCH';
+      confEl.classList.add('input-mismatch');
+      lbl.textContent = 'MISMATCH';
     } else {
-      accConfirmInput.classList.add('input-match');
-      accMismatchLbl.textContent = '';
+      confEl.classList.add('input-match');
+      lbl.textContent = '';
     }
   }
-  [accInput, accConfirmInput].forEach(el => el.addEventListener('input', validateCompanyAccountLive));
+  [accInput, accConfirmInput].forEach(el => el.addEventListener('input', () => checkPair(accInput, accConfirmInput, accMismatchLbl)));
+  [ifscInput, ifscConfirmInput].forEach(el => el.addEventListener('input', () => checkPair(ifscInput, ifscConfirmInput, ifscMismatchLbl)));
+
+  // Auto-fill Branch/Sys Code from the (confirmed) IFSC, but only
+  // while the field still holds a value we auto-filled ourselves —
+  // the moment the user types their own value in, we stop touching it.
+  let lastAutoSysValue = sysInput.value;
+  ifscConfirmInput.addEventListener('input', () => {
+    if (ifscInput.value.trim().toUpperCase() !== ifscConfirmInput.value.trim().toUpperCase()) return;
+    const derived = deriveBranchCodeFromIfsc(ifscConfirmInput.value);
+    if (!derived) return;
+    if (sysInput.value.trim() === '' || sysInput.value === lastAutoSysValue) {
+      sysInput.value = derived;
+      lastAutoSysValue = derived;
+    }
+  });
+  sysInput.addEventListener('input', () => {
+    if (sysInput.value !== lastAutoSysValue) lastAutoSysValue = '__manual__';
+  });
+
+  const infoBtn = document.getElementById('sysCodeInfoBtn');
+  const infoText = document.getElementById('sysCodeInfoText');
+  infoBtn.addEventListener('click', () => {
+    infoText.classList.toggle('hidden');
+    infoBtn.classList.toggle('is-open');
+  });
 
   document.getElementById('saveCompanyBtn').addEventListener('click', async () => {
     const name = document.getElementById('companyNameInput').value.trim().toUpperCase();
     const accountNumber = accInput.value.trim();
     const accountNumberConfirm = accConfirmInput.value.trim();
-    const sysId = document.getElementById('companySysInput').value.trim();
+    const ifsc = ifscInput.value.trim().toUpperCase();
+    const ifscConfirm = ifscConfirmInput.value.trim().toUpperCase();
+    const sysId = sysInput.value.trim();
     const bankName = document.getElementById('companyBankInput').value;
-    if (!name || !accountNumber || !accountNumberConfirm || !sysId || !bankName) { alert('Please fill all fields.'); return; }
+    if (!name || !accountNumber || !accountNumberConfirm || !ifsc || !ifscConfirm || !sysId || !bankName) {
+      alert('Please fill all fields.'); return;
+    }
     if (accountNumber !== accountNumberConfirm) {
       alert('Company Account Number and its confirmation do not match.');
       return;
     }
+    if (ifsc !== ifscConfirm) {
+      alert('Bank IFSC Code and its confirmation do not match.');
+      return;
+    }
     try {
-      await Api.updateCompanyProfile({ name, accountNumber, sysId, bankName });
-      companyProfile = { ...companyProfile, name, accountNumber, sysId, bankName };
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | Branch: ${sysId} | Bank: ${bankName}`);
+      await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName });
+      companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName };
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Branch: ${sysId} | Bank: ${bankName}`);
       updateDisbursementModeUI();
       renderDisbursementList();
       renderEmployeeKpis();

@@ -1053,11 +1053,6 @@ async function bootDashboard(user) {
   currentUser = user;
   document.getElementById('userName').textContent = user.displayName || 'PayFlow User';
   document.getElementById('userEmail').textContent = user.email;
-  const welcomeNameEl = document.getElementById('dashWelcomeName');
-  if (welcomeNameEl) {
-    const firstName = (user.displayName || '').trim().split(/\s+/)[0];
-    welcomeNameEl.textContent = firstName ? `, ${firstName}` : '';
-  }
   applyUserProfileUI(user);
 
   try {
@@ -1070,7 +1065,6 @@ async function bootDashboard(user) {
   initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
   renderEmployeeKpis();
-  loadDashboardOverview();
 
   if (!dashboardBooted) {
     dashboardBooted = true;
@@ -1167,117 +1161,8 @@ function wireNav() {
       document.getElementById('page-' + item.dataset.page).classList.remove('hidden');
       if (item.dataset.page === 'audit') loadAuditTrail();
       if (item.dataset.page === 'exports') loadExportHistory();
-      if (item.dataset.page === 'dashboard') loadDashboardOverview();
     });
   });
-
-  // "View all →" links inside the Overview panels just jump to the
-  // corresponding tab, reusing the same nav-item click logic above.
-  document.querySelectorAll('[data-page-link]').forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      goToPage(link.dataset.pageLink);
-    });
-  });
-
-  const quickAdd = document.getElementById('dashQuickAddEmployee');
-  if (quickAdd) quickAdd.addEventListener('click', () => {
-    goToPage('employees');
-    document.getElementById('addEmployeeBtn').click();
-  });
-  const quickDisburse = document.getElementById('dashQuickDisburse');
-  if (quickDisburse) quickDisburse.addEventListener('click', () => goToPage('disbursement'));
-  const quickExports = document.getElementById('dashQuickExports');
-  if (quickExports) quickExports.addEventListener('click', () => goToPage('exports'));
-}
-
-// ---------------------------------------------------------
-// DASHBOARD / OVERVIEW — the landing page after login. Pulls together
-// data already used elsewhere (employees, company profile, recent
-// exports, recent audit activity) into one at-a-glance summary instead
-// of leaving the app on an empty screen.
-// ---------------------------------------------------------
-async function loadDashboardOverview() {
-  const elEmployees = document.getElementById('dashKpiEmployees');
-  const elBank = document.getElementById('dashKpiBank');
-  const elMonth = document.getElementById('dashKpiMonth');
-  const elExports = document.getElementById('dashKpiExports');
-  if (!elEmployees) return;
-
-  elEmployees.textContent = employees.length;
-  const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
-  elBank.textContent = bank.label;
-
-  const recentExportsBody = document.getElementById('dashRecentExports');
-  const recentActivityBody = document.getElementById('dashRecentActivity');
-  recentExportsBody.innerHTML = '<tr><td colspan="4" style="color:var(--text3);">Loading…</td></tr>';
-  recentActivityBody.innerHTML = '<li class="dash-activity-item" style="color:var(--text3);">Loading…</li>';
-
-  let history = [];
-  let audit = [];
-  try {
-    [history, audit] = await Promise.all([Api.getDisbursementHistory(), Api.getAuditTrail()]);
-  } catch (err) {
-    console.error(err);
-  }
-
-  const now = new Date();
-  let monthTotal = 0;
-  const byBatch = new Map();
-  history.forEach(row => {
-    const created = row.createdAt && row.createdAt.toDate ? row.createdAt.toDate() : null;
-    if (created && created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()) {
-      const amt = parseFloat(row.amount);
-      if (!isNaN(amt)) monthTotal += amt;
-    }
-    if (!byBatch.has(row.batchId)) {
-      byBatch.set(row.batchId, { batchId: row.batchId, bank: row.bank, count: 0, total: 0, createdAt: row.createdAt });
-    }
-    const b = byBatch.get(row.batchId);
-    b.count += 1;
-    b.total += parseFloat(row.amount) || 0;
-  });
-  elMonth.textContent = `₹ ${monthTotal.toFixed(2)}`;
-
-  const batches = [...byBatch.values()].sort((a, b) => {
-    const ta = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
-    const tb = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
-    return tb - ta;
-  });
-  elExports.textContent = batches.length;
-
-  recentExportsBody.innerHTML = '';
-  if (!batches.length) {
-    recentExportsBody.innerHTML = '<tr><td colspan="4" style="color:var(--text3);">No exports yet.</td></tr>';
-  } else {
-    batches.slice(0, 5).forEach(b => {
-      const d = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().toLocaleDateString() : '—';
-      recentExportsBody.innerHTML += `
-        <tr>
-          <td style="font-family:var(--font-mono); font-size:12.5px;">${escapeHtml(b.batchId)}</td>
-          <td>${d}</td>
-          <td>${b.count}</td>
-          <td style="text-align:right; font-weight:600;">₹${b.total.toFixed(2)}</td>
-        </tr>`;
-    });
-  }
-
-  recentActivityBody.innerHTML = '';
-  if (!audit.length) {
-    recentActivityBody.innerHTML = '<li class="dash-activity-item" style="color:var(--text3);">No activity yet.</li>';
-  } else {
-    audit.slice(0, 6).forEach(r => {
-      const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString() : '';
-      recentActivityBody.innerHTML += `
-        <li class="dash-activity-item">
-          <span class="dash-activity-item__dot"></span>
-          <div>
-            <div class="dash-activity-item__action">${escapeHtml(r.action)} <span class="dash-activity-item__user">— ${escapeHtml(r.userName || r.userEmail || '')}</span></div>
-            <div class="dash-activity-item__time">${escapeHtml(ts)}</div>
-          </div>
-        </li>`;
-    });
-  }
 }
 
 // Renders N placeholder rows into a <tbody> while a Firestore read is

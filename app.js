@@ -321,6 +321,17 @@ function determineTransactionMode(bankKey, ifsc, amount, preferImps) {
   return amount >= 200000 ? 'RTGS' : 'NEFT';
 }
 
+// "Same Bank" is a UI-only label (shown in the mode badge on the
+// Payroll Run screen) meaning "this is an intra-bank transfer" — it
+// is NOT a value any bank's bulk-upload portal recognises in a
+// TxnType column, and uploading it as-is risks the file being
+// rejected. NEFT is accepted for same-bank transfers too, so the
+// exported file always carries a real network code while the badge
+// the user sees keeps the more informative "Same Bank" label.
+function txnTypeCodeForFile(mode) {
+  return mode === 'Same Bank' ? 'NEFT' : mode;
+}
+
 // ctx passed to every generate() below:
 //   companyProfile { name, accountNumber, sysId, bankName }
 //   lines[]  { acc, empCode, name, ifsc, amount, mode }
@@ -349,7 +360,7 @@ const BankFormatters = {
     generate(ctx) {
       const header = 'DebitAcc,BenAcc,Amount,BenName,IFSC,TxnType,TxnDate,Remarks';
       const rows = ctx.lines.map(l => csvRow([
-        ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc, l.mode,
+        ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc, txnTypeCodeForFile(l.mode),
         ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
       ]));
       return [header, ...rows].join('\r\n') + '\r\n';
@@ -360,7 +371,7 @@ const BankFormatters = {
     generate(ctx) {
       const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Email,Remarks';
       const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
+        txnTypeCodeForFile(l.mode), ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
         ctx.txnDate, '', `SALARY OF ${ctx.monthName} ${ctx.year}`
       ]));
       return [header, ...rows].join('\r\n') + '\r\n';
@@ -371,7 +382,7 @@ const BankFormatters = {
     generate(ctx) {
       const d = v => sanitizeForDelimitedFile(v, '^');
       const rows = ctx.lines.map(l =>
-        [l.mode, d(ctx.companyProfile.accountNumber), d(l.acc), l.amount.toFixed(2), d(l.name), d(l.ifsc),
+        [txnTypeCodeForFile(l.mode), d(ctx.companyProfile.accountNumber), d(l.acc), l.amount.toFixed(2), d(l.name), d(l.ifsc),
           `SALARY OF ${d(ctx.monthName)} ${ctx.year}`].join('^'));
       return rows.join('\n') + '\n';
     }
@@ -1608,6 +1619,11 @@ function exportLedgerCsv() {
   downloadTextFile(`payflow_employee_ledger_${new Date().toISOString().slice(0, 10)}.csv`, content, 'text/csv;charset=utf-8');
 }
 
+// Parsed-but-not-yet-imported rows/errors, held between the preview
+// modal being shown and the user confirming the import.
+let pendingImportRows = [];
+let pendingImportErrors = [];
+
 function wireBulkImport() {
   const fileInput = document.getElementById('bulkImportInput');
   document.getElementById('bulkImportBtn').onclick = () => fileInput.click();
@@ -1619,32 +1635,110 @@ function wireBulkImport() {
   document.getElementById('importResultCloseBtn').addEventListener('click', () =>
     document.getElementById('importResultModal').classList.add('hidden'));
 
+  // Selecting a file only parses and validates it — nothing is written
+  // to the ledger yet. The user reviews exactly what will and won't be
+  // imported in the preview modal below and has to explicitly confirm.
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
-    const btn = document.getElementById('bulkImportBtn');
-    btn.disabled = true; btn.textContent = 'Importing...';
     try {
       const text = await file.text();
       const existingAccounts = employees.map(e => String(e.accountNumber));
       const { rows, errors } = parseCsv(text, existingAccounts);
-
-      if (!rows.length) {
-        showImportResultModal(0, errors);
-        return;
-      }
-      await Api.bulkAddEmployees(rows);
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'BULK IMPORT',
-        `${rows.length} employees imported${errors.length ? `, ${errors.length} row(s) skipped` : ''}`);
-      await loadEmployees();
-      showImportResultModal(rows.length, errors);
+      pendingImportRows = rows;
+      pendingImportErrors = errors;
+      showImportPreviewModal(rows, errors);
     } catch (err) {
-      toast('Import failed: ' + err.message, 'error');
+      toast('Could not read file: ' + err.message, 'error');
     } finally {
-      btn.disabled = false; btn.textContent = 'Bulk Import CSV';
       fileInput.value = '';
     }
   });
+
+  document.getElementById('cancelImportPreviewBtn').addEventListener('click', () => {
+    document.getElementById('importPreviewModal').classList.add('hidden');
+    pendingImportRows = []; pendingImportErrors = [];
+  });
+
+  document.getElementById('confirmImportBtn').addEventListener('click', async () => {
+    if (!pendingImportRows.length) {
+      document.getElementById('importPreviewModal').classList.add('hidden');
+      return;
+    }
+    const btn = document.getElementById('confirmImportBtn');
+    btn.disabled = true; btn.textContent = 'Importing...';
+    try {
+      await Api.bulkAddEmployees(pendingImportRows);
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'BULK IMPORT',
+        `${pendingImportRows.length} employees imported${pendingImportErrors.length ? `, ${pendingImportErrors.length} row(s) skipped` : ''}`);
+      await loadEmployees();
+      document.getElementById('importPreviewModal').classList.add('hidden');
+      showImportResultModal(pendingImportRows.length, pendingImportErrors);
+    } catch (err) {
+      toast('Import failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      pendingImportRows = []; pendingImportErrors = [];
+    }
+  });
+}
+
+// Renders the pre-import review: every row that parsed cleanly (green,
+// "Will import") and every row that failed validation (red, with its
+// exact reason) — so a bad file is caught and understood before a
+// single record reaches the ledger, instead of only finding out after.
+function showImportPreviewModal(rows, errors) {
+  const summary = document.getElementById('importPreviewSummary');
+  summary.innerHTML = `
+    <span style="color:var(--success); font-weight:700;">${rows.length} row${rows.length === 1 ? '' : 's'} will be imported</span>
+    ${errors.length ? ` &nbsp;•&nbsp; <span style="color:var(--danger); font-weight:700;">${errors.length} row${errors.length === 1 ? '' : 's'} will be skipped</span>` : ''}`;
+
+  const tbody = document.getElementById('importPreviewTableBody');
+  tbody.innerHTML = '';
+
+  // Guards against freezing the tab on a very large file — everything
+  // past this many rows is still imported/skipped exactly the same,
+  // it's just not individually listed in the preview table.
+  const MAX_ROWS = 500;
+  let shown = 0;
+
+  rows.forEach((r, i) => {
+    if (shown >= MAX_ROWS) return;
+    shown++;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${escapeHtml(r.empCode)}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td style="font-family:var(--font-mono);">${escapeHtml(maskAccount(r.accountNumber))}</td>
+      <td style="font-family:var(--font-mono);">${escapeHtml(r.ifsc)}</td>
+      <td>${escapeHtml(r.transferType)}</td>
+      <td><span class="badge badge-green">✓ Will import</span></td>`;
+    tbody.appendChild(tr);
+  });
+  errors.forEach(e => {
+    if (shown >= MAX_ROWS) return;
+    shown++;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>Line ${e.line}</td>
+      <td colspan="4" style="color:var(--text2);">${escapeHtml(e.reason)}</td>
+      <td>—</td>
+      <td><span class="badge" style="color:var(--danger); border-color:var(--danger);">✗ Skipped</span></td>`;
+    tbody.appendChild(tr);
+  });
+
+  if (rows.length + errors.length > MAX_ROWS) {
+    const note = document.createElement('tr');
+    note.innerHTML = `<td colspan="7" style="color:var(--text3); text-align:center; padding:12px;">+ ${rows.length + errors.length - MAX_ROWS} more row(s) not listed — they will be processed the same way.</td>`;
+    tbody.appendChild(note);
+  }
+
+  const confirmBtn = document.getElementById('confirmImportBtn');
+  confirmBtn.textContent = rows.length ? `Import ${rows.length} Employee${rows.length === 1 ? '' : 's'}` : 'Nothing to Import';
+  confirmBtn.disabled = !rows.length;
+
+  document.getElementById('importPreviewModal').classList.remove('hidden');
 }
 
 // Shows a clear summary of what was imported vs skipped, with the exact
@@ -2177,6 +2271,16 @@ let auditSort = { key: null, dir: 1 }; // null = natural (Firestore) order: newe
 
 function wireAudit() {
   document.getElementById('auditSearch').addEventListener('input', renderAuditTable);
+  document.getElementById('auditActionFilter').addEventListener('change', renderAuditTable);
+  document.getElementById('auditFromDate').addEventListener('change', renderAuditTable);
+  document.getElementById('auditToDate').addEventListener('change', renderAuditTable);
+  document.getElementById('auditClearFiltersBtn').addEventListener('click', () => {
+    document.getElementById('auditSearch').value = '';
+    document.getElementById('auditActionFilter').value = '';
+    document.getElementById('auditFromDate').value = '';
+    document.getElementById('auditToDate').value = '';
+    renderAuditTable();
+  });
   document.querySelectorAll('#page-audit th.sortable').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.auditSort;
@@ -2208,12 +2312,28 @@ function renderAuditTable() {
   const tbody = document.getElementById('auditTableBody');
   const emptyState = document.getElementById('auditEmptyState');
   const query = (document.getElementById('auditSearch').value || '').trim().toLowerCase();
+  const actionFilter = document.getElementById('auditActionFilter').value;
+  const fromVal = document.getElementById('auditFromDate').value; // "YYYY-MM-DD"
+  const toVal = document.getElementById('auditToDate').value;     // "YYYY-MM-DD"
+  // "To" is inclusive of the whole day, so compare against the start
+  // of the following day rather than midnight of the same day.
+  const fromDate = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+  const toDate = toVal ? new Date(toVal + 'T23:59:59.999') : null;
 
-  let filtered = auditRows.filter(r =>
-    !query ||
-    (r.userEmail||'').toLowerCase().includes(query) ||
-    (r.action||'').toLowerCase().includes(query) ||
-    (r.details||'').toLowerCase().includes(query));
+  let filtered = auditRows.filter(r => {
+    if (query &&
+      !(r.userEmail||'').toLowerCase().includes(query) &&
+      !(r.action||'').toLowerCase().includes(query) &&
+      !(r.details||'').toLowerCase().includes(query)) return false;
+    if (actionFilter && r.action !== actionFilter) return false;
+    if (fromDate || toDate) {
+      const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : null;
+      if (!ts) return false;
+      if (fromDate && ts < fromDate) return false;
+      if (toDate && ts > toDate) return false;
+    }
+    return true;
+  });
 
   if (auditSort.key) {
     const dir = auditSort.dir;

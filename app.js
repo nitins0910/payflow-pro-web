@@ -96,11 +96,19 @@ const SITE_URL = "https://nitins0910.github.io/payflow-pro-web/";
 const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 
 // ---------------------------------------------------------
-// 1b. BILLING CONFIG — pay-per-export
-// First export ever is free; every export after that costs ₹50.
-// The functions below live on Netlify (see /netlify/functions) and do
-// the actual enforcement + Razorpay verification server-side, so none
-// of this can be bypassed by editing this file in devtools.
+// 1b. BILLING CONFIG — credit wallet
+// Every new user gets 5 free credits on signup. Every export costs
+// EXPORT_COST_CREDITS credits, deducted from the wallet balance
+// (free or purchased credits spend the same way). When the balance
+// runs out, the user buys a credit pack — bigger packs cost less per
+// credit. The functions below live on Netlify (see /netlify/functions)
+// and do the actual enforcement + Razorpay verification server-side,
+// so none of this can be bypassed by editing this file in devtools.
+//
+// This list mirrors netlify/functions/_creditPacks.js for rendering
+// only — the ACTUAL price charged always comes from that server-side
+// file, never from here, so editing this array client-side changes
+// nothing about what gets billed.
 //
 // IMPORTANT: point this at wherever the Netlify functions are actually
 // deployed. If this static site is hosted on the SAME Netlify site as
@@ -110,6 +118,17 @@ const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 // "https://payflow-pro-billing.netlify.app".
 // ---------------------------------------------------------
 const FUNCTIONS_BASE_URL = "https://incomparable-cat-722533.netlify.app/"; // "" = same origin, or "https://your-site.netlify.app"
+
+const EXPORT_COST_CREDITS = 5;
+const CREDIT_PACKS = [
+  { id: 'pack_5', credits: 5, priceRupees: 50, discountPct: 0, label: 'Quick top-up' },
+  { id: 'pack_15', credits: 15, priceRupees: 135, discountPct: 10, label: '' },
+  { id: 'pack_30', credits: 30, priceRupees: 240, discountPct: 20, label: 'Popular' },
+  { id: 'pack_60', credits: 60, priceRupees: 420, discountPct: 30, label: '' },
+  { id: 'pack_120', credits: 120, priceRupees: 720, discountPct: 40, label: 'Best value' }
+];
+
+let walletBalance = 0;
 
 async function callBillingFunction(name, body) {
   // Strip any trailing slash on FUNCTIONS_BASE_URL before joining, so we
@@ -129,7 +148,7 @@ async function callBillingFunction(name, body) {
   } catch (e) {
     // Network failure or a CORS-blocked response lands here as a
     // rejected fetch — surface it as a normal "not ok" result instead
-    // of letting it throw, so callers (ensureExportAllowed) never hang.
+    // of letting it throw, so callers never hang.
     return { ok: false, status: 0, data: { error: 'Could not reach the billing server. Check your connection and try again.' } };
   }
   let data;
@@ -137,38 +156,77 @@ async function callBillingFunction(name, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
-// Checks (and atomically consumes) the user's free export or a paid
-// credit. Returns true if the caller may proceed with generating the
-// file right now. If payment is required, opens the Razorpay checkout
-// and — only on a verified successful payment — consumes the newly
-// granted credit and returns true. Returns false if the user cancels
-// payment or something goes wrong (a toast is already shown).
+// Called once per dashboard boot (every login). Idempotent server-side —
+// only the very first call for a given user actually grants the 5 free
+// credits; every call after that just reads the current balance back.
+async function initWallet() {
+  const res = await callBillingFunction('init-wallet');
+  if (!res.ok) {
+    toast((res.data && res.data.error) || 'Could not load your wallet.', 'error');
+    return;
+  }
+  setWalletBalance(res.data.credits);
+  if (res.data.granted) {
+    showFreeCreditsModal(res.data.credits);
+  }
+}
+
+function setWalletBalance(credits) {
+  walletBalance = Number(credits) || 0;
+  const chip = document.getElementById('walletBalanceValue');
+  if (chip) chip.textContent = walletBalance;
+  const pageBalance = document.getElementById('walletPageBalance');
+  if (pageBalance) pageBalance.textContent = walletBalance;
+}
+
+function showFreeCreditsModal(credits) {
+  const modal = document.getElementById('freeCreditsModal');
+  if (!modal) return;
+  document.getElementById('freeCreditsAmount').textContent = credits;
+  modal.classList.remove('hidden');
+}
+
+// Checks (and atomically consumes) EXPORT_COST_CREDITS from the wallet.
+// Returns true if the caller may proceed with generating the file right
+// now. If the balance is too low, opens the buy-credits modal and —
+// only once a purchase is verified server-side — retries the deduction.
+// Returns false if the user closes the modal or something goes wrong
+// (a toast is already shown).
 async function ensureExportAllowed() {
-  const first = await callBillingFunction('consume-export');
-  if (first.ok && first.data.allowed) return true;
+  const first = await callBillingFunction('consume-credits');
+  if (first.ok && first.data.allowed) {
+    setWalletBalance(first.data.creditsRemaining);
+    return true;
+  }
 
   if (first.status !== 402) {
     toast((first.data && first.data.error) || 'Could not verify export eligibility. Please try again.', 'error');
     return false;
   }
 
-  // Payment required — run the Razorpay checkout, then re-check.
-  const paid = await runRazorpayCheckout();
-  if (!paid) return false;
+  setWalletBalance(first.data.creditsRemaining);
 
-  const second = await callBillingFunction('consume-export');
-  if (second.ok && second.data.allowed) return true;
+  const bought = await openBuyCreditsModal({
+    reason: `You need ${first.data.creditsNeeded} more credit${first.data.creditsNeeded === 1 ? '' : 's'} to export this file (each export costs ${EXPORT_COST_CREDITS} credits).`
+  });
+  if (!bought) return false;
 
-  toast('Payment succeeded but the credit could not be applied. Please try exporting again — you will not be charged twice.', 'error');
+  const second = await callBillingFunction('consume-credits');
+  if (second.ok && second.data.allowed) {
+    setWalletBalance(second.data.creditsRemaining);
+    return true;
+  }
+
+  toast('Payment succeeded but the credits could not be applied. Please try exporting again — you will not be charged twice.', 'error');
   return false;
 }
 
-// Opens Razorpay's hosted checkout for a single ₹50 export credit.
-// Resolves true only after the payment has been verified server-side
+// Opens Razorpay's hosted checkout for a specific credit pack. Resolves
+// true only after the payment has been verified server-side
 // (verify-payment.js) — never on the client-side success callback alone.
-function runRazorpayCheckout() {
+function buyCreditPack(pack) {
   return new Promise(async (resolve) => {
-    const order = await callBillingFunction('create-order');
+    const order = await callBillingFunction('create-order', { packId: pack.id });
     if (!order.ok) {
       toast((order.data && order.data.error) || 'Could not start payment. Please try again.', 'error');
       resolve(false);
@@ -186,7 +244,7 @@ function runRazorpayCheckout() {
       amount: order.data.amount,
       currency: order.data.currency,
       name: 'PayFlow Pro',
-      description: 'Payroll export file credit',
+      description: `${pack.credits} export credits`,
       prefill: { email: currentUser ? currentUser.email : '' },
       theme: { color: '#2563EB' },
       handler: async function (response) {
@@ -196,7 +254,8 @@ function runRazorpayCheckout() {
           razorpay_signature: response.razorpay_signature
         });
         if (verify.ok && verify.data.verified) {
-          toast('Payment successful — exporting your file...', 'success');
+          setWalletBalance(verify.data.creditsRemaining);
+          toast(`Payment successful — ${verify.data.creditsAdded} credits added.`, 'success');
           resolve(true);
         } else {
           toast((verify.data && verify.data.error) || 'Payment verification failed.', 'error');
@@ -212,6 +271,65 @@ function runRazorpayCheckout() {
       resolve(false);
     });
     rzp.open();
+  });
+}
+
+// Renders the pack cards into any container (the low-balance modal or
+// the full Wallet page share this markup) and wires each Buy button.
+// onBought is called (with the new balance already applied) after a
+// verified purchase.
+function renderCreditPacks(container, onBought) {
+  container.innerHTML = CREDIT_PACKS.map(p => `
+    <div class="credit-pack-card">
+      ${p.label ? `<span class="credit-pack-card__badge">${p.label}</span>` : ''}
+      ${p.discountPct ? `<span class="credit-pack-card__discount">${p.discountPct}% off</span>` : ''}
+      <div class="credit-pack-card__credits">${p.credits} credits</div>
+      <div class="credit-pack-card__price">₹${p.priceRupees}</div>
+      <div class="credit-pack-card__rate">₹${(p.priceRupees / p.credits).toFixed(1)}/credit</div>
+      <button type="button" class="btn-inline primary" style="width:100%;" data-pack="${p.id}">Buy</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('button[data-pack]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const pack = CREDIT_PACKS.find(p => p.id === btn.dataset.pack);
+      const prevLabel = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Opening payment...';
+      const ok = await buyCreditPack(pack);
+      btn.disabled = false; btn.textContent = prevLabel;
+      if (ok && onBought) onBought();
+    });
+  });
+}
+
+function renderWalletPage() {
+  setWalletBalance(walletBalance);
+  const grid = document.getElementById('walletPackGrid');
+  if (grid) renderCreditPacks(grid, () => {});
+}
+
+// Low-balance prompt shown from ensureExportAllowed(). Resolves true as
+// soon as any pack purchase is verified (the modal closes itself);
+// resolves false if the user dismisses it without buying.
+function openBuyCreditsModal({ reason }) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('buyCreditsModal');
+    const grid = document.getElementById('buyCreditsGrid');
+    document.getElementById('buyCreditsReason').textContent = reason || '';
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      modal.classList.add('hidden');
+      resolve(result);
+    };
+
+    renderCreditPacks(grid, () => finish(true));
+
+    modal.classList.remove('hidden');
+    modal.querySelectorAll('.modal-close').forEach(el => {
+      el.addEventListener('click', () => finish(false));
+    });
   });
 }
 
@@ -1182,6 +1300,7 @@ async function bootDashboard(user) {
     return;
   }
 
+  initWallet();
   initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
   renderEmployeeKpis();
@@ -1202,6 +1321,8 @@ async function bootDashboard(user) {
     wireHelpSupport();
     wireGuidedTour();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
+    const walletChip = document.getElementById('walletChip');
+    if (walletChip) walletChip.addEventListener('click', () => showAppPage('wallet'));
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
 
     // First-ever dashboard visit for this browser: auto-start the tour.
@@ -1516,6 +1637,7 @@ function showAppPage(page) {
   if (section) section.classList.remove('hidden');
   if (page === 'audit') loadAuditTrail();
   if (page === 'exports') loadExportHistory();
+  if (page === 'wallet') renderWalletPage();
 }
 function goToPage(page) { showAppPage(page); }
 
@@ -2655,9 +2777,9 @@ async function openExportPreview() {
     confirmBtn.textContent = 'Checking...';
 
     try {
-      // Billing gate: consumes the free export (first time ever) or a
-      // paid credit; if neither is available, this opens Razorpay
-      // checkout and only continues after a verified ₹50 payment.
+      // Billing gate: deducts EXPORT_COST_CREDITS from the wallet; if
+      // the balance is too low, this opens the buy-credits modal and
+      // only continues after a verified credit-pack payment.
       const allowed = await ensureExportAllowed();
       if (!allowed) return;
 
@@ -3217,6 +3339,10 @@ function wireSettingsForms() {
   document.getElementById('openEditCompanyBtn').addEventListener('click', () => {
     showAppPage('company');
     setCompanyEditMode(false);
+  });
+
+  document.getElementById('openAboutBtn').addEventListener('click', () => {
+    document.getElementById('aboutModal').classList.remove('hidden');
   });
 
   // ---- Change email ----

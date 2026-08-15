@@ -307,6 +307,10 @@
       </div>
 
       <div class="sidebar-footer">
+        <button type="button" class="wallet-chip" id="walletChip" title="Wallet">
+          <span class="wallet-chip__icon">🪙</span>
+          <span><strong id="walletBalanceValue">0</strong> credits</span>
+        </button>
         <div class="user-chip">
           <img id="userAvatarImg" class="user-avatar hidden" alt="Profile photo">
           <div id="userAvatarFallback" class="user-avatar-fallback hidden">—</div>
@@ -629,6 +633,22 @@
         </div>
       </section>
 
+      <section id="page-wallet" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Wallet</h2>
+            <p>Each export uses 5 credits. Buy bigger packs for a bigger discount.</p>
+          </div>
+        </div>
+
+        <div class="panel" style="text-align:center; padding:28px;">
+          <div style="font-size:13px; color:var(--muted, #888); text-transform:uppercase; letter-spacing:.04em;">Current balance</div>
+          <div style="font-size:40px; font-weight:700; margin-top:4px;"><span id="walletPageBalance">0</span> <span style="font-size:18px; font-weight:500;">credits</span></div>
+        </div>
+
+        <div id="walletPackGrid" class="credit-pack-grid"></div>
+      </section>
+
       <section id="page-settings" class="hidden">
         <div class="page-head">
           <div>
@@ -679,6 +699,13 @@
             <div>
               <div class="settings-list-item__title">Replay Guided Tour</div>
               <div class="settings-list-item__subtitle">See the app walkthrough again</div>
+            </div>
+            <span class="settings-list-item__chevron">›</span>
+          </div>
+          <div class="settings-list-item" id="openAboutBtn" role="button" tabindex="0">
+            <div>
+              <div class="settings-list-item__title">About PayFlow Pro</div>
+              <div class="settings-list-item__subtitle">What this app does and how it works</div>
             </div>
             <span class="settings-list-item__chevron">›</span>
           </div>
@@ -881,6 +908,75 @@
     </div>
   </div>
 
+  <!-- Shown once, right after the free 5 credits are granted on a
+       brand-new account (see initWallet() in app.js). -->
+  <div id="freeCreditsModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:380px; text-align:center;">
+      <div class="modal-head" style="justify-content:flex-end;">
+        <button type="button" class="modal-close" data-modal="freeCreditsModal" aria-label="Close">×</button>
+      </div>
+      <div style="font-size:40px; margin-bottom:6px;">🎉</div>
+      <h3 style="margin:0 0 6px;">Congratulations!</h3>
+      <p style="margin:0 0 18px;">You've got <strong id="freeCreditsAmount">5</strong> free credits to get started — enough for your first payroll export.</p>
+      <button type="button" class="btn-inline" style="width:100%;" data-modal="freeCreditsModal" onclick="document.getElementById('freeCreditsModal').classList.add('hidden')">Let's go</button>
+    </div>
+  </div>
+
+  <!-- Low-balance prompt — shown from ensureExportAllowed() in app.js
+       when a file export is blocked by an insufficient wallet balance. -->
+  <div id="buyCreditsModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-head">
+        <h3>Buy Credits</h3>
+        <button type="button" class="modal-close" data-modal="buyCreditsModal" aria-label="Close">×</button>
+      </div>
+      <p class="field-hint" style="margin-top:-6px;" id="buyCreditsReason"></p>
+      <div id="buyCreditsGrid" class="credit-pack-grid"></div>
+    </div>
+  </div>
+
+  <!-- About — opened from Settings, explains what the app does. -->
+  <div id="aboutModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-head">
+        <h3>About PayFlow Pro</h3>
+        <button type="button" class="modal-close" data-modal="aboutModal" aria-label="Close">×</button>
+      </div>
+      <div style="font-size:13.5px; color:var(--text2); line-height:1.7; max-height:60vh; overflow-y:auto;">
+        <p>
+          PayFlow Pro is a payroll management and salary-disbursement tool built for small
+          and mid-sized businesses. It replaces spreadsheet-based payroll with a single
+          dashboard where you can maintain your employee records, run monthly payroll, and
+          generate the exact bank-upload files your bank needs to actually pay everyone.
+        </p>
+        <p><strong>What you can do here:</strong></p>
+        <ul style="margin:0 0 12px; padding-left:18px;">
+          <li>Maintain an <strong>employee directory</strong> — names, salaries, bank account
+            numbers, and IFSC codes — either one by one or via bulk CSV import, with
+            validation that catches duplicate or malformed account details before they're
+            saved.</li>
+          <li>Run a <strong>Payroll Run</strong> for any month: pick employees, confirm
+            amounts, and disburse — every run is recorded with a batch ID so it can be
+            traced later.</li>
+          <li>Generate <strong>bank-ready export files</strong> formatted for direct bulk
+            upload to your bank's salary/NEFT portal, instead of manually entering each
+            transfer.</li>
+          <li>Keep a full <strong>Activity Log</strong> of every change made to employee
+            records and every export generated, for audit and accountability.</li>
+          <li>Manage your <strong>company details</strong> (name, bank, account number, IFSC)
+            that get stamped onto every export file.</li>
+        </ul>
+        <p><strong>How billing works:</strong> every new account starts with 5 free credits.
+          Generating one payroll export file costs 5 credits. Once your balance runs out,
+          you can top up your wallet with a credit pack — the bigger the pack, the bigger
+          the per-credit discount. See the Wallet page for current pack pricing.</p>
+        <p><strong>Your data:</strong> all employee records, company details, and export
+          history are stored securely per account and are only ever accessible to you when
+          signed in — nothing is shared across accounts.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Bulk import validation preview — shown BEFORE anything is written
        to the ledger, so every row that will import and every row that
        will be skipped (with its exact reason) is visible up front. -->
@@ -943,6 +1039,8 @@
   <!-- Toast notification host, used by toast() in place of window.alert() -->
   <div id="toastHost" class="toast-host" aria-live="polite"></div>
 </div>
+
+<footer class="site-footer">All rights reserved by EnginX &amp; Co © 2026</footer>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>

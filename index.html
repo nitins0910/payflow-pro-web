@@ -876,9 +876,11 @@
         <button type="button" class="modal-close" data-modal="exportPreviewModal" aria-label="Close">×</button>
       </div>
       <div id="exportPreviewBody" style="font-size:13px; color:var(--text2); line-height:1.7;"></div>
-      <div class="modal-actions">
+      <p class="field-hint" style="margin:10px 0 4px;">Choose how to pay for this export:</p>
+      <div class="modal-actions" style="flex-wrap:wrap; gap:8px;">
         <button type="button" class="btn-inline secondary" id="cancelExportBtn">Cancel</button>
-        <button type="button" class="btn-inline" id="confirmExportBtn" style="flex:1;">Confirm → Export</button>
+        <button type="button" class="btn-inline secondary" id="payWalletExportBtn" style="flex:1; min-width:160px;">💳 Pay via Wallet</button>
+        <button type="button" class="btn-inline" id="payRazorpayExportBtn" style="flex:1; min-width:160px;">🔒 Pay via Razorpay</button>
       </div>
     </div>
   </div>

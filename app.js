@@ -186,41 +186,6 @@ function showFreeCreditsModal(credits) {
   modal.classList.remove('hidden');
 }
 
-// Checks (and atomically consumes) EXPORT_COST_CREDITS from the wallet.
-// Returns true if the caller may proceed with generating the file right
-// now. If the balance is too low, opens the buy-credits modal and —
-// only once a purchase is verified server-side — retries the deduction.
-// Returns false if the user closes the modal or something goes wrong
-// (a toast is already shown).
-async function ensureExportAllowed() {
-  const first = await callBillingFunction('consume-credits');
-  if (first.ok && first.data.allowed) {
-    setWalletBalance(first.data.creditsRemaining);
-    return true;
-  }
-
-  if (first.status !== 402) {
-    toast((first.data && first.data.error) || 'Could not verify export eligibility. Please try again.', 'error');
-    return false;
-  }
-
-  setWalletBalance(first.data.creditsRemaining);
-
-  const bought = await openBuyCreditsModal({
-    reason: `You need ${first.data.creditsNeeded} more credit${first.data.creditsNeeded === 1 ? '' : 's'} to export this file (each export costs ${EXPORT_COST_CREDITS} credits).`
-  });
-  if (!bought) return false;
-
-  const second = await callBillingFunction('consume-credits');
-  if (second.ok && second.data.allowed) {
-    setWalletBalance(second.data.creditsRemaining);
-    return true;
-  }
-
-  toast('Payment succeeded but the credits could not be applied. Please try exporting again — you will not be charged twice.', 'error');
-  return false;
-}
-
 // Opens Razorpay's hosted checkout for a specific credit pack. Resolves
 // true only after the payment has been verified server-side
 // (verify-payment.js) — never on the client-side success callback alone.
@@ -308,9 +273,10 @@ function renderWalletPage() {
   if (grid) renderCreditPacks(grid, () => {});
 }
 
-// Low-balance prompt shown from ensureExportAllowed(). Resolves true as
-// soon as any pack purchase is verified (the modal closes itself);
-// resolves false if the user dismisses it without buying.
+// Low-balance / "Pay via Razorpay" prompt shown from the export-payment
+// buttons wired in openExportPreview(). Resolves true as soon as any
+// pack purchase is verified (the modal closes itself); resolves false
+// if the user dismisses it without buying.
 function openBuyCreditsModal({ reason }) {
   return new Promise((resolve) => {
     const modal = document.getElementById('buyCreditsModal');
@@ -2754,37 +2720,94 @@ async function openExportPreview() {
     <p><strong>Transfer Date:</strong> ${escapeHtml(txnDate)}</p>
     <p><strong>Employees:</strong> ${lines.length}</p>
     <p style="font-size:20px; color:var(--success); font-weight:700; margin-top:10px;">₹ ${total.toFixed(2)}</p>
+    <p style="margin-top:10px;">This export costs <strong>${EXPORT_COST_CREDITS} credits</strong> · Wallet balance: <strong id="exportPreviewWalletBalance">${walletBalance}</strong> credits</p>
     ${warningsHtml}
   `;
   document.getElementById('exportPreviewModal').classList.remove('hidden');
-  const confirmBtn = document.getElementById('confirmExportBtn');
-  confirmBtn.disabled = false;
-  confirmBtn.textContent = 'Confirm → Export';
-  confirmBtn.onclick = async () => {
-    // Guards against a fast double-click firing two exports — each one
-    // burns a batch counter value and writes its own ledger/audit rows,
-    // so a duplicate click would otherwise produce two "real" exports.
-    if (confirmBtn.disabled) return;
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Checking...';
 
+  const cancelBtn = document.getElementById('cancelExportBtn');
+  const walletBtn = document.getElementById('payWalletExportBtn');
+  const razorpayBtn = document.getElementById('payRazorpayExportBtn');
+
+  const walletBtnLabel = '💳 Pay via Wallet';
+  const razorpayBtnLabel = '🔒 Pay via Razorpay';
+
+  // Both payment buttons share one busy-state so a click on either one
+  // locks out the other (and Cancel) until it resolves — prevents a
+  // double-submit racing two exports off the same click.
+  let busy = false;
+  const setBusy = (isBusy) => {
+    busy = isBusy;
+    walletBtn.disabled = isBusy;
+    razorpayBtn.disabled = isBusy;
+    cancelBtn.disabled = isBusy;
+    if (!isBusy) {
+      walletBtn.textContent = walletBtnLabel;
+      razorpayBtn.textContent = razorpayBtnLabel;
+    }
+  };
+  setBusy(false);
+
+  const finishExport = async () => {
+    document.getElementById('exportPreviewModal').classList.add('hidden');
+    await executeExport();
+  };
+
+  // Option 1: pay straight from the wallet balance. Single check —
+  // if it's short, this does NOT fall back to Razorpay on its own;
+  // it just reports the failure so the user can pick the other option.
+  walletBtn.onclick = async () => {
+    if (busy) return;
+    setBusy(true);
+    walletBtn.textContent = 'Checking wallet...';
     try {
-      // Billing gate: deducts EXPORT_COST_CREDITS from the wallet; if
-      // the balance is too low, this opens the buy-credits modal and
-      // only continues after a verified credit-pack payment.
-      const allowed = await ensureExportAllowed();
-      if (!allowed) return;
-
-      confirmBtn.textContent = 'Exporting...';
-      document.getElementById('exportPreviewModal').classList.add('hidden');
-      await executeExport();
+      const res = await callBillingFunction('consume-credits');
+      if (res.ok && res.data.allowed) {
+        setWalletBalance(res.data.creditsRemaining);
+        walletBtn.textContent = 'Exporting...';
+        await finishExport();
+        return;
+      }
+      if (res.status === 402) {
+        setWalletBalance(res.data.creditsRemaining);
+        const bal = document.getElementById('exportPreviewWalletBalance');
+        if (bal) bal.textContent = res.data.creditsRemaining;
+        toast(`Payment failed — insufficient wallet balance. You have ${res.data.creditsRemaining} credit${res.data.creditsRemaining === 1 ? '' : 's'}, need ${res.data.creditsNeeded} more. Try "Pay via Razorpay" to top up instead.`, 'error');
+      } else {
+        toast((res.data && res.data.error) || 'Could not verify export eligibility. Please try again.', 'error');
+      }
     } catch (e) {
       toast('Something went wrong: ' + (e && e.message ? e.message : e), 'error');
     } finally {
-      // Always runs — even on an unexpected throw — so the button can
-      // never get stuck on "Checking..." / "Exporting..." again.
-      confirmBtn.disabled = false;
-      confirmBtn.textContent = 'Confirm → Export';
+      setBusy(false);
+    }
+  };
+
+  // Option 2: same as before — go straight to Razorpay to buy a
+  // credit pack, then consume credits and export once payment is
+  // verified server-side.
+  razorpayBtn.onclick = async () => {
+    if (busy) return;
+    setBusy(true);
+    razorpayBtn.textContent = 'Opening payment...';
+    try {
+      const bought = await openBuyCreditsModal({
+        reason: `Pay via Razorpay to buy credits for this export (each export costs ${EXPORT_COST_CREDITS} credits).`
+      });
+      if (!bought) return;
+
+      const res = await callBillingFunction('consume-credits');
+      if (res.ok && res.data.allowed) {
+        setWalletBalance(res.data.creditsRemaining);
+        razorpayBtn.textContent = 'Exporting...';
+        await finishExport();
+        return;
+      }
+      toast('Payment succeeded but the credits could not be applied. Please try exporting again — you will not be charged twice.', 'error');
+    } catch (e) {
+      toast('Something went wrong: ' + (e && e.message ? e.message : e), 'error');
+    } finally {
+      setBusy(false);
     }
   };
 }

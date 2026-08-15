@@ -507,6 +507,18 @@ function txnTypeCodeForFile(mode) {
   return mode === 'Same Bank' ? 'NEFT' : mode;
 }
 
+// SBI's bulk .txt file wants only the numeric branch-code part of the
+// IFSC — everything after the 4-letter bank code and the reserved
+// '0' that always follows it — with any further leading zeros on
+// that stripped too. e.g. SBIN0030127 -> branch portion "030127" ->
+// leading zero stripped -> "30127". Only used for SBI; the other
+// banks' formatters still write the full IFSC as before.
+function sbiBranchCodeFromIfsc(ifsc) {
+  const clean = String(ifsc || '').trim().toUpperCase();
+  const branch = clean.slice(5); // drop the 4-letter bank code + reserved '0'
+  return branch.replace(/^0+(?=\d)/, ''); // strip extra leading zeros, keep at least one digit
+}
+
 // ctx passed to every generate() below:
 //   companyProfile { name, accountNumber, sysId, bankName }
 //   lines[]  { acc, empCode, name, ifsc, amount, mode }
@@ -524,7 +536,7 @@ const BankFormatters = {
       // still telling you which employee (and which batch) it belongs to.
       const empLines = ctx.lines.map(l => {
         const seqStr = `${ctx.batchId}E${l.empCode}`;
-        return `${d(l.acc)}#${d(l.ifsc)}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
+        return `${d(l.acc)}#${d(sbiBranchCodeFromIfsc(l.ifsc))}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
       });
       const header = `${d(ctx.companyProfile.accountNumber)}#${d(ctx.companyProfile.sysId)}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${d(ctx.companyProfile.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
       return [header, ...empLines].join('\n') + '\n';
@@ -1215,38 +1227,38 @@ async function bootDashboard(user) {
 const TOUR_STEPS = [
   {
     target: '.nav-item[data-page="settings"]',
-    title: 'Company Details se shuru karein',
-    body: 'Sabse pehle yahan aakar apni company ka naam, bank aur account number bhar dein. Yehi details har exported payment file par print hoti hain.'
+    title: 'Start with Company Details',
+    body: 'First, come here and fill in your company name, bank, and account number. These details are printed on every exported payment file.'
   },
   {
     target: '#addEmployeeBtn',
-    title: 'Employee add karein',
-    body: 'Yahan click karke ek-ek employee ka naam, account number, IFSC, mobile aur email daalein.'
+    title: 'Add an employee',
+    body: 'Click here to add each employee\'s name, account number, IFSC, mobile, and email one at a time.'
   },
   {
     target: '#bulkImportBtn',
-    title: 'Ek saath bahut se employees add karein',
-    body: 'Poori list ek baar me chahiye to sample CSV download karein, use bharein, aur yahan se bulk import kar dein. Import se pehle ek preview dikhega jisme galat rows highlight ho jaati hain.'
+    title: 'Add many employees at once',
+    body: 'Need to add the whole list in one go? Download the sample CSV, fill it in, and bulk import it here. You\'ll see a preview before importing, with any invalid rows highlighted.'
   },
   {
     target: '.topbar__tabs .nav-item[data-page="disbursement"]',
     title: 'Payroll Run',
-    body: 'Har employee ke saamne is mahine ka amount bharein, transfer type chunein aur bank-ready file export karein.'
+    body: 'Enter this month\'s amount next to each employee, choose the transfer type, and export a bank-ready file.'
   },
   {
     target: '.topbar__tabs .nav-item[data-page="exports"]',
     title: 'Exports',
-    body: 'Pehle export ki hui saari batches yahan milengi — dobara download bhi kar sakte hain.'
+    body: 'Every batch you\'ve exported before shows up here — you can re-download them anytime.'
   },
   {
     target: '.sidebar-icons .nav-item[data-page="audit"]',
     title: 'Activity Log',
-    body: 'Har add, edit, delete aur export yahan automatically track hota hai — kisne kab kya kiya.'
+    body: 'Every add, edit, delete, and export is tracked here automatically — who did what, and when.'
   },
   {
     target: '.user-chip',
-    title: 'Aapka profile',
-    body: 'Yahan aapka naam/email dikhta hai, aur neeche Logout button bhi hai. Bas ho gaya — ab explore karein!'
+    title: 'Your profile',
+    body: 'Your name and email show up here, with a Logout button below it. That\'s it — go explore!'
   }
 ];
 

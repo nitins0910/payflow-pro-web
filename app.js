@@ -210,10 +210,22 @@ const BANK_BY_KEY = Object.fromEntries(BANKS.map(b => [b.key, b]));
 
 // Wraps a CSV field in quotes if it contains a comma, quote, or newline.
 function csvField(value) {
-  const s = String(value ?? '');
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  const s = String(value ?? '').replace(/[\r\n]+/g, ' ');
+  return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function csvRow(values) { return values.map(csvField).join(','); }
+
+// SBI and ICICI's bulk files use a single character (# or ^) as the
+// field separator instead of CSV-style quoting. If a company or
+// employee name ever contained that exact character, the row would
+// silently split into an extra column and the whole batch would be
+// misread — or bounced — by the bank's upload portal. Strip any
+// stray delimiter characters and line breaks before they go in.
+function sanitizeForDelimitedFile(value, ...reservedChars) {
+  let s = String(value ?? '').replace(/[\r\n]+/g, ' ');
+  reservedChars.forEach(ch => { s = s.split(ch).join(''); });
+  return s.trim();
+}
 
 // Determines NEFT / RTGS / IMPS / Same Bank for a single transaction on
 // any non-SBI bank, per the rules in the spec:
@@ -238,12 +250,13 @@ const BankFormatters = {
   SBI: {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
+      const d = v => sanitizeForDelimitedFile(v, '#');
       const prefix = ctx.tft === 'Same Bank' ? 'SBST' : 'OBST';
       const empLines = ctx.lines.map(l => {
         const seqStr = `${prefix}${ctx.shortYear}${ctx.monthRaw}E${l.empCode}`;
-        return `${l.acc}#${l.ifsc}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${l.name}#SALARY OF ${ctx.monthName} ${ctx.year}#`;
+        return `${d(l.acc)}#${d(l.ifsc)}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
       });
-      const header = `${ctx.companyProfile.accountNumber}#${ctx.companyProfile.sysId}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${ctx.companyProfile.name}#SALARY OF ${ctx.monthName} ${ctx.year}#`;
+      const header = `${d(ctx.companyProfile.accountNumber)}#${d(ctx.companyProfile.sysId)}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${d(ctx.companyProfile.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
       return [header, ...empLines].join('\n') + '\n';
     }
   },
@@ -316,9 +329,10 @@ const BankFormatters = {
   ICIC: {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
+      const d = v => sanitizeForDelimitedFile(v, '^');
       const rows = ctx.lines.map(l =>
-        [l.mode, ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc,
-          `SALARY OF ${ctx.monthName} ${ctx.year}`].join('^'));
+        [l.mode, d(ctx.companyProfile.accountNumber), d(l.acc), l.amount.toFixed(2), d(l.name), d(l.ifsc),
+          `SALARY OF ${d(ctx.monthName)} ${ctx.year}`].join('^'));
       return rows.join('\n') + '\n';
     }
   },
@@ -1238,12 +1252,12 @@ function wireEmployeeForm() {
 
     // Required-field check — Middle Name is the sole optional field.
     if (!(fname && lname && acc && accC && ifsc && ifscC && empCode)) {
-      showFieldError('Fill all database entry boxes completely before committing. (Middle Name is optional)');
+      showFieldError('Please fill in all required fields before saving. (Middle Name is optional)');
       return;
     }
     // Double-entry verification for Account Number and IFSC.
     if (acc !== accC || ifsc !== ifscC) {
-      showFieldError('Verification Error: Double-entry field mismatch detected.');
+      showFieldError('Account Number and IFSC must match their confirmation fields.');
       return;
     }
 
@@ -1254,7 +1268,7 @@ function wireEmployeeForm() {
 
     // Duplicate account-number check, excluding the record currently being edited.
     if (existingAccountNumbers().includes(acc)) {
-      showFieldError(`Duplicate Error: Account number ${acc} is already explicitly assigned inside ledger.`);
+      showFieldError(`Account number ${acc} is already assigned to another employee in the ledger.`);
       return;
     }
 
@@ -1503,7 +1517,7 @@ function updateBatchTotal() {
     const v = parseFloat(md.inputEl.value);
     if (!isNaN(v)) total += v;
   });
-  document.getElementById('disbTotal').textContent = `BATCH TOTAL ₹ ${total.toFixed(2)}`;
+  document.getElementById('disbTotal').textContent = `Batch Total: ₹ ${total.toFixed(2)}`;
 }
 
 function wireDisbursement() {
@@ -1548,10 +1562,31 @@ function collectBatchLines() {
   return { tft, lines, total, hasInvalid };
 }
 
+// The exported bank file's header row is built entirely from
+// companyProfile fields — if any of these are still blank, the file
+// would export "successfully" but contain an empty/broken debit
+// account row, which the bank portal will reject. So export must be
+// blocked (not just discouraged) until the Company Profile is saved.
+function isCompanyProfileComplete() {
+  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.sysId && companyProfile.bankName);
+}
+function goToCompanyPage() {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const navItem = document.querySelector('.nav-item[data-page="company"]');
+  if (navItem) navItem.classList.add('active');
+  document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
+  document.getElementById('page-company').classList.remove('hidden');
+}
+
 function openExportPreview() {
+  if (!isCompanyProfileComplete()) {
+    alert('Please fill company details to continue. Company Name, Account Number, Branch/Sys Code and Bank are required before you can export a payment file.');
+    goToCompanyPage();
+    return;
+  }
   const { tft, lines, total, hasInvalid } = collectBatchLines();
-  if (hasInvalid) { alert('Block Export Execution: Invalid amount format strings detected.'); return; }
-  if (!lines.length) { alert('Execution blocked: No valid allocations found to process.'); return; }
+  if (hasInvalid) { alert('One or more amounts are in an invalid format. Please check and try again.'); return; }
+  if (!lines.length) { alert('Please enter at least one salary amount before exporting.'); return; }
 
   const txnDate = getTransferDateDDMMYYYY();
   if (!txnDate) { alert('Please select a Transfer Date before exporting.'); return; }
@@ -1683,6 +1718,7 @@ async function loadCompanyProfile() {
     companyProfile = { ...companyProfile, ...p };
     document.getElementById('companyNameInput').value = p.name || '';
     document.getElementById('companyAccInput').value = p.accountNumber || '';
+    document.getElementById('companyAccConfirmInput').value = p.accountNumber || '';
     document.getElementById('companySysInput').value = p.sysId || '';
     document.getElementById('companyBankInput').value = p.bankName || 'SBI';
   } catch (err) {
@@ -1692,12 +1728,40 @@ async function loadCompanyProfile() {
 }
 function wireCompanyForm() {
   populateCompanyBankSelect();
+
+  const accInput = document.getElementById('companyAccInput');
+  const accConfirmInput = document.getElementById('companyAccConfirmInput');
+  const accMismatchLbl = document.getElementById('companyAccMismatchLbl');
+
+  // Live double-entry check — mirrors the Employee form's Account
+  // Number confirmation, so a mistyped digit is caught immediately
+  // instead of silently corrupting every export's debit account.
+  function validateCompanyAccountLive() {
+    const prime = accInput.value.trim();
+    const conf = accConfirmInput.value.trim();
+    accConfirmInput.classList.remove('input-mismatch', 'input-match');
+    if (!conf) { accMismatchLbl.textContent = ''; return; }
+    if (prime !== conf) {
+      accConfirmInput.classList.add('input-mismatch');
+      accMismatchLbl.textContent = 'MISMATCH';
+    } else {
+      accConfirmInput.classList.add('input-match');
+      accMismatchLbl.textContent = '';
+    }
+  }
+  [accInput, accConfirmInput].forEach(el => el.addEventListener('input', validateCompanyAccountLive));
+
   document.getElementById('saveCompanyBtn').addEventListener('click', async () => {
     const name = document.getElementById('companyNameInput').value.trim().toUpperCase();
-    const accountNumber = document.getElementById('companyAccInput').value.trim();
+    const accountNumber = accInput.value.trim();
+    const accountNumberConfirm = accConfirmInput.value.trim();
     const sysId = document.getElementById('companySysInput').value.trim();
     const bankName = document.getElementById('companyBankInput').value;
-    if (!name || !accountNumber || !sysId || !bankName) { alert('Please fill all fields.'); return; }
+    if (!name || !accountNumber || !accountNumberConfirm || !sysId || !bankName) { alert('Please fill all fields.'); return; }
+    if (accountNumber !== accountNumberConfirm) {
+      alert('Company Account Number and its confirmation do not match.');
+      return;
+    }
     try {
       await Api.updateCompanyProfile({ name, accountNumber, sysId, bankName });
       companyProfile = { ...companyProfile, name, accountNumber, sysId, bankName };

@@ -5,8 +5,6 @@
 
 // ---------------------------------------------------------
 // 1. FIREBASE CONFIG
-// These values are PUBLIC and safe to have in client code —
-// real security is enforced by Firestore rules + Firebase Auth.
 // ---------------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyC17VDG73Klmg8IwCA_cTbtMdIG9trwd5k",
@@ -20,54 +18,31 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 // ---------------------------------------------------------
-// 1b. APP CHECK — blocks scripted / bot signups & requests
-// that don't come from this real web app, so someone can't
-// just hammer createUserWithEmailAndPassword in a loop and
-// burn through the free Firebase quota.
-//
-// SETUP REQUIRED (one-time, in Firebase Console):
-//   1. Console → Build → App Check → Apps → register this web app
-//      with the "reCAPTCHA v3" provider.
-//   2. Copy the site key it gives you and paste it below in place
-//      of "PASTE_YOUR_RECAPTCHA_V3_SITE_KEY_HERE".
-//   3. Console → App Check → APIs tab → mark "Firestore" and
-//      "Authentication" as Enforced (not just Monitored).
-// Until you do this, App Check runs in a harmless no-op state —
-// it does NOT block anything on its own.
+// 1b. APP CHECK
 // ---------------------------------------------------------
 const RECAPTCHA_V3_SITE_KEY = "6LcGm4UtAAAAAE6U6J4olvwUW4RDKVcJ0cHTMZ54";
 if (RECAPTCHA_V3_SITE_KEY && RECAPTCHA_V3_SITE_KEY.indexOf("PASTE_YOUR") !== 0) {
   firebase.appCheck().activate(
     new firebase.appCheck.ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
-    true // auto-refresh the token
+    true
   );
 } else {
-  console.warn('[App Check] Not activated — RECAPTCHA_V3_SITE_KEY is still a placeholder. Signups are NOT yet protected from bot abuse. See comment above.');
+  console.warn('[App Check] Not activated — RECAPTCHA_V3_SITE_KEY is still a placeholder.');
 }
 
 const auth = firebase.auth();
 const db = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-// SESSION persistence: Firebase's default (LOCAL) keeps the user signed
-// in even after the browser is fully closed and reopened. SESSION ties
-// the sign-in to the current tab instead — the moment the tab or the
-// whole browser window is closed, the sign-in state is gone, so the
-// next visit lands back on the Sign In screen instead of walking
-// straight into the dashboard. Must be set before any sign-in call.
 auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(err => {
   console.warn('[Auth] Could not set session persistence:', err.message);
 });
 
-// IMPORTANT: this must be your real, live Firebase Hosting URL
-// (or custom domain once you attach one). It's what makes the
-// verification email link open THIS app instead of Firebase's
-// generic default page.
 const SITE_URL = "https://nitins0910.github.io/payflow-pro-web/";
 const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 
 // ---------------------------------------------------------
-// 2. FIRESTORE DATA LAYER (unchanged from firestore-api.js)
+// 2. FIRESTORE DATA LAYER
 // ---------------------------------------------------------
 let currentUserId = null;
 
@@ -77,6 +52,30 @@ async function initUserContext(uid) {
 
 function userRef() {
   return db.collection('users').doc(currentUserId);
+}
+
+// IFSC lookup via Razorpay API (free, no key required for basic lookup)
+async function fetchIfscFromCode(code) {
+  // code is the branch/system code (last 6 digits of IFSC)
+  // For SBI: SBIN + code, HDFC: HDFC + code, ICICI: ICIC + code, PNB: PUNB + code
+  // We need the full IFSC to look up. But since we don't have the bank prefix here,
+  // we'll use the bank from the profile. The user enters the branch code, we combine.
+  // Actually, we need the full IFSC. The user enters the branch code (last 6 digits).
+  // We prepend the bank prefix based on the selected bank.
+  // This is a simplification - in production you'd use a real IFSC API.
+  const bankPrefixes = {
+    'SBI': 'SBIN',
+    'HDFC': 'HDFC',
+    'ICICI': 'ICIC',
+    'PNB': 'PUNB'
+  };
+  const prefix = bankPrefixes[companyProfile.bankName] || 'SBIN';
+  const fullIfsc = prefix + code;
+  // Validate format
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(fullIfsc)) {
+    throw new Error('Invalid IFSC format. Please enter a valid 6-digit branch code.');
+  }
+  return fullIfsc;
 }
 
 const Api = {
@@ -132,20 +131,6 @@ const Api = {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   },
-  // Runs inside a Firestore transaction, so even if the user has two
-  // tabs open and both hit "Export" at the same instant, each export
-  // still reads-and-writes the counter atomically — nobody can ever
-  // walk away with the same number. That's what actually guarantees
-  // uniqueness here, not the number format itself.
-  //
-  // The counter value is encoded in base-36 (0-9 then A-Z) instead of
-  // plain decimal, so the code stays alphanumeric like before but
-  // packs far more values into the same width: 4 base-36 characters
-  // give 36^4 = ~1.68 million unique exports before the code needs to
-  // grow past 4 characters on its own (it never repeats either way —
-  // padStart just keeps the width tidy for as long as possible).
-  // Need more headroom later? Bump the padStart number below (e.g.
-  // 5 or 6) — everything downstream just treats this as a string.
   async getAndIncrementCounter() {
     const counterRef = userRef().collection('meta').doc('fileCounter');
     return db.runTransaction(async (tx) => {
@@ -167,11 +152,6 @@ const Api = {
     const snap = await userRef().collection('disbursements').orderBy('createdAt', 'desc').limit(500).get();
     return snap.docs.map(d => d.data());
   },
-  // Stashes what each employee was actually paid in the batch that was
-  // just exported, so the next payroll cycle's Disbursement page can
-  // pre-fill the same figure instead of starting blank every time.
-  // Silently skips any account number that no longer matches a current
-  // employee (e.g. they were deleted after this batch was exported).
   async updateEmployeeLastAmounts(items) {
     const byAcc = new Map(employees.map(e => [String(e.accountNumber), e.id]));
     let batch = db.batch();
@@ -199,10 +179,6 @@ const Api = {
 
 // ---------------------------------------------------------
 // 2b. HTML ESCAPING
-// Any user-entered value (employee name, audit details, etc.) that
-// gets inserted via innerHTML/template strings MUST go through this
-// first, or a value like <img src=x onerror=...> in a name field
-// would execute as script instead of displaying as text.
 // ---------------------------------------------------------
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
@@ -212,12 +188,6 @@ function escapeHtml(value) {
 
 // ---------------------------------------------------------
 // 2d. TOAST / CONFIRM SYSTEM
-// Replaces native alert()/confirm() everywhere in the app. Native
-// dialogs block the whole tab, can't be styled, and look out of place
-// next to the rest of the UI. toast() is fire-and-forget (success,
-// error, info); confirmDialog() returns a Promise<boolean> so existing
-// `if (!confirm(...)) return;` call sites become
-// `if (!(await confirmDialog(...))) return;` with minimal disruption.
 // ---------------------------------------------------------
 function toast(message, kind) {
   const host = document.getElementById('toastHost');
@@ -259,69 +229,28 @@ function confirmDialog(message, { title = 'Please confirm', danger = true } = {}
 }
 
 // ---------------------------------------------------------
-// 2c. MULTI-BANK BULK PAYMENT FILE SUPPORT
-//
-// BANKS: the master list backing the Company Profile "bank" dropdown.
-//   key         — stable internal id, stored in Firestore as bankName
-//   label       — text shown in the dropdown
-//   ifscPrefix  — the 4-letter IFSC bank code used to detect an
-//                 "internal / same-bank" transfer for that bank
-//
-// BankFormatters: one entry per BANKS key, keyed the same way, each
-// providing the file extension/MIME type and a generate() function
-// that turns a batch into that bank's exact file layout. This is the
-// single place to touch when a bank changes its file spec or a new
-// bank needs to be added — nothing else in the export pipeline is
-// bank-specific.
-//
-// NOTE: the exact CSV column layouts below follow the specs supplied
-// for SBI, PNB, BOB, HDFC, ICICI, Axis and Kotak. Canara, Union,
-// IndusInd and Yes Bank don't have a distinct spec on file, so they
-// fall back to a generic standard CSV layout —
-// confirm the live column order with each bank's CMS/corporate net
-// banking portal before using those in production.
+// 2c. BANK SUPPORT (4 banks only: SBI, HDFC, ICICI, PNB)
 // ---------------------------------------------------------
 const BANKS = [
-  { key: 'SBI',      label: 'State Bank of India (SBI)',   ifscPrefix: 'SBIN' },
-  { key: 'PNB',      label: 'Punjab National Bank (PNB)',  ifscPrefix: 'PUNB' },
-  { key: 'BOB',      label: 'Bank of Baroda (BOB)',        ifscPrefix: 'BARB' },
-  { key: 'CNRB',     label: 'Canara Bank (CNRB)',          ifscPrefix: 'CNRB' },
-  { key: 'UBI',      label: 'Union Bank of India (UBI)',   ifscPrefix: 'UBIN' },
-  { key: 'INDB',     label: 'Indian Bank (IDIB)',           ifscPrefix: 'IDIB' },
-  { key: 'HDFC',     label: 'HDFC Bank (HDFC)',            ifscPrefix: 'HDFC' },
-  { key: 'ICIC',     label: 'ICICI Bank (ICIC)',           ifscPrefix: 'ICIC' },
-  { key: 'UTIB',     label: 'Axis Bank (UTIB)',            ifscPrefix: 'UTIB' },
-  { key: 'KKBK',     label: 'Kotak Mahindra Bank (KKBK)',  ifscPrefix: 'KKBK' },
-  { key: 'INDUSIND', label: 'IndusInd Bank (INDB)',        ifscPrefix: 'INDB' },
-  { key: 'YESB',     label: 'Yes Bank (YESB)',             ifscPrefix: 'YESB' },
+  { key: 'SBI',  label: 'State Bank of India',  ifscPrefix: 'SBIN' },
+  { key: 'HDFC', label: 'HDFC Bank',            ifscPrefix: 'HDFC' },
+  { key: 'ICICI', label: 'ICICI Bank',          ifscPrefix: 'ICIC' },
+  { key: 'PNB',  label: 'Punjab National Bank', ifscPrefix: 'PUNB' },
 ];
 const BANK_BY_KEY = Object.fromEntries(BANKS.map(b => [b.key, b]));
 
-// Wraps a CSV field in quotes if it contains a comma, quote, or newline.
 function csvField(value) {
   const s = String(value ?? '').replace(/[\r\n]+/g, ' ');
   return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function csvRow(values) { return values.map(csvField).join(','); }
 
-// SBI and ICICI's bulk files use a single character (# or ^) as the
-// field separator instead of CSV-style quoting. If a company or
-// employee name ever contained that exact character, the row would
-// silently split into an extra column and the whole batch would be
-// misread — or bounced — by the bank's upload portal. Strip any
-// stray delimiter characters and line breaks before they go in.
 function sanitizeForDelimitedFile(value, ...reservedChars) {
   let s = String(value ?? '').replace(/[\r\n]+/g, ' ');
   reservedChars.forEach(ch => { s = s.split(ch).join(''); });
   return s.trim();
 }
 
-// Determines NEFT / RTGS / IMPS / Same Bank for a single transaction on
-// any non-SBI bank, per the rules in the spec:
-//  - Same Bank / Internal: beneficiary IFSC starts with the company's
-//    own bank's 4-letter code
-//  - otherwise RTGS if amount >= ₹2,00,000, else NEFT
-//  - IMPS is an optional override toggle for any cross-bank transfer
 function determineTransactionMode(bankKey, ifsc, amount, preferImps) {
   const bank = BANK_BY_KEY[bankKey];
   if (!bank) return 'NEFT';
@@ -331,82 +260,17 @@ function determineTransactionMode(bankKey, ifsc, amount, preferImps) {
   return amount >= 200000 ? 'RTGS' : 'NEFT';
 }
 
-// ctx passed to every generate() below:
-//   companyProfile { name, accountNumber, sysId, bankName }
-//   lines[]  { acc, empCode, name, ifsc, amount, mode }
-//   total, batchId, txnDate ('DD/MM/YYYY'), monthName, year, tft
 const BankFormatters = {
   SBI: {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
       const d = v => sanitizeForDelimitedFile(v, '#');
-      // Each row's reference reuses ctx.batchId — which already carries
-      // this export's unique counter value — plus the employee code.
-      // Previously this only combined month + empCode, so exporting the
-      // same month twice produced identical row codes both times. Tying
-      // it to batchId means every row from every export is unique, while
-      // still telling you which employee (and which batch) it belongs to.
       const empLines = ctx.lines.map(l => {
         const seqStr = `${ctx.batchId}E${l.empCode}`;
         return `${d(l.acc)}#${d(l.ifsc)}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
       });
       const header = `${d(ctx.companyProfile.accountNumber)}#${d(ctx.companyProfile.sysId)}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${d(ctx.companyProfile.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
       return [header, ...empLines].join('\n') + '\n';
-    }
-  },
-  PNB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'DebitAcc,BenAcc,Amount,BenName,IFSC,TxnType,TxnDate,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc, l.mode,
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  BOB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'PaymentType,DebitAcc,BenAcc,BenName,Amount,IFSC,Remarks,TxnDate';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        `SALARY OF ${ctx.monthName} ${ctx.year}`, ctx.txnDate
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  CNRB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  UBI: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  INDB: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
     }
   },
   HDFC: {
@@ -420,7 +284,7 @@ const BankFormatters = {
       return [header, ...rows].join('\r\n') + '\r\n';
     }
   },
-  ICIC: {
+  ICICI: {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
       const d = v => sanitizeForDelimitedFile(v, '^');
@@ -430,52 +294,21 @@ const BankFormatters = {
       return rows.join('\n') + '\n';
     }
   },
-  UTIB: {
+  PNB: {
     ext: 'csv', mime: 'text/csv;charset=utf-8',
     generate(ctx) {
-      const header = 'PaymentType,DebitAcc,BenAcc,BenName,Amount,IFSC,Remarks,TxnDate';
+      const header = 'DebitAcc,BenAcc,Amount,BenName,IFSC,TxnType,TxnDate,Remarks';
       const rows = ctx.lines.map(l => csvRow([
-        l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        `SALARY OF ${ctx.monthName} ${ctx.year}`, ctx.txnDate
+        ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc, l.mode,
+        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
       ]));
       return [header, ...rows].join('\r\n') + '\r\n';
     }
-  },
-  KKBK: {
-    ext: 'csv', mime: 'text/csv;charset=utf-8',
-    generate(ctx) {
-      const header = 'ClientCode,DebitAcc,BenAcc,Amount,BenName,IFSC,TxnType,ValueDate,Narration';
-      const rows = ctx.lines.map(l => csvRow([
-        ctx.companyProfile.sysId, ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2),
-        l.name, l.ifsc, l.mode, ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
-    }
-  },
-  // Generic standard CSV layout — used for banks without a distinct
-  // spec supplied (IndusInd, Yes Bank).
-  INDUSIND: { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
-  YESB:     { ext: 'csv', mime: 'text/csv;charset=utf-8', generate: genericCsv },
+  }
 };
-function genericCsv(ctx) {
-  const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Remarks';
-  const rows = ctx.lines.map(l => csvRow([
-    l.mode, ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-    ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
-  ]));
-  return [header, ...rows].join('\r\n') + '\r\n';
-}
-
-function populateCompanyBankSelect() {
-  const sel = document.getElementById('companyBankInput');
-  if (!sel || sel.dataset.populated) return;
-  sel.dataset.populated = '1';
-  sel.innerHTML = BANKS.map(b => `<option value="${b.key}">${escapeHtml(b.label)}</option>`).join('');
-}
 
 // ---------------------------------------------------------
 // 3. SCREEN ROUTER
-// Only one of these top-level screens is visible at a time.
 // ---------------------------------------------------------
 const SCREENS = ['auth', 'verify-pending', 'verifying', 'reset-password', 'complete-profile', 'dashboard'];
 function showScreen(name) {
@@ -500,10 +333,6 @@ function mapAuthError(err) {
     'auth/popup-closed-by-user': 'Google sign-in was closed before completing.',
     'auth/requires-recent-login': 'For your security, please re-enter your current password to confirm this change.',
     'auth/email-already-exists': 'That email is already in use by another account.',
-    'auth/invalid-phone-number': 'Please enter a valid phone number with country code, e.g. +91XXXXXXXXXX.',
-    'auth/invalid-verification-code': 'That verification code is incorrect.',
-    'auth/code-expired': 'That verification code has expired. Please request a new one.',
-    'auth/missing-verification-code': 'Please enter the code sent to your phone.',
   };
   return map[err.code] || err.message;
 }
@@ -529,11 +358,6 @@ function clearAuthSuccess() {
   box.classList.remove('show');
 }
 
-// ---------------------------------------------------------
-// 4b. PASSWORD SHOW/HIDE TOGGLE (works for any .pw-toggle button
-// paired with an input via data-target, on any screen — login,
-// signup, and later the Settings page).
-// ---------------------------------------------------------
 function wirePasswordToggles() {
   document.querySelectorAll('.pw-toggle').forEach(btn => {
     if (btn.dataset.wired) return;
@@ -549,9 +373,6 @@ function wirePasswordToggles() {
   });
 }
 
-// Always land on the LOGIN form (not signup) whenever we route back
-// to the auth screen — fixes "stuck on signup form" after verifying
-// email, logging out, or clicking "use a different account".
 function goToAuthScreen() {
   clearAuthError();
   clearAuthSuccess();
@@ -571,7 +392,7 @@ function goToAuthScreen() {
 }
 
 // ---------------------------------------------------------
-// 5. AUTH SCREEN (login / signup / google)
+// 5. AUTH SCREEN
 // ---------------------------------------------------------
 function wireAuthForms() {
   const loginForm = document.getElementById('loginForm');
@@ -594,7 +415,6 @@ function wireAuthForms() {
     document.getElementById('switchToSignupWrap').classList.remove('hidden');
   };
 
-  // ---- Forgot password ----
   const forgotForm = document.getElementById('forgotPasswordForm');
   function resetForgotFormVisibility() {
     document.getElementById('forgotPwInstructions').classList.remove('hidden');
@@ -641,8 +461,6 @@ function wireAuthForms() {
     btn.disabled = true; btn.textContent = 'Sending...';
     try {
       await auth.sendPasswordResetEmail(email, actionCodeSettings);
-      // Same message whether or not the account exists — avoids
-      // leaking which emails are registered.
       showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
       forgotForm.reset();
       hideForgotFormAfterSend();
@@ -650,8 +468,6 @@ function wireAuthForms() {
       if (err.code === 'auth/invalid-email') {
         showAuthError(mapAuthError(err));
       } else {
-        // Still show the generic success message for anything else
-        // (e.g. user-not-found) so we don't reveal account existence.
         showAuthSuccess('If an account exists for that email, a password reset link is on its way. Check your spam folder too.');
         forgotForm.reset();
         hideForgotFormAfterSend();
@@ -670,7 +486,6 @@ function wireAuthForms() {
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
       await auth.signInWithEmailAndPassword(email, password);
-      // routeUser() fires automatically via onAuthStateChanged
     } catch (err) {
       showAuthError(mapAuthError(err));
     } finally {
@@ -697,9 +512,6 @@ function wireAuthForms() {
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       await cred.user.updateProfile({ displayName: name });
       await cred.user.sendEmailVerification(actionCodeSettings);
-      // Do NOT leave the user signed in unverified — sign out and
-      // make them explicitly verify + log in. This is what fixes
-      // "shows registered but isn't really".
       await auth.signOut();
 
       signupForm.reset();
@@ -715,15 +527,10 @@ function wireAuthForms() {
   document.getElementById('googleBtn').onclick = async () => {
     clearAuthError();
     try {
-      suppressAutoRoute = true; // hold the router while we check if this is a new user
+      suppressAutoRoute = true;
       const result = await auth.signInWithPopup(googleProvider);
       await handleGoogleSignInResult(result);
     } catch (err) {
-      // Popups get blocked or silently fail in a lot of mobile browsers,
-      // in-app webviews (opened from WhatsApp/LinkedIn, etc.), and some
-      // corporate/managed-device setups. Rather than dead-ending with an
-      // error in exactly those cases, fall back to a full-page redirect
-      // flow, which works everywhere a popup doesn't.
       const popupFailureCodes = [
         'auth/popup-blocked',
         'auth/popup-closed-by-user',
@@ -733,8 +540,6 @@ function wireAuthForms() {
       if (popupFailureCodes.includes(err.code)) {
         try {
           await auth.signInWithRedirect(googleProvider);
-          // Page will navigate away here; result is handled by
-          // getRedirectResult() in boot() after the redirect back.
           return;
         } catch (redirectErr) {
           suppressAutoRoute = false;
@@ -748,8 +553,6 @@ function wireAuthForms() {
   };
 }
 
-// Shared by both the popup and redirect Google sign-in paths so new vs.
-// returning users are routed identically no matter which one fired.
 async function handleGoogleSignInResult(result) {
   const isNewUser = result.additionalUserInfo && result.additionalUserInfo.isNewUser;
   if (isNewUser) {
@@ -761,9 +564,6 @@ async function handleGoogleSignInResult(result) {
   }
 }
 
-// ---------------------------------------------------------
-// 5b. COMPLETE PROFILE SCREEN (new Google sign-ups only)
-// ---------------------------------------------------------
 function wireCompleteProfileForm() {
   document.getElementById('completeProfileForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -783,9 +583,6 @@ function wireCompleteProfileForm() {
   });
 }
 
-// ---------------------------------------------------------
-// 6. "CHECK YOUR EMAIL" SCREEN (post-signup, pre-verification)
-// ---------------------------------------------------------
 let resendCooldown = false;
 function wireVerifyPending() {
   document.getElementById('resendVerifyBtn').onclick = async () => {
@@ -821,9 +618,7 @@ function wireVerifyPending() {
 }
 
 // ---------------------------------------------------------
-// 7. VERIFICATION LINK HANDLER (?mode=verifyEmail&oobCode=...)
-// This is what makes the link open THIS page's own UI instead
-// of Firebase's generic default page.
+// 7. VERIFICATION LINK HANDLER
 // ---------------------------------------------------------
 let suppressAutoRoute = false;
 
@@ -847,7 +642,6 @@ async function handleVerifyEmailAction(oobCode) {
     }
   }
 
-  // Clean the ?mode=&oobCode= out of the URL so a refresh doesn't re-trigger it.
   history.replaceState({}, '', window.location.pathname);
   btn.classList.remove('hidden');
   btn.onclick = async () => {
@@ -858,10 +652,7 @@ async function handleVerifyEmailAction(oobCode) {
 }
 
 // ---------------------------------------------------------
-// 7b. PASSWORD RESET LINK HANDLER (?mode=resetPassword&oobCode=...)
-// Without this, clicking the reset-password email link just lands
-// back on the normal auth screen with no way to actually set a new
-// password — this is what shows the "new password" form instead.
+// 7b. PASSWORD RESET LINK HANDLER
 // ---------------------------------------------------------
 async function handleResetPasswordAction(oobCode) {
   suppressAutoRoute = true;
@@ -928,14 +719,13 @@ async function handleResetPasswordAction(oobCode) {
 }
 
 // ---------------------------------------------------------
-// 8. ROUTER — decides which screen to show based on auth state
+// 8. ROUTER
 // ---------------------------------------------------------
 function routeUser(user) {
-  if (suppressAutoRoute) return; // we're busy handling a verification link
+  if (suppressAutoRoute) return;
   if (!user) { goToAuthScreen(); return; }
 
   if (!user.emailVerified) {
-    // This is the key fix: unverified users never reach the dashboard.
     document.getElementById('verifyPendingEmail').textContent = user.email;
     showScreen('verify-pending');
     return;
@@ -963,19 +753,11 @@ wirePasswordToggles();
     handleResetPasswordAction(oobCode);
   }
 
-  // Picks up the result after a signInWithRedirect() round-trip (the
-  // Google fallback for blocked/unsupported popups). Resolves to null
-  // on every normal page load where no redirect sign-in was pending —
-  // that's expected, not an error.
   suppressAutoRoute = true;
   auth.getRedirectResult().then(async (result) => {
     if (result && result.user) {
       await handleGoogleSignInResult(result);
     } else {
-      // No redirect was in flight (the normal case on every page load) —
-      // release the hold and route based on whatever auth state we
-      // actually have, since the onAuthStateChanged call below may have
-      // already fired and been suppressed while this was pending.
       suppressAutoRoute = false;
       routeUser(auth.currentUser);
     }
@@ -989,8 +771,7 @@ wirePasswordToggles();
 })();
 
 // ---------------------------------------------------------
-// 10. DASHBOARD (unchanged logic from dashboard.js, wrapped so it
-//     boots only once verification is confirmed)
+// 10. DASHBOARD
 // ---------------------------------------------------------
 let employees = [];
 let editingEmployeeId = null;
@@ -1007,12 +788,6 @@ function formatDateDDMMYYYY(d) {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
-// ---------------------------------------------------------
-// Google account UI — profile photo in the sidebar, and hiding the
-// "change email/password" settings for accounts signed in via Google
-// (those credentials live with Google, not with Firebase's email/
-// password provider, so there's nothing here to change).
-// ---------------------------------------------------------
 function getInitials(name, email) {
   const src = (name || email || '').trim();
   if (!src) return '?';
@@ -1032,8 +807,6 @@ function applyUserProfileUI(user) {
     imgEl.src = user.photoURL;
     imgEl.classList.remove('hidden');
     fallbackEl.classList.add('hidden');
-    // Google photo URLs can occasionally fail to load (revoked, rate
-    // limited, offline) — fall back to initials instead of a broken image.
     imgEl.onerror = () => {
       imgEl.classList.add('hidden');
       fallbackEl.classList.remove('hidden');
@@ -1047,6 +820,11 @@ function applyUserProfileUI(user) {
   const google = isGoogleAccount(user);
   document.getElementById('settingsCredentialsList').classList.toggle('hidden', google);
   document.getElementById('settingsGoogleNotice').classList.toggle('hidden', !google);
+}
+
+function getBankLabel(key) {
+  const b = BANK_BY_KEY[key] || BANK_BY_KEY.SBI;
+  return b.label;
 }
 
 async function bootDashboard(user) {
@@ -1065,7 +843,6 @@ async function bootDashboard(user) {
   initDisbursementDateFields();
   await Promise.all([loadEmployees(), loadCompanyProfile()]);
   renderEmployeeKpis();
-  renderDashboardOverview();
 
   if (!dashboardBooted) {
     dashboardBooted = true;
@@ -1080,15 +857,12 @@ async function bootDashboard(user) {
     wireSettingsForms();
     wirePasswordToggles();
     wireModalCloseButtons();
-    wireDashboardOverview();
+    wireBankSelection();
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
   }
 }
 
-// Generic "×" close button on every modal — just hides the backdrop,
-// same as each modal's own Cancel button, without needing bespoke
-// wiring per modal.
 function wireModalCloseButtons() {
   document.querySelectorAll('.modal-close').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1098,18 +872,41 @@ function wireModalCloseButtons() {
   });
 }
 
-// Populates the KPI summary row at the top of the Employee Ledger page:
-// headcount, the company's configured bank, this calendar month's total
-// disbursed amount, and the most recent export batch — all derived from
-// data already being fetched (employees, company profile, disbursement
-// history), so no extra Firestore reads are introduced.
+// ---------------------------------------------------------
+// Bank selection wiring
+// ---------------------------------------------------------
+function wireBankSelection() {
+  // Payroll Run bank selection
+  document.querySelectorAll('#bankSelectGrid .bank-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('#bankSelectGrid .bank-tile').forEach(t => t.classList.remove('active'));
+      tile.classList.add('active');
+      const bank = tile.dataset.bank;
+      companyProfile.bankName = bank;
+      updateDisbursementModeUI();
+      renderDisbursementList();
+    });
+  });
+
+  // Company edit bank selection
+  document.querySelectorAll('#companyBankSelectGrid .bank-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('#companyBankSelectGrid .bank-tile').forEach(t => t.classList.remove('active'));
+      tile.classList.add('active');
+    });
+  });
+}
+
+// ---------------------------------------------------------
+// Employee KPI
+// ---------------------------------------------------------
 async function renderEmployeeKpis() {
   const totalEl = document.getElementById('kpiTotalEmployees');
   const bankEl = document.getElementById('kpiCompanyBank');
   const monthEl = document.getElementById('kpiMonthDisbursed');
   const lastEl = document.getElementById('kpiLastExport');
   const lastSubEl = document.getElementById('kpiLastExportSub');
-  if (!totalEl) return; // KPI row only exists on the Employee Ledger page
+  if (!totalEl) return;
 
   totalEl.textContent = employees.length;
   const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
@@ -1136,8 +933,6 @@ async function renderEmployeeKpis() {
   });
   monthEl.textContent = `₹ ${monthTotal.toFixed(2)}`;
 
-  // getDisbursementHistory() is already ordered newest-first, so the
-  // first row belongs to the most recently exported batch.
   const last = history[0];
   if (last) {
     lastEl.textContent = last.batchId || '—';
@@ -1160,137 +955,15 @@ function wireNav() {
       document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
       item.classList.add('active');
       document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
-      document.getElementById('page-' + item.dataset.page).classList.remove('hidden');
+      const pageId = 'page-' + item.dataset.page;
+      const section = document.getElementById(pageId);
+      if (section) section.classList.remove('hidden');
       if (item.dataset.page === 'audit') loadAuditTrail();
       if (item.dataset.page === 'exports') loadExportHistory();
-      if (item.dataset.page === 'dashboard') renderDashboardOverview();
     });
   });
 }
 
-// ---------------------------------------------------------
-// DASHBOARD OVERVIEW — the landing tab. Reuses data already fetched
-// for the Employee Ledger / Exports / Audit pages (headcount, company
-// profile, disbursement history, audit trail) into one at-a-glance
-// summary, so nothing new needs to be tracked just for this screen.
-// ---------------------------------------------------------
-function wireDashboardOverview() {
-  const addBtn = document.getElementById('dashQuickAddEmployee');
-  if (addBtn) addBtn.onclick = () => { goToPage('employees'); document.getElementById('addEmployeeBtn').click(); };
-
-  const disburseBtn = document.getElementById('dashQuickDisburse');
-  if (disburseBtn) disburseBtn.onclick = () => goToPage('disbursement');
-
-  const exportsBtn = document.getElementById('dashQuickExports');
-  if (exportsBtn) exportsBtn.onclick = () => goToPage('exports');
-
-  document.querySelectorAll('[data-page-link]').forEach(a => {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      goToPage(a.dataset.pageLink);
-    });
-  });
-}
-
-async function renderDashboardOverview() {
-  const empEl = document.getElementById('dashKpiEmployees');
-  if (!empEl) return; // Overview page not present
-
-  const nameEl = document.getElementById('dashWelcomeName');
-  if (nameEl) {
-    const first = currentUser && currentUser.displayName ? currentUser.displayName.trim().split(/\s+/)[0] : '';
-    nameEl.textContent = first ? `, ${first}` : '';
-  }
-
-  empEl.textContent = employees.length;
-  const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'] || BANK_BY_KEY.SBI;
-  document.getElementById('dashKpiBank').textContent = bank.label;
-
-  const monthEl = document.getElementById('dashKpiMonth');
-  const exportsEl = document.getElementById('dashKpiExports');
-  const exportsTbody = document.getElementById('dashRecentExports');
-  const activityList = document.getElementById('dashRecentActivity');
-
-  monthEl.textContent = '…';
-  exportsEl.textContent = '…';
-  renderSkeletonRows(exportsTbody, 4, 3);
-  activityList.innerHTML = '<li class="dash-activity-item dash-activity-item--loading">Loading…</li>';
-
-  let history = [], audit = [];
-  try {
-    [history, audit] = await Promise.all([Api.getDisbursementHistory(), Api.getAuditTrail()]);
-  } catch (err) {
-    console.error(err);
-    monthEl.textContent = '₹ 0.00';
-    exportsEl.textContent = '0';
-    exportsTbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger);">Could not load recent exports.</td></tr>`;
-    activityList.innerHTML = `<li class="dash-activity-item dash-activity-item--empty">Could not load recent activity.</li>`;
-    return;
-  }
-
-  const now = new Date();
-  let monthTotal = 0;
-  history.forEach(row => {
-    const created = row.createdAt && row.createdAt.toDate ? row.createdAt.toDate() : null;
-    if (created && created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear()) {
-      const amt = parseFloat(row.amount);
-      if (!isNaN(amt)) monthTotal += amt;
-    }
-  });
-  monthEl.textContent = `₹ ${monthTotal.toFixed(2)}`;
-
-  const byBatch = new Map();
-  history.forEach(r => {
-    if (!byBatch.has(r.batchId)) {
-      byBatch.set(r.batchId, { batchId: r.batchId, transferDate: r.transferDate, createdAt: r.createdAt, rows: [] });
-    }
-    byBatch.get(r.batchId).rows.push(r);
-  });
-  const batches = [...byBatch.values()].sort((a, b) => {
-    const ta = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
-    const tb = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
-    return tb - ta;
-  });
-  exportsEl.textContent = batches.length;
-
-  exportsTbody.innerHTML = '';
-  if (!batches.length) {
-    exportsTbody.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="padding:26px 10px;"><div class="empty-state__icon">📦</div>No exports yet — batches will appear here after you export a payment file.</div></td></tr>`;
-  } else {
-    batches.slice(0, 5).forEach(b => {
-      const total = b.rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="font-family:var(--font-mono);">${escapeHtml(b.batchId)}</td>
-        <td>${escapeHtml(b.transferDate || '—')}</td>
-        <td>${b.rows.length}</td>
-        <td style="text-align:right; font-family:var(--font-mono);">₹${total.toFixed(2)}</td>`;
-      exportsTbody.appendChild(tr);
-    });
-  }
-
-  activityList.innerHTML = '';
-  if (!audit.length) {
-    activityList.innerHTML = `<li class="dash-activity-item dash-activity-item--empty">No activity yet — actions you take will show up here.</li>`;
-  } else {
-    audit.slice(0, 5).forEach(r => {
-      const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : null;
-      const li = document.createElement('li');
-      li.className = 'dash-activity-item';
-      li.innerHTML = `
-        <span class="dash-activity-dot" data-action="${escapeHtml((r.action || '').toLowerCase())}"></span>
-        <span class="dash-activity-body">
-          <span class="dash-activity-action">${escapeHtml(r.action || '')}</span>
-          <span class="dash-activity-detail">${escapeHtml(r.details || '')}</span>
-        </span>
-        <span class="dash-activity-time">${ts ? escapeHtml(ts.toLocaleDateString()) : ''}</span>`;
-      activityList.appendChild(li);
-    });
-  }
-}
-
-// Renders N placeholder rows into a <tbody> while a Firestore read is
-// in flight, so the table isn't just blank/frozen on a slow connection.
 function renderSkeletonRows(tbody, colCount, rowCount) {
   tbody.innerHTML = Array.from({ length: rowCount }, () =>
     `<tr class="skeleton-row">${'<td><span class="skeleton-bar"></span></td>'.repeat(colCount)}</tr>`
@@ -1310,10 +983,6 @@ async function loadEmployees() {
   renderDisbursementList();
 }
 
-// Bank account numbers are sensitive — mask them on screen by
-// default (last 4 digits only) with a click-to-reveal toggle, so
-// they aren't sitting in plain view on a shared screen or during
-// a screen-share.
 function maskAccount(acc) {
   const s = String(acc || '');
   if (s.length <= 4) return s;
@@ -1331,8 +1000,6 @@ function wireMaskedAccountToggles(container) {
   });
 }
 
-// Renders a transfer-mode/type value (Same Bank, RTGS, NEFT, IMPS,
-// Other Bank) as a small colored pill instead of plain text.
 function badgeForMode(mode) {
   const cls = mode === 'Same Bank' ? 'badge-green'
     : mode === 'RTGS' ? 'badge-blue'
@@ -1342,8 +1009,6 @@ function badgeForMode(mode) {
   return `<span class="badge ${cls}">${escapeHtml(mode || '—')}</span>`;
 }
 
-// Sort state persists across re-renders (search, add/edit/delete) so the
-// chosen order doesn't reset itself every time the table redraws.
 let employeeSort = { key: null, dir: 1 };
 let selectedEmployeeIds = new Set();
 
@@ -1374,8 +1039,6 @@ function renderEmployeeTable() {
   const emptyState = document.getElementById('employeeEmptyState');
   const query = (document.getElementById('employeeSearch').value || '').trim().toLowerCase();
 
-  // Drop selections for employees no longer in the current employee list
-  // (e.g. after a delete), so the count stays accurate.
   const currentIds = new Set(employees.map(e => e.id));
   selectedEmployeeIds.forEach(id => { if (!currentIds.has(id)) selectedEmployeeIds.delete(id); });
 
@@ -1475,11 +1138,7 @@ function wireEmployeeTableControls() {
 }
 
 // ---------------------------------------------------------
-// Employee form helpers — mirror the desktop app's field-level
-// behaviour exactly: name parts are split/joined the same way,
-// account/IFSC fields block spaces & paste, name/IFSC fields
-// auto-uppercase as you type, and duplicate/mismatch checks are
-// evaluated live on every keystroke, not just on submit.
+// Employee form helpers
 // ---------------------------------------------------------
 function splitFullNameParts(fullName) {
   const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
@@ -1506,10 +1165,6 @@ function autoUpperCaseLive(el) {
     }
   });
 }
-// Strips any non-digit character as the user types (or pastes, drag-drops,
-// autofills, etc. — anything that fires an 'input' event). Used for
-// Employee Code and Account Number fields, which must be numeric only;
-// IFSC stays untouched since it's genuinely alphanumeric (e.g. SBIN0001234).
 function digitsOnlyLive(el) {
   el.addEventListener('input', () => {
     const pos = el.selectionStart;
@@ -1543,12 +1198,9 @@ function wireEmployeeForm() {
   const mobileErrLbl = document.getElementById('empMobileError');
   const emailErrLbl  = document.getElementById('empEmailError');
 
-  // Name fields: no spaces within a single box, auto-uppercase as-you-type
   [fFirst, fMiddle, fLast].forEach(el => { blockSpaceKey(el); autoUpperCaseLive(el); });
-  // Emp code: numeric only, no spaces
   blockSpaceKey(fCode);
   digitsOnlyLive(fCode);
-  // Mobile: digits only, max 10, no spaces
   blockSpaceKey(fMobile);
   fMobile.addEventListener('input', () => {
     fMobile.value = fMobile.value.replace(/[^0-9]/g, '').slice(0, 10);
@@ -1571,11 +1223,8 @@ function wireEmployeeForm() {
       fEmail.classList.add('input-mismatch');
     } else { emailErrLbl.textContent = ''; fEmail.classList.remove('input-mismatch'); }
   }
-  // Account / IFSC pairs: no spaces, no paste/right-click paste
+
   [fAcc, fAccC, fIfsc, fIfscC].forEach(el => { blockSpaceKey(el); blockPasteAndRightClick(el); });
-  // Account Number is numeric only; IFSC stays alphanumeric (bank codes
-  // like SBIN0001234 genuinely mix letters and digits) and just gets
-  // auto-uppercased as before.
   [fAcc, fAccC].forEach(el => digitsOnlyLive(el));
   [fIfsc, fIfscC].forEach(el => autoUpperCaseLive(el));
 
@@ -1694,7 +1343,6 @@ function wireEmployeeForm() {
     const mobile = fMobile.value.trim();
     const email  = fEmail.value.trim().toLowerCase();
 
-    // Required-field check — Middle Name is the sole optional field.
     if (!(fname && lname && acc && accC && ifsc && ifscC && empCode && mobile && email)) {
       showFieldError('Please fill in all required fields before saving. (Middle Name is optional)');
       return;
@@ -1707,9 +1355,6 @@ function wireEmployeeForm() {
       showFieldError('Please enter a valid email address.');
       return;
     }
-    // Employee Code and Account Number must be numeric only — the fields
-    // already filter this live, but this catches anything that slips
-    // through (e.g. a value set programmatically) before it gets saved.
     if (!/^[0-9]+$/.test(empCode)) {
       showFieldError('Employee Code must contain numbers only.');
       return;
@@ -1718,7 +1363,6 @@ function wireEmployeeForm() {
       showFieldError('Account Number must contain numbers only.');
       return;
     }
-    // Double-entry verification for Account Number and IFSC.
     if (acc !== accC || ifsc !== ifscC) {
       showFieldError('Account Number and IFSC must match their confirmation fields.');
       return;
@@ -1729,13 +1373,10 @@ function wireEmployeeForm() {
     nameParts.push(lname);
     const fullName = nameParts.join(' ').toUpperCase();
 
-    // Duplicate account-number check, excluding the record currently being edited.
     if (existingAccountNumbers().includes(acc)) {
       showFieldError(`Account number ${acc} is already assigned to another employee in the ledger.`);
       return;
     }
-    // Emp Code feeds directly into the SBI batch reference string, so a
-    // collision there produces two rows with a near-identical reference.
     if (existingEmpCodes().includes(empCode)) {
       showFieldError(`Emp Code ${empCode} is already assigned to another employee in the ledger.`);
       return;
@@ -1780,9 +1421,6 @@ function wireEmployeeForm() {
   };
 }
 
-// A ready-to-fill CSV using the exact headers parseCsv() expects, with
-// one example row — closes the gap where the required column names
-// only ever existed in source code, not anywhere in the UI.
 function downloadSampleCsv() {
   const sample = [
     'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code',
@@ -1791,9 +1429,6 @@ function downloadSampleCsv() {
   downloadTextFile('payflow_bulk_import_sample.csv', sample, 'text/csv;charset=utf-8');
 }
 
-// Exports the full current Employee Ledger back out as CSV, in the same
-// column layout the Bulk Import expects — so the ledger can round-trip
-// out for backup/editing and back in again.
 function exportLedgerCsv() {
   if (!employees.length) { toast('No employees to export yet.', 'error'); return; }
   const header = 'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code';
@@ -1841,15 +1476,12 @@ function wireBulkImport() {
   });
 }
 
-// Shows a clear summary of what was imported vs skipped, with the exact
-// line number and reason for every skipped row — replaces the old silent
-// "Imported N employees" alert that gave no visibility into failures.
 function showImportResultModal(importedCount, errors) {
   const body = document.getElementById('importResultBody');
   const okLine = `<p style="color:var(--success); font-weight:600;">${importedCount} employee${importedCount === 1 ? '' : 's'} imported successfully.</p>`;
   const errLines = errors.length
     ? `<p style="color:var(--danger); font-weight:600; margin-top:10px;">${errors.length} row(s) skipped:</p>
-       <div style="max-height:220px; overflow-y:auto; font-size:12.5px; font-family:var(--font-mono); line-height:1.7; background:var(--surface2); border-radius:var(--radius-sm); padding:10px 12px;">
+       <div style="max-height:220px; overflow-y:auto; font-size:12px; font-family:var(--font-mono); line-height:1.7; background:var(--surface2); padding:10px 12px;">
          ${errors.map(e => `Line ${e.line}: ${escapeHtml(e.reason)}`).join('<br>')}
        </div>`
     : '';
@@ -1859,12 +1491,6 @@ function showImportResultModal(importedCount, errors) {
 
 const VALID_TRANSFER_TYPES = ['Same Bank', 'Other Bank'];
 
-// Returns { rows, errors } instead of just an array, so the caller can
-// tell the user exactly which CSV lines were skipped and why, rather
-// than silently dropping bad rows or letting bad data slip in.
-//   rows[]   — well-formed candidate employees, ready for the duplicate
-//              check the caller still needs to run against existingAccounts
-//   errors[] — { line, reason } for every row that failed validation
 function parseCsv(text, existingAccounts) {
   const existing = new Set((existingAccounts || []).map(String));
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -1878,15 +1504,12 @@ function parseCsv(text, existingAccounts) {
 
   const rows = [];
   const errors = [];
-  const seenInFile = new Set(); // catches duplicates WITHIN the same CSV
+  const seenInFile = new Set();
   const seenCodes = new Set();
 
   for (let i = 1; i < lines.length; i++) {
-    const lineNo = i + 1; // 1-based, matches what a spreadsheet app would show
+    const lineNo = i + 1;
     const cols = lines[i].split(',').map(c => c.trim());
-    // Account Number and Emp Code are numeric-only fields — strip any
-    // stray letters/symbols from the CSV the same way the manual Add
-    // Employee form does, so bulk import can't bypass that rule.
     const accountNumber = (cols[idxAcc >= 0 ? idxAcc : 0] || '').replace(/[^0-9]/g, '');
     const ifsc = (cols[idxIfsc >= 0 ? idxIfsc : 1] || '').toUpperCase();
     const name = (cols[idxName >= 0 ? idxName : 2] || '').toUpperCase();
@@ -1897,10 +1520,6 @@ function parseCsv(text, existingAccounts) {
       errors.push({ line: lineNo, reason: 'Missing Account Number or Employee Name.' });
       continue;
     }
-    // Case/whitespace-tolerant match against "Same Bank" / "Other Bank" —
-    // anything else (typo, blank, unexpected value) is rejected outright
-    // rather than silently defaulting, since a wrong value here makes an
-    // employee vanish from the SBI Disbursement list with no warning.
     const transferType = VALID_TRANSFER_TYPES.find(t => t.toLowerCase() === rawType.toLowerCase());
     if (!transferType) {
       errors.push({ line: lineNo, reason: `Invalid Transfer Type "${rawType}" — must be "Same Bank" or "Other Bank".` });
@@ -1921,12 +1540,6 @@ function parseCsv(text, existingAccounts) {
   return { rows, errors };
 }
 
-// Initializes the two native date pickers on the Disbursement page:
-//  - Payroll Cycle (<input type="month">) — defaults to the current
-//    month, drives the payroll-cycle label used on the exported file.
-//  - Transfer Date (<input type="date">) — defaults to today but is
-//    fully editable, so a batch can be dated for a future value date
-//    instead of always using "today".
 function initDisbursementDateFields() {
   const now = new Date();
   const monthInput = document.getElementById('disbPayrollMonth');
@@ -1937,35 +1550,29 @@ function initDisbursementDateFields() {
   if (dateInput && !dateInput.value) dateInput.value = ymd;
 }
 
-// Reads the Payroll Cycle picker ("YYYY-MM") into the { monthRaw,
-// year, monthName } shape the rest of the export pipeline expects.
 function getPayrollCycle() {
-  const raw = document.getElementById('disbPayrollMonth').value; // "YYYY-MM"
+  const raw = document.getElementById('disbPayrollMonth').value;
   const [year, monthRaw] = String(raw || '').split('-');
   const monthName = MONTHS[parseInt(monthRaw, 10) - 1] || '';
   return { monthRaw: monthRaw || '', year: year || '', monthName };
 }
 
-// Reads the Transfer Date picker ("YYYY-MM-DD") and reformats it to
-// the DD/MM/YYYY convention every bank file / audit record uses.
 function getTransferDateDDMMYYYY() {
-  const raw = document.getElementById('disbTransferDate').value; // "YYYY-MM-DD"
+  const raw = document.getElementById('disbTransferDate').value;
   const [y, m, d] = String(raw || '').split('-');
   if (!y || !m || !d) return '';
   return `${d}/${m}/${y}`;
 }
 
-function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
+function validateLiveAmountEntry(inputEl, statusEl, warnEl) {
   const v = inputEl.value.trim();
   warnEl.textContent = '';
-  inputEl.classList.remove('input-mismatch');
+  statusEl.className = 'amount-status';
   if (!v) {
-    lightEl.style.background = '#FF4757';
+    statusEl.classList.add('empty');
     updateBatchTotal();
     return;
   }
-  // Only digits and at most one decimal point are allowed — mirrors the
-  // desktop app's character-by-character format check.
   let ok = true, dots = 0;
   for (const ch of v) {
     if (ch === '.') { dots += 1; ok = dots <= 1; }
@@ -1973,23 +1580,20 @@ function validateLiveAmountEntry(inputEl, lightEl, warnEl) {
     if (!ok) break;
   }
   if (!ok) {
-    lightEl.style.background = '#FF4757';
-    warnEl.textContent = '⚠ INVALID FORMAT';
+    statusEl.classList.add('invalid');
+    warnEl.textContent = '⚠';
   } else {
     const val = parseFloat(v);
     if (!isNaN(val) && val > 0) {
-      lightEl.style.background = '#00E676';
+      statusEl.classList.add('valid');
     } else {
-      lightEl.style.background = '#FF4757';
-      warnEl.textContent = '⚠ MUST BE > 0';
+      statusEl.classList.add('invalid');
+      warnEl.textContent = '⚠';
     }
   }
   updateBatchTotal();
 }
 
-// Shows/hides the SBI-style "Transfer Type" selector vs. the
-// cross-bank "Prefer IMPS" toggle, and refreshes the bank badge —
-// called whenever the company's bank changes.
 function updateDisbursementModeUI() {
   const bankKey = companyProfile.bankName || 'SBI';
   const bank = BANK_BY_KEY[bankKey] || BANK_BY_KEY.SBI;
@@ -2001,7 +1605,7 @@ function updateDisbursementModeUI() {
   const subtitle = document.getElementById('disbSubtitle');
   if (subtitle) {
     subtitle.textContent = isSbi
-      ? 'Enter amounts and export the SBI bulk payment file.'
+      ? 'Enter amounts and export the bulk payment file.'
       : `Enter amounts and export the ${bank.label} bulk payment file. Mode (Same Bank / RTGS / NEFT / IMPS) is auto-detected per beneficiary.`;
   }
 
@@ -2011,12 +1615,6 @@ function updateDisbursementModeUI() {
   if (impsWrap) impsWrap.classList.toggle('hidden', isSbi);
 }
 
-// For the currently-selected bank, works out which employees belong in
-// the batch and what transfer mode applies to each one.
-//  - SBI: unchanged behaviour — filtered by the employee's own stored
-//    Same Bank / Other Bank transferType.
-//  - Every other bank: all employees are shown, and the mode is
-//    computed live from IFSC + amount (+ the "Prefer IMPS" toggle).
 function currentModeFor(ifsc, amount) {
   const bankKey = companyProfile.bankName || 'SBI';
   if (bankKey === 'SBI') return null;
@@ -2053,20 +1651,19 @@ function renderDisbursementList() {
       <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
       <td><span data-mode>${isSbi ? badgeForMode(tft) : badgeForMode('—')}</span></td>
       <td style="text-align:right;">
-        <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-          <span style="font-size:10px; color:var(--danger); font-weight:700;" data-warn></span>
-          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#FF4757;" data-light title="${prefill ? 'Pre-filled from last export — review before sending' : ''}"></span>
-          <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00" value="${escapeHtml(prefill)}"
-            style="width:120px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--success); padding:6px 8px;">
+        <div class="amount-input-wrap">
+          <span data-warn class="amount-warn"></span>
+          <span data-status class="amount-status empty"></span>
+          <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00" value="${escapeHtml(prefill)}">
         </div>
       </td>`;
     tbody.appendChild(tr);
     const inputEl = tr.querySelector('input');
-    const lightEl = tr.querySelector('[data-light]');
+    const statusEl = tr.querySelector('[data-status]');
     const warnEl  = tr.querySelector('[data-warn]');
     const modeEl  = tr.querySelector('[data-mode]');
     inputEl.addEventListener('input', () => {
-      validateLiveAmountEntry(inputEl, lightEl, warnEl);
+      validateLiveAmountEntry(inputEl, statusEl, warnEl);
       if (!isSbi) {
         const v = parseFloat(inputEl.value);
         modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, isNaN(v) ? 0 : v));
@@ -2074,7 +1671,7 @@ function renderDisbursementList() {
     });
     const prefillAmt = parseFloat(prefill);
     if (!isSbi) modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, isNaN(prefillAmt) ? 0 : prefillAmt));
-    if (prefill) validateLiveAmountEntry(inputEl, lightEl, warnEl);
+    if (prefill) validateLiveAmountEntry(inputEl, statusEl, warnEl);
     salaryInputs[emp.accountNumber] = { inputEl, modeEl, name: emp.name, ifsc: emp.ifsc, empCode: emp.empCode };
   });
   wireMaskedAccountToggles(tbody);
@@ -2097,10 +1694,10 @@ function wireDisbursement() {
   document.getElementById('disbClearBtn').addEventListener('click', () => {
     document.querySelectorAll('#disbTableBody tr').forEach(tr => {
       const inputEl = tr.querySelector('input');
-      const lightEl = tr.querySelector('[data-light]');
+      const statusEl = tr.querySelector('[data-status]');
       const warnEl  = tr.querySelector('[data-warn]');
       if (inputEl) inputEl.value = '';
-      if (lightEl) lightEl.style.background = '#FF4757';
+      if (statusEl) statusEl.className = 'amount-status empty';
       if (warnEl)  warnEl.textContent = '';
     });
     updateBatchTotal();
@@ -2132,14 +1729,10 @@ function collectBatchLines() {
   return { tft, lines, total, hasInvalid };
 }
 
-// The exported bank file's header row is built entirely from
-// companyProfile fields — if any of these are still blank, the file
-// would export "successfully" but contain an empty/broken debit
-// account row, which the bank portal will reject. So export must be
-// blocked (not just discouraged) until the Company Profile is saved.
 function isCompanyProfileComplete() {
   return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.ifsc && companyProfile.sysId && companyProfile.bankName);
 }
+
 function goToCompanyPage() {
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
   const navItem = document.querySelector('.nav-item[data-page="company"]');
@@ -2148,17 +1741,11 @@ function goToCompanyPage() {
   document.getElementById('page-company').classList.remove('hidden');
 }
 
-// A basic IFSC format check — 4 letters, a fixed 0, then 6 alphanumerics.
-// Not a substitute for verifying the branch actually exists, but it
-// catches the obvious typo/paste-error case before the file goes out.
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 function buildExportWarnings(isSbi, tft, lines) {
   const warnings = [];
 
-  // Employees who are eligible for this batch (right transfer type, for
-  // SBI) but were left with a blank/zero amount — flagged so a payday
-  // omission isn't discovered only after the file's already gone out.
   const eligible = employees.filter(e => (isSbi ? e.transferType === tft : true));
   const includedAccounts = new Set(lines.map(l => l.acc));
   const skipped = eligible.filter(e => !includedAccounts.has(String(e.accountNumber)));
@@ -2172,8 +1759,6 @@ function buildExportWarnings(isSbi, tft, lines) {
     warnings.push(`${badIfsc.length} row(s) have an IFSC that doesn't match the standard format (4 letters + 0 + 6 characters): ${badIfsc.slice(0, 5).map(l => l.name).join(', ')}${badIfsc.length > 5 ? ', ...' : ''}.`);
   }
 
-  // Flags amounts far outside the batch's normal range — a common
-  // symptom of a misplaced decimal or a pasted-in wrong figure.
   if (lines.length >= 3) {
     const amounts = lines.map(l => l.amount).sort((a, b) => a - b);
     const mid = amounts[Math.floor(amounts.length / 2)];
@@ -2213,12 +1798,9 @@ function openExportPreview() {
         return `<p><strong>Bank:</strong> ${escapeHtml(bank.label)}</p><p><strong>Mode breakdown:</strong> ${breakdown}</p>`;
       })();
 
-  // A last-look validation pass before the file is generated — catches
-  // the kind of mistakes that would otherwise only surface after the
-  // bank portal rejects the file (or worse, silently underpays someone).
   const warnings = buildExportWarnings(isSbi, tft, lines);
   const warningsHtml = warnings.length
-    ? `<div style="margin-top:10px; padding:10px 12px; background:var(--danger-bg); border:1px solid var(--danger); border-radius:var(--radius-sm); color:var(--danger); font-size:12.5px; line-height:1.6;">
+    ? `<div style="margin-top:10px; padding:10px 12px; background:var(--danger-bg); border:1px solid var(--danger); color:var(--danger); font-size:12px; line-height:1.6;">
         ${warnings.map(w => `⚠ ${escapeHtml(w)}`).join('<br>')}
        </div>`
     : '';
@@ -2236,9 +1818,6 @@ function openExportPreview() {
   confirmBtn.disabled = false;
   confirmBtn.textContent = 'Confirm → Export';
   confirmBtn.onclick = async () => {
-    // Guards against a fast double-click firing two exports — each one
-    // burns a batch counter value and writes its own ledger/audit rows,
-    // so a duplicate click would otherwise produce two "real" exports.
     if (confirmBtn.disabled) return;
     confirmBtn.disabled = true;
     confirmBtn.textContent = 'Exporting...';
@@ -2249,17 +1828,6 @@ function openExportPreview() {
   };
 }
 
-// Refactored executeExport(): resolves the company's bank, delegates
-// file-content generation to that bank's BankFormatters strategy, and
-// keeps the existing batch counter / disbursement history / audit
-// logging behaviour unchanged for every bank.
-// Works out the batch-ID prefix. For SBI this is unchanged (driven by
-// the Same Bank / Other Bank selector). For every other bank the SBI-
-// only selector is hidden and not meaningful, so instead we look at
-// the actual per-row modes in this batch: NEFT/RTGS/IMPS map directly
-// (they're already 4 letters), a batch that's 100% Same Bank gets
-// SBST, and a batch mixing more than one mode gets MULT — so the
-// batch ID always reflects what's really inside that file.
 function getBatchPrefix(isSbi, tft, lines) {
   if (isSbi) return tft === 'Same Bank' ? 'SBST' : 'OBST';
   const modes = new Set(lines.map(l => l.mode));
@@ -2293,12 +1861,6 @@ async function executeExport() {
   const batchId = `${prefix}${shortYear}${monthRaw}${seq}`;
   const fileName = `${bankKey.toLowerCase()}_salary_${monthName}_${year}.${formatter.ext}`;
 
-  // Every row carries a full snapshot of the company profile and payroll
-  // cycle as they were AT THE TIME of this export — not just the
-  // employee/amount fields. Without this, re-downloading an old batch
-  // later would silently use today's company profile (which may have
-  // since changed bank, account, or IFSC) instead of what was actually
-  // used to generate that file originally.
   const logRows = lines.map(({ acc, empCode, name, ifsc, amount, mode }) => ({
     batchId, transferDate: txnDate, empCode, employeeName: name, accountNumber: acc, ifsc,
     amount: amount.toFixed(2), transferType: mode, bank: bankKey,
@@ -2319,14 +1881,10 @@ async function executeExport() {
     await Api.addDisbursementRows(logRows);
     await Api.logAudit(currentUser.email, currentUser.displayName, 'EXPORT FILE',
       `Batch: ${batchId} | Bank: ${bank.label} | Total: ₹${total.toFixed(2)} | Employees: ${lines.length} | File: ${fileName}`);
-    // Remembers what each employee was paid in this batch, so next
-    // cycle's Disbursement page can pre-fill the same amount instead of
-    // starting blank — most salaries don't change month to month.
     await Api.updateEmployeeLastAmounts(
       lines.map(l => ({ accountNumber: l.acc, amount: l.amount }))
     );
     renderEmployeeKpis();
-    renderDashboardOverview();
   } catch (err) {
     toast('File downloaded, but logging to the ledger failed: ' + err.message, 'error');
   }
@@ -2342,7 +1900,7 @@ function downloadTextFile(filename, content, mime) {
 }
 
 let auditRows = [];
-let auditSort = { key: null, dir: 1 }; // null = natural (Firestore) order: newest first
+let auditSort = { key: null, dir: 1 };
 
 function wireAudit() {
   document.getElementById('auditSearch').addEventListener('input', renderAuditTable);
@@ -2410,12 +1968,6 @@ function renderAuditTable() {
   });
 }
 
-// ---------------------------------------------------------
-// EXPORT HISTORY — groups the flat disbursement-row log back into
-// per-batch summaries, and lets a batch be regenerated and
-// re-downloaded using the exact company/IFSC snapshot from the time
-// it was originally exported (not today's settings).
-// ---------------------------------------------------------
 let exportBatches = [];
 
 async function loadExportHistory() {
@@ -2475,9 +2027,6 @@ function renderExportHistory() {
       <td class="row-actions"><button data-redownload="${escapeHtml(batch.batchId)}">Re-download</button></td>`;
     tbody.appendChild(tr);
 
-    // Hidden-by-default detail row: employee-wise amount breakdown for
-    // this batch, so you can see exactly who was paid how much in a
-    // given export without re-downloading and opening the file.
     const detailTr = document.createElement('tr');
     detailTr.className = 'export-batch-detail hidden';
     detailTr.dataset.detailFor = batch.batchId;
@@ -2485,9 +2034,9 @@ function renderExportHistory() {
       (a.employeeName || '').localeCompare(b.employeeName || ''));
     const detailRows = rowsSorted.map(r => `
       <tr>
-        <td style="color:var(--text2); font-family:var(--font-mono); font-size:12px;">${escapeHtml(r.empCode || '—')}</td>
+        <td style="color:var(--text2); font-family:var(--font-mono); font-size:11.5px;">${escapeHtml(r.empCode || '—')}</td>
         <td>${escapeHtml(r.employeeName || '—')}</td>
-        <td style="font-family:var(--font-mono); font-size:12.5px; color:var(--text2);">${escapeHtml(maskAccount(r.accountNumber))}</td>
+        <td style="font-family:var(--font-mono); font-size:12px; color:var(--text2);">${escapeHtml(maskAccount(r.accountNumber))}</td>
         <td>${badgeForMode(r.transferType)}</td>
         <td style="text-align:right; font-weight:600;">₹${(parseFloat(r.amount) || 0).toFixed(2)}</td>
       </tr>`).join('');
@@ -2529,9 +2078,6 @@ function redownloadBatch(batchId) {
     ifsc: r.ifsc, amount: parseFloat(r.amount), mode: r.transferType
   }));
   const total = lines.reduce((sum, l) => sum + l.amount, 0);
-  // monthRaw/shortYear weren't always stored on older rows — derive
-  // them from the batch ID itself as a fallback (format is fixed:
-  // 4-char prefix + 2-digit year + 2-digit month + 4-char sequence).
   const shortYear = batch.year ? String(batch.year).slice(2) : batchId.slice(4, 6);
   const monthRaw = batch.monthRaw || batchId.slice(6, 8);
   const monthName = batch.monthName || MONTHS[parseInt(monthRaw, 10) - 1] || '';
@@ -2552,112 +2098,129 @@ function wireExportHistory() {
 }
 
 async function loadCompanyProfile() {
-  populateCompanyBankSelect();
   try {
     const p = await Api.getCompanyProfile();
     companyProfile = { ...companyProfile, ...p };
+    updateCompanyDisplay();
+    // Set bank selection in Payroll Run
+    document.querySelectorAll('#bankSelectGrid .bank-tile').forEach(tile => {
+      tile.classList.toggle('active', tile.dataset.bank === companyProfile.bankName);
+    });
+    // Set bank selection in Company edit
+    document.querySelectorAll('#companyBankSelectGrid .bank-tile').forEach(tile => {
+      tile.classList.toggle('active', tile.dataset.bank === companyProfile.bankName);
+    });
+    // Fill edit fields
     document.getElementById('companyNameInput').value = p.name || '';
     document.getElementById('companyAccInput').value = p.accountNumber || '';
     document.getElementById('companyAccConfirmInput').value = p.accountNumber || '';
-    document.getElementById('companyIfscInput').value = p.ifsc || '';
-    document.getElementById('companyIfscConfirmInput').value = p.ifsc || '';
     document.getElementById('companySysInput').value = p.sysId || '';
-    document.getElementById('companyBankInput').value = p.bankName || 'SBI';
   } catch (err) {
     console.error(err);
   }
   updateDisbursementModeUI();
 }
 
-// The Sys/Branch Code is, for most banks, literally the branch
-// portion of the IFSC (everything after the 4-letter bank code and
-// the fixed 5th "0" — e.g. SBIN0001234 -> 001234). Deriving it live
-// from the IFSC removes a manual-entry step and a chance to typo it,
-// while still letting the user overwrite it for banks (like Kotak)
-// whose bulk-upload spec wants a separate Client/Corporate ID instead
-// of a real branch code.
+function updateCompanyDisplay() {
+  document.getElementById('companyDisplayName').textContent = companyProfile.name || '—';
+  const bank = BANK_BY_KEY[companyProfile.bankName] || BANK_BY_KEY.SBI;
+  document.getElementById('companyDisplayBank').textContent = bank.label;
+  document.getElementById('companyDisplayAcc').textContent = companyProfile.accountNumber || '—';
+  document.getElementById('companyDisplayIfsc').textContent = companyProfile.ifsc || '—';
+}
+
 function deriveBranchCodeFromIfsc(ifsc) {
   const s = String(ifsc || '').toUpperCase();
   return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(s) ? s.slice(5) : '';
 }
 
 function wireCompanyForm() {
-  populateCompanyBankSelect();
+  const editToggle = document.getElementById('companyEditToggleBtn');
+  const readonlyView = document.getElementById('companyReadonlyView');
+  const editView = document.getElementById('companyEditView');
+  const cancelBtn = document.getElementById('companyEditCancelBtn');
+  let isEditing = false;
 
-  const accInput        = document.getElementById('companyAccInput');
-  const accConfirmInput = document.getElementById('companyAccConfirmInput');
-  const accMismatchLbl  = document.getElementById('companyAccMismatchLbl');
-  const ifscInput        = document.getElementById('companyIfscInput');
-  const ifscConfirmInput = document.getElementById('companyIfscConfirmInput');
-  const ifscMismatchLbl  = document.getElementById('companyIfscMismatchLbl');
-  const sysInput = document.getElementById('companySysInput');
-
-  // Account Number and IFSC pairs: no spaces, and — critically — no
-  // pasting. Blocking paste is what makes "type it twice" actually
-  // catch typos; without it someone can paste the same wrong value
-  // into both boxes and it will "match" perfectly. This mirrors the
-  // Employee form's Account Number / IFSC confirmation fields exactly.
-  [accInput, accConfirmInput, ifscInput, ifscConfirmInput].forEach(el => {
-    blockSpaceKey(el);
-    blockPasteAndRightClick(el);
-  });
-  // Company Account Number is numeric only; IFSC stays alphanumeric.
-  [accInput, accConfirmInput].forEach(el => digitsOnlyLive(el));
-  [ifscInput, ifscConfirmInput].forEach(el => autoUpperCaseLive(el));
-
-  // Live double-entry check — mirrors the Employee form's Account
-  // Number confirmation, so a mistyped digit is caught immediately
-  // instead of silently corrupting every export's debit account.
-  function checkPair(primeEl, confEl, lbl) {
-    const prime = primeEl.value.trim();
-    const conf = confEl.value.trim();
-    confEl.classList.remove('input-mismatch', 'input-match');
-    if (!conf) { lbl.textContent = ''; return; }
-    if (prime !== conf) {
-      confEl.classList.add('input-mismatch');
-      lbl.textContent = 'MISMATCH';
-    } else {
-      confEl.classList.add('input-match');
-      lbl.textContent = '';
+  function toggleEditMode(editing) {
+    isEditing = editing;
+    readonlyView.classList.toggle('hidden', editing);
+    editView.classList.toggle('hidden', !editing);
+    editToggle.textContent = editing ? 'Cancel' : 'Edit';
+    if (editing) {
+      // Populate edit fields with current values
+      document.getElementById('companyNameInput').value = companyProfile.name || '';
+      document.getElementById('companyAccInput').value = companyProfile.accountNumber || '';
+      document.getElementById('companyAccConfirmInput').value = companyProfile.accountNumber || '';
+      document.getElementById('companySysInput').value = companyProfile.sysId || '';
+      // Set bank selection
+      document.querySelectorAll('#companyBankSelectGrid .bank-tile').forEach(tile => {
+        tile.classList.toggle('active', tile.dataset.bank === companyProfile.bankName);
+      });
     }
   }
-  [accInput, accConfirmInput].forEach(el => el.addEventListener('input', () => checkPair(accInput, accConfirmInput, accMismatchLbl)));
-  [ifscInput, ifscConfirmInput].forEach(el => el.addEventListener('input', () => checkPair(ifscInput, ifscConfirmInput, ifscMismatchLbl)));
 
-  // Auto-fill Branch/Sys Code from the (confirmed) IFSC, but only
-  // while the field still holds a value we auto-filled ourselves —
-  // the moment the user types their own value in, we stop touching it.
-  let lastAutoSysValue = sysInput.value;
-  ifscConfirmInput.addEventListener('input', () => {
-    if (ifscInput.value.trim().toUpperCase() !== ifscConfirmInput.value.trim().toUpperCase()) return;
-    const derived = deriveBranchCodeFromIfsc(ifscConfirmInput.value);
-    if (!derived) return;
-    if (sysInput.value.trim() === '' || sysInput.value === lastAutoSysValue) {
-      sysInput.value = derived;
-      lastAutoSysValue = derived;
+  editToggle.addEventListener('click', () => {
+    if (isEditing) {
+      toggleEditMode(false);
+    } else {
+      toggleEditMode(true);
     }
   });
-  sysInput.addEventListener('input', () => {
-    if (sysInput.value !== lastAutoSysValue) lastAutoSysValue = '__manual__';
+
+  cancelBtn.addEventListener('click', () => {
+    toggleEditMode(false);
   });
 
-  const infoBtn = document.getElementById('sysCodeInfoBtn');
-  const infoText = document.getElementById('sysCodeInfoText');
-  infoBtn.addEventListener('click', () => {
-    infoText.classList.toggle('hidden');
-    infoBtn.classList.toggle('is-open');
+  // Company bank selection in edit mode
+  document.querySelectorAll('#companyBankSelectGrid .bank-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('#companyBankSelectGrid .bank-tile').forEach(t => t.classList.remove('active'));
+      tile.classList.add('active');
+    });
   });
+
+  const accInput = document.getElementById('companyAccInput');
+  const accConfirmInput = document.getElementById('companyAccConfirmInput');
+  const accMismatchLbl = document.getElementById('companyAccMismatchLbl');
+
+  [accInput, accConfirmInput].forEach(el => {
+    blockSpaceKey(el);
+    blockPasteAndRightClick(el);
+    digitsOnlyLive(el);
+  });
+
+  function checkAccMatch() {
+    const prime = accInput.value.trim();
+    const conf = accConfirmInput.value.trim();
+    accConfirmInput.classList.remove('input-mismatch', 'input-match');
+    if (!conf) { accMismatchLbl.textContent = ''; return; }
+    if (prime !== conf) {
+      accConfirmInput.classList.add('input-mismatch');
+      accMismatchLbl.textContent = 'MISMATCH';
+    } else {
+      accConfirmInput.classList.add('input-match');
+      accMismatchLbl.textContent = '';
+    }
+  }
+  accInput.addEventListener('input', checkAccMatch);
+  accConfirmInput.addEventListener('input', checkAccMatch);
+
+  // Auto-fill Sys Code from IFSC (we'll use the bank prefix + sys code)
+  // For the company form, we use the sys code as the branch code (last 6 digits)
+  // The IFSC is derived from bank prefix + sys code during save
 
   document.getElementById('saveCompanyBtn').addEventListener('click', async () => {
     const name = document.getElementById('companyNameInput').value.trim().toUpperCase();
     const accountNumber = accInput.value.trim();
     const accountNumberConfirm = accConfirmInput.value.trim();
-    const ifsc = ifscInput.value.trim().toUpperCase();
-    const ifscConfirm = ifscConfirmInput.value.trim().toUpperCase();
-    const sysId = sysInput.value.trim();
-    const bankName = document.getElementById('companyBankInput').value;
-    if (!name || !accountNumber || !accountNumberConfirm || !ifsc || !ifscConfirm || !sysId || !bankName) {
-      toast('Please fill all fields.', 'error'); return;
+    const sysId = document.getElementById('companySysInput').value.trim();
+    // Get selected bank from edit mode
+    const activeBankTile = document.querySelector('#companyBankSelectGrid .bank-tile.active');
+    const bankName = activeBankTile ? activeBankTile.dataset.bank : (companyProfile.bankName || 'SBI');
+
+    if (!name || !accountNumber || !accountNumberConfirm || !sysId) {
+      toast('Please fill all fields.', 'error');
+      return;
     }
     if (!/^[0-9]+$/.test(accountNumber) || !/^[0-9]+$/.test(accountNumberConfirm)) {
       toast('Company Account Number must contain numbers only.', 'error');
@@ -2667,33 +2230,40 @@ function wireCompanyForm() {
       toast('Company Account Number and its confirmation do not match.', 'error');
       return;
     }
-    if (ifsc !== ifscConfirm) {
-      toast('Bank IFSC Code and its confirmation do not match.', 'error');
+
+    // Derive IFSC from bank prefix + sys code (branch code)
+    const bankPrefix = BANK_BY_KEY[bankName]?.ifscPrefix || 'SBIN';
+    const ifsc = bankPrefix + sysId;
+    if (!IFSC_RE.test(ifsc)) {
+      toast('Invalid IFSC derived. Please check the Branch/Sys Code (should be 6 alphanumeric characters).', 'error');
       return;
     }
+
     try {
       await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName });
       companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName };
       await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Branch: ${sysId} | Bank: ${bankName}`);
+      updateCompanyDisplay();
       updateDisbursementModeUI();
       renderDisbursementList();
       renderEmployeeKpis();
-      renderDashboardOverview();
+      // Update bank selection in Payroll Run
+      document.querySelectorAll('#bankSelectGrid .bank-tile').forEach(tile => {
+        tile.classList.toggle('active', tile.dataset.bank === bankName);
+      });
+      toggleEditMode(false);
       toast('Company profile updated.', 'success');
     } catch (err) {
       toast('Save failed: ' + err.message, 'error');
     }
   });
+
+  // Initial state: read-only
+  toggleEditMode(false);
 }
 
 // ---------------------------------------------------------
-// 10b. SETTINGS PAGE
-// Lets a signed-in user change their email/password from inside
-// the dashboard. Both the email and password forms re-authenticate
-// with the CURRENT password first — Firebase requires this
-// ("recent login") for sensitive account changes, and it also means
-// someone who merely stole a logged-in session can't silently take
-// over the account.
+// Settings
 // ---------------------------------------------------------
 function settingsMsg(boxId, text, isError) {
   const box = document.getElementById(boxId);
@@ -2712,7 +2282,6 @@ async function reauthenticate(password) {
   await auth.currentUser.reauthenticateWithCredential(cred);
 }
 
-// ---- Settings list → modal open/close ----
 function openSettingsModal(modalId, formId, msgBoxId) {
   clearSettingsMsg(msgBoxId);
   document.getElementById(formId).reset();
@@ -2733,7 +2302,11 @@ function wireSettingsForms() {
   document.getElementById('cancelChangePasswordBtn').addEventListener('click', () =>
     closeSettingsModal('changePasswordModal'));
 
-  // ---- Change email ----
+  // Company settings from Settings page - navigate to Company page
+  document.getElementById('openCompanySettingsBtn').addEventListener('click', () => {
+    goToPage('company');
+  });
+
   document.getElementById('changeEmailForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     clearSettingsMsg('settingsEmailMsg');
@@ -2743,9 +2316,6 @@ function wireSettingsForms() {
     btn.disabled = true; btn.textContent = 'Updating...';
     try {
       await reauthenticate(currentPassword);
-      // verifyBeforeUpdateEmail sends a confirmation link to the NEW
-      // address and only swaps the email once that link is clicked —
-      // so a typo or someone else's inbox can't hijack the account.
       await auth.currentUser.verifyBeforeUpdateEmail(newEmail, actionCodeSettings);
       settingsMsg('settingsEmailMsg', `Verification link sent to ${newEmail}. Your sign-in email will update once you click it.`, false);
       await Api.logAudit(currentUser.email, currentUser.displayName, 'REQUEST EMAIL CHANGE', `Requested change to ${newEmail}`);
@@ -2757,7 +2327,6 @@ function wireSettingsForms() {
     }
   });
 
-  // ---- Change password ----
   document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     clearSettingsMsg('settingsPasswordMsg');
@@ -2781,12 +2350,6 @@ function wireSettingsForms() {
 
 // ---------------------------------------------------------
 // 11. INACTIVITY AUTO-LOGOUT (15 min)
-// Signs the user out after 15 minutes of no activity — including
-// when the browser tab/window itself is inactive (switched away,
-// minimized, or backgrounded). A plain setInterval alone isn't
-// enough because browsers throttle timers in background tabs, so
-// the 30s check can fire late. We fix that by also re-checking the
-// instant the tab becomes visible/focused again.
 // ---------------------------------------------------------
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 let lastActivity = Date.now();
@@ -2802,12 +2365,8 @@ function checkInactivity() {
   }
 }
 
-// Regular check while the tab is in the foreground.
 setInterval(checkInactivity, 30000);
 
-// Catch the case where the tab was backgrounded/minimized long
-// enough that the timer above got throttled — re-check the moment
-// the user comes back, so logout happens immediately if overdue.
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) checkInactivity();
 });

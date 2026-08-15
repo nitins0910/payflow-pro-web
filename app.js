@@ -112,15 +112,26 @@ const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 const FUNCTIONS_BASE_URL = "https://incomparable-cat-722533.netlify.app/"; // "" = same origin, or "https://your-site.netlify.app"
 
 async function callBillingFunction(name, body) {
+  // Strip any trailing slash on FUNCTIONS_BASE_URL before joining, so we
+  // never end up with a double slash like ".app//.netlify/functions/...".
+  const base = FUNCTIONS_BASE_URL.replace(/\/+$/, '');
   const idToken = await auth.currentUser.getIdToken();
-  const res = await fetch(`${FUNCTIONS_BASE_URL}/.netlify/functions/${name}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+  let res;
+  try {
+    res = await fetch(`${base}/.netlify/functions/${name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (e) {
+    // Network failure or a CORS-blocked response lands here as a
+    // rejected fetch — surface it as a normal "not ok" result instead
+    // of letting it throw, so callers (ensureExportAllowed) never hang.
+    return { ok: false, status: 0, data: { error: 'Could not reach the billing server. Check your connection and try again.' } };
+  }
   let data;
   try { data = await res.json(); } catch (e) { data = {}; }
   return { ok: res.ok, status: res.status, data };
@@ -2574,21 +2585,24 @@ async function openExportPreview() {
     confirmBtn.disabled = true;
     confirmBtn.textContent = 'Checking...';
 
-    // Billing gate: consumes the free export (first time ever) or a
-    // paid credit; if neither is available, this opens Razorpay
-    // checkout and only continues after a verified ₹50 payment.
-    const allowed = await ensureExportAllowed();
-    if (!allowed) {
+    try {
+      // Billing gate: consumes the free export (first time ever) or a
+      // paid credit; if neither is available, this opens Razorpay
+      // checkout and only continues after a verified ₹50 payment.
+      const allowed = await ensureExportAllowed();
+      if (!allowed) return;
+
+      confirmBtn.textContent = 'Exporting...';
+      document.getElementById('exportPreviewModal').classList.add('hidden');
+      await executeExport();
+    } catch (e) {
+      toast('Something went wrong: ' + (e && e.message ? e.message : e), 'error');
+    } finally {
+      // Always runs — even on an unexpected throw — so the button can
+      // never get stuck on "Checking..." / "Exporting..." again.
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Confirm → Export';
-      return;
     }
-
-    confirmBtn.textContent = 'Exporting...';
-    document.getElementById('exportPreviewModal').classList.add('hidden');
-    await executeExport();
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = 'Confirm → Export';
   };
 }
 

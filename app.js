@@ -899,6 +899,46 @@ function wirePasswordToggles() {
   });
 }
 
+// ---------------------------------------------------------
+// 4c. SIGNUP PASSWORD STRENGTH METER
+// Purely a visual UX aid — does NOT relax or replace the real
+// validation (minlength=8 on the input, and whatever Firebase Auth
+// itself enforces). Scores on length + character variety.
+// ---------------------------------------------------------
+function passwordStrengthScore(pw) {
+  if (!pw) return 0;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+  if (/\d/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return Math.min(score, 4);
+}
+
+function wirePasswordStrengthMeter() {
+  const input = document.getElementById('signupPassword');
+  const bar = document.getElementById('pwStrengthBar');
+  const label = document.getElementById('pwStrengthLabel');
+  if (!input || !bar || !label || input.dataset.strengthWired) return;
+  input.dataset.strengthWired = '1';
+
+  const LEVELS = [
+    { cls: '', text: 'At least 8 characters.' },
+    { cls: 'is-weak', text: 'Weak — try adding numbers or a symbol.' },
+    { cls: 'is-fair', text: 'Fair — mix upper/lowercase, numbers or symbols.' },
+    { cls: 'is-good', text: 'Good password.' },
+    { cls: 'is-strong', text: 'Strong password.' }
+  ];
+
+  input.addEventListener('input', () => {
+    const score = input.value ? Math.max(1, passwordStrengthScore(input.value)) : 0;
+    const level = LEVELS[input.value ? score : 0];
+    bar.className = 'pw-strength' + (level.cls ? ' ' + level.cls : '');
+    label.textContent = level.text;
+  });
+}
+
 // Always land on the LOGIN form (not signup) whenever we route back
 // to the auth screen — fixes "stuck on signup form" after verifying
 // email, logging out, or clicking "use a different account".
@@ -1302,6 +1342,7 @@ wireAuthForms();
 wireVerifyPending();
 wireCompleteProfileForm();
 wirePasswordToggles();
+wirePasswordStrengthMeter();
 
 (function boot() {
   const params = new URLSearchParams(window.location.search);

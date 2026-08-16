@@ -272,6 +272,27 @@ a{color:var(--blue-bright); text-decoration:none;}
   font-size:11px; color:var(--text3); margin-top:5px; line-height:1.5;
 }
 
+/* ---------------- Password strength meter ---------------- */
+.pw-strength{
+  display:flex;
+  gap:4px;
+  margin-top:9px;
+}
+.pw-strength span{
+  height:4px;
+  flex:1;
+  border-radius:2px;
+  background:var(--border-soft);
+  transition:background .2s var(--ease);
+}
+.pw-strength.is-weak span:nth-child(1){ background:var(--danger); }
+.pw-strength.is-fair span:nth-child(1),
+.pw-strength.is-fair span:nth-child(2){ background:#f59e0b; }
+.pw-strength.is-good span:nth-child(1),
+.pw-strength.is-good span:nth-child(2),
+.pw-strength.is-good span:nth-child(3){ background:#3b82f6; }
+.pw-strength.is-strong span{ background:var(--success); }
+
 /* ---------------- Forgot password link ---------------- */
 .forgot-link-row{ display:flex; justify-content:flex-end; margin:-8px 0 16px; }
 .forgot-link-row button{
@@ -1143,50 +1164,169 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
   .toolbar-actions{ width:100%; }
   .toolbar-actions .btn-inline, .toolbar-actions a{ flex:1; text-align:center; }
 }
+
 /* ------------------------------------------------------------
-   Bank compatibility trust strip (login screen only). Generic
-   glyph, not any bank's real logo — see index.html comment for why.
+   Login screen: two-column layout. Left = marketing panel
+   (what PayFlow Pro does), right = the login/signup card
+   (pushed to the right instead of dead-centered).
+   On narrow screens the marketing panel is hidden and the
+   layout collapses back to the original single centered card.
    ------------------------------------------------------------ */
-.bank-trust-strip{
-  width:100%;
-  max-width:420px;
-  text-align:center;
-}
-.bank-trust-strip__label{
-  font-family:var(--font-mono, 'JetBrains Mono', monospace);
-  font-size:11px;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  color:var(--text3);
-  margin-bottom:12px;
-}
-.bank-trust-strip__grid{
-  display:grid;
-  grid-template-columns:repeat(4, 1fr);
-  gap:8px;
-}
-.bank-trust-strip__item{
+.auth-page{
+  min-height:100vh;
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:10px 6px;
+  gap:72px;
+  max-width:1180px;
+  margin:0 auto;
+  padding:48px 56px;
+}
+.auth-marketing{
+  flex:1 1 480px;
+  max-width:520px;
+}
+.auth-marketing .brand{ margin-bottom:2px; }
+.auth-marketing .brand .mark{ width:36px; height:36px; font-size:15px; }
+.auth-marketing .brand h1{ font-size:26px; }
+.auth-marketing .tagline{ margin-bottom:30px; }
+
+.auth-marketing__badge{
+  display:inline-block;
+  font-size:11.5px;
+  font-weight:600;
+  letter-spacing:.02em;
+  color:var(--blue-bright);
+  background:var(--blue-dim);
+  border:1px solid rgba(99,102,241,0.3);
+  border-radius:999px;
+  padding:5px 14px;
+  margin-bottom:18px;
+}
+.auth-marketing__headline{
+  font-family:var(--font-display);
+  font-size:32px;
+  line-height:1.22;
+  font-weight:700;
+  letter-spacing:-0.5px;
+  color:var(--text);
+  margin-bottom:16px;
+}
+.auth-marketing__sub{
+  font-size:14.5px;
+  line-height:1.7;
+  color:var(--text2);
+  margin-bottom:28px;
+  max-width:460px;
+}
+.auth-marketing__banks{ margin-bottom:26px; }
+.auth-marketing__banks-label{
+  display:block;
+  font-family:var(--font-body, 'Inter', sans-serif);
+  font-size:13px;
+  font-weight:500;
+  color:var(--text2);
+  margin-bottom:12px;
+}
+.auth-marketing__banks-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.bank-chip{
+  font-size:13px;
+  font-weight:600;
+  color:var(--text);
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.22);
+  border-radius:999px;
+  padding:8px 18px;
+  backdrop-filter:blur(14px) saturate(160%);
+  -webkit-backdrop-filter:blur(14px) saturate(160%);
+  box-shadow:0 4px 18px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  transition:background .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+  cursor:default;
+}
+.bank-chip:hover{
+  background:rgba(255,255,255,0.16);
+  border-color:rgba(255,255,255,0.38);
+  transform:translateY(-2px);
+  box-shadow:0 10px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+html[data-theme="light"] .bank-chip{
+  color:var(--text);
+  background:rgba(20,20,20,0.05);
+  border:1px solid rgba(20,20,20,0.12);
+  box-shadow:0 4px 18px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+html[data-theme="light"] .bank-chip:hover{
+  background:rgba(20,20,20,0.09);
+  border-color:rgba(20,20,20,0.2);
+  box-shadow:0 10px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+.auth-marketing__trust{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:14px 16px;
+  margin-bottom:26px;
   background:var(--surface);
   border:1px solid var(--border-soft);
   border-radius:var(--radius-md);
 }
-.bank-trust-strip__item span{
-  font-size:12px;
-  font-weight:500;
-  color:var(--text2);
-  line-height:1.2;
-  text-align:center;
+.auth-marketing__trust svg{
+  width:18px; height:18px;
+  flex-shrink:0;
+  margin-top:1px;
+  color:var(--success, #22c55e);
 }
-.bank-trust-strip__note{
-  margin-top:12px;
-  font-size:11.5px;
-  color:var(--text3);
+.auth-marketing__trust span{
+  font-size:12.5px;
+  line-height:1.6;
+  color:var(--text2);
+}
+
+.auth-marketing__features{
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.auth-marketing__features li{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  font-size:14px;
+  color:var(--text2);
   line-height:1.5;
 }
-@media (max-width: 420px){
-  .bank-trust-strip__grid{ grid-template-columns:repeat(2, 1fr); }
+.auth-marketing__features svg{
+  width:18px; height:18px;
+  flex-shrink:0;
+  margin-top:2px;
+  color:var(--blue-bright);
+  background:var(--blue-dim);
+  border-radius:50%;
+  padding:3px;
+  box-sizing:border-box;
+}
+
+.auth-right{
+  flex:0 1 420px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:18px;
+}
+
+/* The card repeats the brand mark for mobile only — on desktop the
+   marketing panel already shows it, so hide the in-card copy there. */
+.auth-card__mobile-brand{ display:none; }
+
+@media (max-width: 980px){
+  .auth-marketing{ display:none; }
+  .auth-page{ padding:24px; gap:0; }
+  .auth-card__mobile-brand{ display:flex; }
+  p.tagline.auth-card__mobile-brand{ display:block; }
 }

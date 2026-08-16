@@ -42,115 +42,154 @@
      SCREEN: AUTH (Sign in / Sign up)
      ============================================================ -->
 <div id="screen-auth" class="hidden">
-  <div class="auth-wrap">
-    <div class="auth-card">
-      <div class="auth-card__strip"></div>
-      <div class="auth-card__body">
+  <div class="auth-page">
 
-        <div class="brand">
-          <span class="mark">PF</span>
-          <h1>PayFlow Pro</h1>
+    <!-- LEFT: Marketing panel — explains what PayFlow Pro does,
+         shown only on wider screens (hidden on mobile via CSS so the
+         small-screen experience stays exactly as it was). -->
+    <div class="auth-marketing">
+      <div class="brand">
+        <span class="mark">PF</span>
+        <h1>PayFlow Pro</h1>
+      </div>
+      <p class="tagline">// payroll operations, simplified</p>
+
+      <span class="auth-marketing__badge">Built for Indian payroll &amp; finance teams</span>
+
+      <h2 class="auth-marketing__headline">Run payroll. Generate bank-ready transfer files. In minutes, not hours.</h2>
+      <p class="auth-marketing__sub">
+        Upload your employee list once. Every month, PayFlow Pro turns it into a clean,
+        correctly-formatted NEFT/RTGS/IMPS bulk-upload file — ready to submit straight to
+        your bank. No manual formatting, no spreadsheet errors, no back-and-forth with your bank.
+      </p>
+
+      <div class="auth-marketing__banks">
+        <span class="auth-marketing__banks-label">Generates ready-to-upload files for</span>
+        <div class="auth-marketing__banks-row">
+          <span class="bank-chip">SBI</span>
+          <span class="bank-chip">HDFC Bank</span>
+          <span class="bank-chip">ICICI Bank</span>
+          <span class="bank-chip">PNB</span>
         </div>
-        <p class="tagline">// payroll operations, simplified</p>
+      </div>
 
-        <div id="errorBox" class="error-msg"></div>
-        <div id="successBox" class="success-msg"></div>
+      <div class="auth-marketing__trust">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        <span>Your employee and bank data is encrypted, and credits/billing are enforced server-side — never editable from the browser.</span>
+      </div>
 
-        <!-- LOGIN FORM -->
-        <form id="loginForm">
-          <div class="field">
-            <label>Email</label>
-            <input type="email" id="loginEmail" required autocomplete="email">
-          </div>
-          <div class="field password-field">
-            <label>Password</label>
-            <input type="password" id="loginPassword" required autocomplete="current-password">
-            <button type="button" class="pw-toggle" data-target="loginPassword" aria-label="Show password">
-              <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            </button>
-          </div>
-          <div class="forgot-link-row">
-            <button type="button" id="forgotPasswordLink">Forgot password?</button>
-          </div>
-          <button type="submit" class="btn btn-primary" id="loginBtn">Sign In</button>
-        </form>
+      <ul class="auth-marketing__features">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Upload employees once, export every payroll cycle</span>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Full audit trail of every payroll run, always accessible</span>
+        </li>
+      </ul>
+    </div>
 
-        <!-- FORGOT PASSWORD FORM -->
-        <form id="forgotPasswordForm" class="hidden">
-          <p id="forgotPwInstructions" style="color:var(--text2); font-size:13px; margin-bottom:18px;">
-            Enter the email on your account. We'll send a link to reset your password.
-          </p>
-          <div class="field" id="forgotEmailField">
-            <label>Email</label>
-            <input type="email" id="forgotEmail" required autocomplete="email">
-          </div>
-          <button type="submit" class="btn btn-primary" id="forgotSubmitBtn">Send Reset Link</button>
-          <div class="forgot-link-row hidden" id="forgotSendAgainRow" style="justify-content:center; margin-top:14px;">
-            <button type="button" id="forgotSendAgainBtn">Didn't get it? Send again</button>
-          </div>
-          <button type="button" class="btn btn-google" style="margin-top:10px;" id="forgotBackBtn">Back to Sign In</button>
-        </form>
+    <!-- RIGHT: the login/signup card, unchanged. -->
+    <div class="auth-right">
+      <div class="auth-card">
+        <div class="auth-card__strip"></div>
+        <div class="auth-card__body">
 
-        <!-- SIGNUP FORM -->
-        <form id="signupForm" class="hidden">
-          <div class="field">
-            <label>Full Name</label>
-            <input type="text" id="signupName" required autocomplete="name">
+          <div class="brand auth-card__mobile-brand">
+            <span class="mark">PF</span>
+            <h1>PayFlow Pro</h1>
           </div>
-          <div class="field">
-            <label>Email</label>
-            <input type="email" id="signupEmail" required autocomplete="email">
-          </div>
-          <div class="field password-field">
-            <label>Password</label>
-            <input type="password" id="signupPassword" required minlength="8" autocomplete="new-password">
-            <button type="button" class="pw-toggle" data-target="signupPassword" aria-label="Show password">
-              <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            </button>
-            <p class="field-hint">At least 8 characters.</p>
-          </div>
-          <div class="field password-field">
-            <label>Confirm Password</label>
-            <input type="password" id="signupPasswordConfirm" required minlength="8" autocomplete="new-password">
-            <button type="button" class="pw-toggle" data-target="signupPasswordConfirm" aria-label="Show password">
-              <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            </button>
-          </div>
-          <button type="submit" class="btn btn-primary" id="signupBtn">Create Account</button>
-        </form>
+          <p class="tagline auth-card__mobile-brand">// payroll operations, simplified</p>
 
-        <div class="divider" id="authDivider">OR</div>
+          <div id="errorBox" class="error-msg"></div>
+          <div id="successBox" class="success-msg"></div>
 
-        <button id="googleBtn" class="btn btn-google">
-          <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4c-7.7 0-14.3 4.4-17.7 10.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.6l-6.5-5.5C29.5 34.7 26.9 35.5 24 35.5c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.6 39.5 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.4-2.4 4.4-4.4 5.8l6.5 5.5C40.5 36.5 44 30.8 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
-          Continue with Google
-        </button>
+          <!-- LOGIN FORM -->
+          <form id="loginForm">
+            <div class="field">
+              <label>Email</label>
+              <input type="email" id="loginEmail" required autocomplete="email">
+            </div>
+            <div class="field password-field">
+              <label>Password</label>
+              <input type="password" id="loginPassword" required autocomplete="current-password">
+              <button type="button" class="pw-toggle" data-target="loginPassword" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <div class="forgot-link-row">
+              <button type="button" id="forgotPasswordLink">Forgot password?</button>
+            </div>
+            <button type="submit" class="btn btn-primary" id="loginBtn">Sign In</button>
+          </form>
 
-        <div class="switch-mode" id="switchModeWrap">
-          <span id="switchToSignupWrap">New here? <button type="button" id="switchToSignup">Create an account</button></span>
-          <span id="switchToLoginWrap" class="hidden">Already have an account? <button type="button" id="switchToLogin">Sign in</button></span>
+          <!-- FORGOT PASSWORD FORM -->
+          <form id="forgotPasswordForm" class="hidden">
+            <p id="forgotPwInstructions" style="color:var(--text2); font-size:13px; margin-bottom:18px;">
+              Enter the email on your account. We'll send a link to reset your password.
+            </p>
+            <div class="field" id="forgotEmailField">
+              <label>Email</label>
+              <input type="email" id="forgotEmail" required autocomplete="email">
+            </div>
+            <button type="submit" class="btn btn-primary" id="forgotSubmitBtn">Send Reset Link</button>
+            <div class="forgot-link-row hidden" id="forgotSendAgainRow" style="justify-content:center; margin-top:14px;">
+              <button type="button" id="forgotSendAgainBtn">Didn't get it? Send again</button>
+            </div>
+            <button type="button" class="btn btn-google" style="margin-top:10px;" id="forgotBackBtn">Back to Sign In</button>
+          </form>
+
+          <!-- SIGNUP FORM -->
+          <form id="signupForm" class="hidden">
+            <div class="field">
+              <label>Full Name</label>
+              <input type="text" id="signupName" required autocomplete="name">
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="email" id="signupEmail" required autocomplete="email">
+            </div>
+            <div class="field password-field">
+              <label>Password</label>
+              <input type="password" id="signupPassword" required minlength="8" autocomplete="new-password">
+              <button type="button" class="pw-toggle" data-target="signupPassword" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+              <div class="pw-strength" id="pwStrengthBar" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <p class="field-hint" id="pwStrengthLabel">At least 8 characters.</p>
+            </div>
+            <div class="field password-field">
+              <label>Confirm Password</label>
+              <input type="password" id="signupPasswordConfirm" required minlength="8" autocomplete="new-password">
+              <button type="button" class="pw-toggle" data-target="signupPasswordConfirm" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <button type="submit" class="btn btn-primary" id="signupBtn">Create Account</button>
+          </form>
+
+          <div class="divider" id="authDivider">OR</div>
+
+          <button id="googleBtn" class="btn btn-google">
+            <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4c-7.7 0-14.3 4.4-17.7 10.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.6l-6.5-5.5C29.5 34.7 26.9 35.5 24 35.5c-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.6 39.5 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.4-2.4 4.4-4.4 5.8l6.5 5.5C40.5 36.5 44 30.8 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+            Continue with Google
+          </button>
+
+          <div class="switch-mode" id="switchModeWrap">
+            <span id="switchToSignupWrap">New here? <button type="button" id="switchToSignup">Create an account</button></span>
+            <span id="switchToLoginWrap" class="hidden">Already have an account? <button type="button" id="switchToLogin">Sign in</button></span>
+          </div>
+
         </div>
-
       </div>
     </div>
 
-    <!-- Bank-compatibility trust strip. Deliberately plain text, no
-         logos — real bank logos are trademarked and displaying them
-         here would wrongly imply an official partnership/endorsement
-         we don't have. -->
-    <div class="bank-trust-strip">
-      <p class="bank-trust-strip__label">Supported banks</p>
-      <div class="bank-trust-strip__grid">
-        <div class="bank-trust-strip__item"><span>SBI</span></div>
-        <div class="bank-trust-strip__item"><span>HDFC Bank</span></div>
-        <div class="bank-trust-strip__item"><span>ICICI Bank</span></div>
-        <div class="bank-trust-strip__item"><span>PNB</span></div>
-      </div>
-      <p class="bank-trust-strip__note">PayFlow Pro generates standard NEFT/RTGS/IMPS bank-upload files, accepted by every major Indian bank.</p>
-    </div>
   </div>
 </div>
 

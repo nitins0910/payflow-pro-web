@@ -1597,13 +1597,25 @@ function routeUser(user) {
 
 // ---------------------------------------------------------
 // 9. BOOT SEQUENCE
+// Each wiring function is independent (different buttons/forms), so
+// one throwing must never stop the rest from running — otherwise a
+// single bug (even on one specific browser) silently breaks every
+// button wired after it, and clicking any of them does nothing with
+// no visible error. wirePwaGuideModal() also now runs FIRST, since
+// it's needed on the auth screen itself, before any login/signup form
+// interaction even happens.
 // ---------------------------------------------------------
-wireAuthForms();
-wireVerifyPending();
-wireCompleteProfileForm();
-wirePasswordToggles();
-wirePasswordStrengthMeter();
-wirePwaGuideModal();
+function safeInit(name, fn) {
+  try { fn(); } catch (err) {
+    console.error(`[Boot] ${name}() failed — other setup continues:`, err);
+  }
+}
+safeInit('wirePwaGuideModal', wirePwaGuideModal);
+safeInit('wireAuthForms', wireAuthForms);
+safeInit('wireVerifyPending', wireVerifyPending);
+safeInit('wireCompleteProfileForm', wireCompleteProfileForm);
+safeInit('wirePasswordToggles', wirePasswordToggles);
+safeInit('wirePasswordStrengthMeter', wirePasswordStrengthMeter);
 
 (function boot() {
   const params = new URLSearchParams(window.location.search);
@@ -1724,21 +1736,21 @@ async function bootDashboard(user) {
 
   if (!dashboardBooted) {
     dashboardBooted = true;
-    wireNav();
-    wireMobileDrawer();
-    wireEmployeeForm();
-    wireEmployeeTableControls();
-    wireBulkImport();
-    wireDisbursement();
-    wireAudit();
-    wireExportHistory();
-    wireCompanyForm();
-    wireSettingsForms();
-    wirePasswordToggles();
-    wireModalCloseButtons();
-    wireHelpSupport();
-    wireFreeCreditsModal();
-    wireGuidedTour();
+    safeInit('wireNav', wireNav);
+    safeInit('wireMobileDrawer', wireMobileDrawer);
+    safeInit('wireEmployeeForm', wireEmployeeForm);
+    safeInit('wireEmployeeTableControls', wireEmployeeTableControls);
+    safeInit('wireBulkImport', wireBulkImport);
+    safeInit('wireDisbursement', wireDisbursement);
+    safeInit('wireAudit', wireAudit);
+    safeInit('wireExportHistory', wireExportHistory);
+    safeInit('wireCompanyForm', wireCompanyForm);
+    safeInit('wireSettingsForms', wireSettingsForms);
+    safeInit('wirePasswordToggles', wirePasswordToggles);
+    safeInit('wireModalCloseButtons', wireModalCloseButtons);
+    safeInit('wireHelpSupport', wireHelpSupport);
+    safeInit('wireFreeCreditsModal', wireFreeCreditsModal);
+    safeInit('wireGuidedTour', wireGuidedTour);
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     const walletChip = document.getElementById('walletChip');
     if (walletChip) walletChip.addEventListener('click', () => showAppPage('wallet'));

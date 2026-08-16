@@ -288,11 +288,14 @@ function wireFreeCreditsModal() {
 }
 
 // ---------------------------------------------------------
-// "Add to Home Screen" guide — reachable from the login screen
-// (before sign-in, mobile only) and from Settings (after sign-in).
-// Same modal both places; just switches between an Android/Chrome
+// "Add to Home Screen" guide — reachable from Settings (after
+// sign-in) as an in-app modal. Switches between an Android/Chrome
 // tab and an iOS/Safari tab, since the two platforms use different
 // menus to install a site as a home-screen app.
+//
+// The login-screen entry point (before sign-in, mobile only) is now
+// a plain link to the standalone add-to-home-screen.html page
+// instead of this modal — see authPwaGuideLink in wirePwaGuideModal().
 // ---------------------------------------------------------
 function openPwaGuideModal() {
   const modal = document.getElementById('pwaGuideModal');
@@ -367,13 +370,16 @@ function registerServiceWorker() {
 function wirePwaGuideModal() {
   registerServiceWorker();
 
-  const authBtn = document.getElementById('authPwaGuideBtn');
+  // Login screen (mobile, pre-auth): a plain link straight to
+  // add-to-home-screen.html — a full standalone guide page — instead
+  // of a button that opens the in-app modal. Nothing to wire up here
+  // except hiding it once the app is already installed.
+  const authLink = document.getElementById('authPwaGuideLink');
   const settingsBtn = document.getElementById('openPwaGuideBtn');
   if (isRunningInstalled()) {
-    if (authBtn) authBtn.classList.add('hidden');
+    if (authLink) authLink.classList.add('hidden');
     if (settingsBtn) settingsBtn.classList.add('hidden');
   } else {
-    if (authBtn) authBtn.addEventListener('click', triggerInstallOrGuide);
     if (settingsBtn) settingsBtn.addEventListener('click', triggerInstallOrGuide);
   }
 

@@ -987,3 +987,71 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 @media (max-width:640px){
   .tour-card{ width:min(290px, calc(100vw - 32px)); }
 }
+
+/* ============================================================
+   MOBILE RESPONSIVE OVERRIDES
+   Everything below is scoped inside max-width media queries —
+   the desktop layout defined above this point is completely
+   untouched. Fixes: the horizontal section tabs getting crushed
+   into a sliver of scrollable space next to the logo, fixed-px
+   search/filter inputs overflowing narrow phones, the sticky
+   Payroll Run total/action row squeezing together, and iOS
+   Safari auto-zooming on inputs under 16px.
+   ============================================================ */
+@media (max-width: 800px){
+  /* iOS Safari zooms the page in when a focused input's font-size
+     is under 16px — bump every field up to 16px on mobile only. */
+  input, select, textarea{ font-size:16px !important; }
+
+  body{ overflow-x:hidden; }
+
+  /* Top bar: keep the brand mark and the tour "?" button on the
+     top strip, and move the section tabs (Employees / Payroll Run
+     / Exports) into a fixed bottom tab bar instead of squeezing
+     three labelled tabs into whatever sliver of width is left next
+     to the logo — that's what was clipping/cutting off the tab
+     labels on phones. */
+  .topbar{ justify-content:space-between; }
+  .topbar__tabs{
+    position:fixed; left:0; right:0; bottom:22px; z-index:15;
+    height:58px; background:#0C1730; border-top:1px solid var(--border);
+    justify-content:space-around; overflow-x:visible; flex:none;
+  }
+  .topbar__tabs .nav-item{
+    flex-direction:column; gap:3px; padding:6px 4px 0;
+    font-size:10.5px; height:auto; flex:1; justify-content:center;
+  }
+  .topbar__tabs .nav-item svg{ width:18px; height:18px; }
+
+  /* Give the fixed-height footer a known height so the tab bar
+     above it (and the content padding below) line up exactly. */
+  .site-footer{ height:22px; }
+
+  /* Leave room at the bottom of the scrolling content so the last
+     row/card doesn't end up hidden behind the fixed tab bar. */
+  .main{ padding-bottom:96px; }
+}
+
+@media (max-width: 640px){
+  /* These search/filter boxes were sized in px for a desktop
+     panel and overflowed narrow phone screens. */
+  #employeeSearch, #disbSearch, #auditSearch{ width:100% !important; }
+
+  .disb-filters{ gap:12px !important; }
+  .disb-filters > div{ flex:1 1 140px; }
+
+  /* Payroll Run's sticky total/action bar: stack the total above
+     the buttons instead of squeezing both onto one cramped line. */
+  #disbFooterPanel{ flex-direction:column; align-items:stretch !important; gap:14px; }
+  .disb-footer-actions .btn-inline{ flex:1; }
+}
+
+@media (max-width: 480px){
+  .kpi-grid{ gap:10px; }
+  .kpi-card{ padding:14px; }
+  .modal{ padding:18px; }
+  .modal-actions{ flex-wrap:wrap; }
+  .modal-actions > *{ flex:1 1 100%; }
+  .toolbar-actions{ width:100%; }
+  .toolbar-actions .btn-inline, .toolbar-actions a{ flex:1; text-align:center; }
+}

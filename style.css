@@ -540,19 +540,20 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
   width:44px; height:44px;
   display:flex; align-items:center; justify-content:center;
   margin:0; padding:0;
-  border-radius:0;
+  border-radius:var(--radius-md);
   background:var(--surface2);
   border:1px solid var(--border-soft);
   color:var(--text2);
   position:relative;
-  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
+  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease);
 }
 .sidebar-icons .nav-item svg{ width:19px; height:19px; opacity:.9; }
-.sidebar-icons .nav-item:hover{ color:var(--text); background:var(--surface3); }
+.sidebar-icons .nav-item:hover{ color:var(--text); background:var(--surface3); transform:translateY(-1px); }
 .sidebar-icons .nav-item.active{
   color:#fff;
   background:var(--blue-dim);
   border-color:var(--blue-bright);
+  box-shadow:0 4px 12px rgba(59,130,246,0.28);
 }
 
 /* Hover tooltip for icon-only nav items — name only shows on hover,
@@ -563,7 +564,7 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
   transform:translateY(-50%) translateX(-4px);
   background:#0F172A; color:#fff;
   font-size:11.5px; font-weight:600; white-space:nowrap;
-  padding:6px 10px; border-radius:0;
+  padding:6px 10px; border-radius:var(--radius-sm);
   box-shadow:0 6px 16px rgba(0,0,0,0.3);
   opacity:0; pointer-events:none;
   transition:opacity .12s var(--ease), transform .12s var(--ease);
@@ -614,12 +615,12 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
 .user-chip__text{ min-width:0; overflow:hidden; }
 .user-chip__text span{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .user-avatar{
-  width:36px; height:36px; border-radius:0; flex-shrink:0;
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
   object-fit:cover; border:1px solid var(--border);
   background:var(--surface2);
 }
 .user-avatar-fallback{
-  width:36px; height:36px; border-radius:0; flex-shrink:0;
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
   background:var(--surface3);
   border:1px solid var(--border);
@@ -1091,7 +1092,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     display:flex; align-items:center; justify-content:center;
     width:34px; height:34px; margin-right:2px; flex-shrink:0;
     background:none; border:none; color:rgba(255,255,255,0.85);
-    cursor:pointer; border-radius:0; padding:0;
+    cursor:pointer; border-radius:var(--radius-sm); padding:0;
   }
   .mobile-menu-btn svg{ width:21px; height:21px; }
   .mobile-menu-btn:active{ background:rgba(255,255,255,0.08); }
@@ -1142,7 +1143,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     display:flex; align-items:center; justify-content:center;
     position:absolute; top:10px; right:10px; z-index:1;
     width:32px; height:32px; background:var(--surface2); border:1px solid var(--border-soft);
-    color:var(--text2); cursor:pointer; border-radius:0; padding:0;
+    color:var(--text2); cursor:pointer; border-radius:var(--radius-sm); padding:0;
   }
   .sidebar-close svg{ width:16px; height:16px; }
 
@@ -1154,6 +1155,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
   .sidebar-icons .nav-item{
     width:100%; height:auto; justify-content:flex-start; gap:12px;
     padding:12px 14px;
+    border-radius:var(--radius-sm);
   }
   .nav-item[data-tooltip]::after{ display:none; }
   .nav-item-label{ display:inline; font-size:13.5px; font-weight:600; }

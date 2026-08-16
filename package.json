@@ -2,7 +2,7 @@
   "name": "payflow-pro-functions",
   "version": "1.0.0",
   "private": true,
-  "description": "Serverless functions for PayFlow Pro's pay-per-export billing (Razorpay + Firebase Admin).",
+  "description": "Serverless functions for PayFlow Pro's pay-per-export billing (Razorpay + Firebase Admin), migrated from Netlify Functions to Vercel Serverless Functions.",
   "dependencies": {
     "firebase-admin": "^12.1.0",
     "razorpay": "^2.9.4",

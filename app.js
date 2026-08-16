@@ -34,10 +34,23 @@ function getStoredTheme() {
   try { return localStorage.getItem(THEME_STORAGE_KEY); } catch (e) { return null; }
 }
 function isLightTheme() { return document.documentElement.getAttribute('data-theme') === 'light'; }
-function applyTheme(theme) {
+function applyTheme(theme, opts) {
+  opts = opts || {};
   if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
   try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch (e) { /* ignore */ }
+
+  // Persist to the user's Firestore profile too, so the preference
+  // follows them to any other device/browser they sign in on — not
+  // just this one (localStorage above is purely a same-device cache
+  // used to avoid a flash-of-wrong-theme before Firestore responds).
+  // Skipped when we're just applying a value we already loaded FROM
+  // Firestore (loadUserTheme below), and silently ignored if the
+  // write fails (e.g. offline) — the toggle still works locally and
+  // will sync again next time it succeeds.
+  if (!opts.skipRemoteSave && currentUserId) {
+    userRef().set({ theme }, { merge: true }).catch(() => { /* non-fatal */ });
+  }
 }
 function wireThemeToggle() {
   const toggle = document.getElementById('lightModeToggle');
@@ -46,6 +59,22 @@ function wireThemeToggle() {
   toggle.addEventListener('change', () => {
     applyTheme(toggle.checked ? 'light' : 'dark');
   });
+}
+
+// Called once per dashboard boot (alongside loadEmployees/loadCompanyProfile)
+// to pull the user's saved theme from Firestore and apply it — so a
+// preference set on one device shows up on another, instead of each
+// browser only ever remembering its own localStorage value. Falls back
+// silently to whatever the anti-flash inline <head> script + localStorage
+// already applied if the fetch fails or no preference is saved yet.
+async function loadUserTheme() {
+  try {
+    const snap = await userRef().get();
+    const saved = snap.exists ? snap.data().theme : null;
+    if (saved === 'light' || saved === 'dark') {
+      applyTheme(saved, { skipRemoteSave: true });
+    }
+  } catch (e) { /* offline / permissions blip — keep current theme as-is */ }
 }
 
 // ---------------------------------------------------------
@@ -1300,7 +1329,7 @@ async function bootDashboard(user) {
 
   const walletInitPromise = initWallet();
   initDisbursementDateFields();
-  await Promise.all([loadEmployees(), loadCompanyProfile()]);
+  await Promise.all([loadEmployees(), loadCompanyProfile(), loadUserTheme()]);
   renderEmployeeKpis();
   const walletInit = await walletInitPromise;
 

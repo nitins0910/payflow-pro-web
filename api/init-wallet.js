@@ -3,7 +3,7 @@
 // Same logic as before, unchanged. Idempotent: first call ever for a
 // user grants FREE_SIGNUP_CREDITS and flips walletInitialized to true
 // inside a transaction. Every call after that is a no-op read.
-const { db, requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
+const { db, admin, requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
 const { FREE_SIGNUP_CREDITS } = require('../lib/creditPacks');
 
 module.exports = async (req, res) => {
@@ -32,6 +32,15 @@ module.exports = async (req, res) => {
         walletInitialized: true,
         credits: FREE_SIGNUP_CREDITS
       }, { merge: true });
+
+      const txnRef = userRef.collection('transactions').doc();
+      tx.set(txnRef, {
+        type: 'free_signup_credit',
+        credits: FREE_SIGNUP_CREDITS,
+        creditsRemaining: FREE_SIGNUP_CREDITS,
+        description: 'Free signup credits',
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
 
       return { credits: FREE_SIGNUP_CREDITS, granted: true };
     });

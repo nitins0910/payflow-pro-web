@@ -74,6 +74,24 @@ module.exports = async (req, res) => {
         creditsRemaining: updated,
         processedAt: admin.firestore.FieldValue.serverTimestamp()
       });
+
+      // Transaction-history row for this purchase, readable by the
+      // user on the Wallet page. Keyed by payment ID so it can never
+      // be duplicated even if this function were somehow re-entered
+      // (the paymentSnap.exists check above already prevents that).
+      const txnRef = userRef.collection('transactions').doc(razorpay_payment_id);
+      tx.set(txnRef, {
+        type: 'credit_purchase',
+        credits,
+        creditsRemaining: updated,
+        amountRupees: (order.amount || 0) / 100,
+        packId: notes.packId || null,
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id,
+        description: `Purchased ${credits} credits`,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
       return { alreadyProcessed: false, creditsRemaining: updated };
     });
 

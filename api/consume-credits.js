@@ -1,8 +1,12 @@
 // POST /api/consume-credits   (was /.netlify/functions/consume-credits)
 //
-// Same logic as before, unchanged. Deducts EXPORT_COST_CREDITS
-// atomically in a Firestore transaction before an export is generated.
-const { db, requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
+// Same deduction logic as before, plus: every successful deduction now
+// also writes a row to users/{uid}/transactions so the user can see
+// their full credit history (purchases AND export debits) on the
+// Wallet page. This write happens inside the same Firestore
+// transaction as the balance deduction, using the Admin SDK, so it
+// can never be skipped, faked, or bypassed from the browser.
+const { db, admin, requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
 const { EXPORT_COST_CREDITS } = require('../lib/creditPacks');
 
 module.exports = async (req, res) => {
@@ -25,8 +29,23 @@ module.exports = async (req, res) => {
       const credits = Number(data.credits || 0);
 
       if (credits >= EXPORT_COST_CREDITS) {
-        tx.set(userRef, { credits: credits - EXPORT_COST_CREDITS }, { merge: true });
-        return { allowed: true, creditsRemaining: credits - EXPORT_COST_CREDITS };
+        const creditsRemaining = credits - EXPORT_COST_CREDITS;
+        tx.set(userRef, { credits: creditsRemaining }, { merge: true });
+
+        // Transaction-history row for this export debit. Auto-ID doc,
+        // written server-side only — the client can read this
+        // subcollection (see firestore.rules) but this function is the
+        // only place that ever writes an 'export_debit' entry.
+        const txnRef = userRef.collection('transactions').doc();
+        tx.set(txnRef, {
+          type: 'export_debit',
+          credits: -EXPORT_COST_CREDITS,
+          creditsRemaining,
+          description: 'Payroll file export',
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return { allowed: true, creditsRemaining };
       }
 
       return {

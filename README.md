@@ -1,268 +1,148 @@
 # PayFlow Pro
 
-A ledger-grade, browser-based payroll console for generating **bank-ready bulk payment files** — with a server-enforced, pay-per-export credit wallet and Razorpay billing built in.
+**PayFlow Pro** is a simple, secure web app for running your company's monthly payroll and generating a **bank-ready bulk payment file** — the file you upload to your bank's corporate/net-banking portal to pay everyone in one go.
 
-Add employees once, enter each month's salary amounts, and export a bulk upload file formatted exactly the way your bank's corporate portal expects it — SBI, HDFC, ICICI, or PNB.
+Keep your employee list in one place, enter each month's salary amounts, and export a file formatted exactly the way your bank expects it. No spreadsheets to reformat by hand every month, no manual NEFT/RTGS entries one-by-one.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
+- [What PayFlow Pro Does](#what-payflow-pro-does)
+- [Supported Banks](#supported-banks)
 - [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [1. Clone the repo](#1-clone-the-repo)
-  - [2. Firebase setup](#2-firebase-setup)
-  - [3. Razorpay setup](#3-razorpay-setup)
-  - [4. Deploy to Netlify](#4-deploy-to-netlify)
-  - [5. Environment variables](#5-environment-variables)
-  - [6. Help & Support email setup](#6-help--support-email-setup)
-  - [7. Point the frontend at your functions](#7-point-the-frontend-at-your-functions)
-- [Wallet & Billing Model](#wallet--billing-model)
-- [Supported Banks & File Formats](#supported-banks--file-formats)
-- [Security](#security)
-- [Local Development](#local-development)
-- [Migrating Existing Users](#migrating-existing-users)
-- [Troubleshooting](#troubleshooting)
-- [License](#license)
+- [How to Use](#how-to-use)
+  - [1. Set up your company details](#1-set-up-your-company-details)
+  - [2. Add your employees](#2-add-your-employees)
+  - [3. Run payroll and export the payment file](#3-run-payroll-and-export-the-payment-file)
+  - [4. Upload the file to your bank](#4-upload-the-file-to-your-bank)
+  - [5. Review past exports](#5-review-past-exports)
+  - [6. Check the Activity Log](#6-check-the-activity-log)
+- [Wallet & Credits](#wallet--credits)
+- [Settings](#settings)
+- [Help & Support](#help--support)
+- [Data Security](#data-security)
+- [FAQ](#faq)
 
 ---
 
-## Overview
+## What PayFlow Pro Does
 
-PayFlow Pro is a single-page web app (no backend server to manage) that lets a small business:
+- **Employee Ledger** — one place for every employee's name, account number, IFSC, and transfer type, with double-entry checks so a typo in an account number never slips through.
+- **Payroll Run** — enter this month's amount against each employee and see a running batch total as you go.
+- **Bulk Export** — generates a bank-ready upload file in the exact format your bank expects, with the correct transfer mode (Same Bank / NEFT / RTGS / IMPS) worked out automatically for each employee.
+- **Export History** — every batch you've ever exported is saved and can be reviewed or re-downloaded later.
+- **Activity Log** — a running record of every add, edit, delete, and export, so you always know who did what and when.
+- **Wallet & Credits** — a simple pay-per-export model; new accounts start with free credits, and more can be bought in a few taps.
+- **Bulk CSV Import** — already have your employee list in a spreadsheet? Import it in one shot instead of typing everyone in by hand.
+- **Guided Tour** — a short walkthrough that shows you around the app the first time you sign in (replayable any time from Settings).
+- **Works on mobile too** — the full dashboard adapts to phone screens, so you can check balances or review exports on the go.
 
-1. Maintain an employee roster (name, account number, IFSC, transfer type).
-2. Enter a monthly salary amount against each employee.
-3. Preview the batch, then export a bulk payment file in the exact column/format each supported bank expects.
-4. Keep a full audit trail and re-downloadable export history.
+## Supported Banks
 
-Every export costs **credits** from an in-app wallet. New signups get free credits automatically; more can be bought via Razorpay. All billing logic (pricing, balance checks, payment verification) runs **server-side** in Netlify Functions — nothing about pricing or balances can be tampered with from the browser.
+PayFlow Pro currently generates payment files for:
 
-## Features
+- State Bank of India (**SBI**)
+- **HDFC** Bank
+- **ICICI** Bank
+- Punjab National Bank (**PNB**)
 
-- **Employee management** — add/edit/delete employees with double-entry verification (account number & IFSC typed twice, live mismatch warnings) to prevent fat-finger errors before they reach a bank file.
-- **Bulk CSV import** — import employees in bulk with a preview + validation step before committing.
-- **Multi-bank export** — generate bulk payment files formatted for **SBI, HDFC, ICICI, and PNB**, with automatic Same Bank / RTGS / NEFT / IMPS mode detection per beneficiary.
-- **Payroll Run workflow** — enter amounts, preview the batch (total, warnings for unusual amounts, invalid IFSCs, etc.), then export.
-- **Export history** — every export batch is saved and can be reviewed or re-downloaded later, using the exact company/IFSC snapshot from the time it was generated.
-- **Audit log** — every add, edit, delete, and export is automatically logged with who did it and when.
-- **Wallet & credits billing** — pay-per-export model enforced entirely server-side (see [Wallet & Billing Model](#wallet--billing-model)).
-- **Razorpay integration** — buy credit packs with server-verified payments (signature check + replay protection).
-- **Firebase Authentication** — email/password and Google sign-in, with email verification and password reset flows.
-- **Help & Support** — in-app contact form that emails the site owner directly, with replies routed back to the user's account email.
-- **Guided onboarding tour** — a spotlight walkthrough that starts automatically right after a new user's free-credits welcome message.
-- **Dark, monochrome, "ledger-grade" UI** — sharp edges, no unnecessary color, built for financial data.
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Vanilla HTML / CSS / JavaScript (no framework, no build step) |
-| Auth & Database | Firebase Authentication + Cloud Firestore |
-| Serverless backend | Netlify Functions (Node.js) |
-| Payments | Razorpay (Orders API + client checkout) |
-| Email | Nodemailer via Gmail SMTP |
-| Hosting | Netlify (functions) — frontend can be hosted on Netlify itself or separately (e.g. GitHub Pages) |
-
-No frontend build tooling is required — `index.html`, `app.js`, and `style.css` are served as-is.
-
-## Architecture
-
-```
-Browser (index.html / app.js)
-   │
-   ├── Firebase Auth SDK ──────────────► Firebase Authentication
-   ├── Firestore SDK (employees, company profile, audit log, export history)
-   │                                    ──────────────► Cloud Firestore
-   │                                                        ▲
-   │                                                        │ Admin SDK (bypasses
-   │                                                        │ client security rules)
-   └── fetch() ────────────────────────► Netlify Functions ─┘
-                                          ├── init-wallet.js
-                                          ├── consume-credits.js
-                                          ├── create-order.js
-                                          ├── verify-payment.js  ──► Razorpay API
-                                          └── send-support-message.js ──► Gmail SMTP
-```
-
-**Why a server-side wallet?** Anything that decides "how many credits does this cost" or "how many credits did this payment buy" lives in Netlify Functions using the Firebase **Admin SDK**, which is not bound by client-side Firestore security rules. The browser can never write `credits` or `walletInitialized` directly — Firestore rules block it outright (see `firestore.rules`), so the only way those fields change is through the server functions below.
-
-## Project Structure
-
-```
-.
-├── index.html                          # Single-page app shell (all screens/modals)
-├── app.js                              # All frontend logic (auth, employees, export, wallet, tour)
-├── style.css                           # Dark/monochrome ledger-style UI
-├── favicon.svg / favicon.ico / icon-*.png   # Browser tab & home-screen icons
-├── firestore.rules                     # Firestore security rules
-├── netlify.toml                        # Netlify build & functions config
-├── package.json                        # Node dependencies for the functions
-├── BILLING_SETUP.md                    # Step-by-step wallet/Razorpay setup guide
-├── HELP_SUPPORT_SETUP.md               # Step-by-step Help & Support email setup guide
-└── netlify/functions/
-    ├── _firebaseAdmin.js               # Shared Admin SDK init, auth check, CORS helpers
-    ├── _creditPacks.js                 # Server-side pricing source of truth
-    ├── init-wallet.js                  # One-time free-credit grant on signup
-    ├── consume-credits.js              # Atomically deducts credits before an export
-    ├── create-order.js                 # Creates a Razorpay order for a chosen pack
-    ├── verify-payment.js               # Verifies payment signature & credits the wallet
-    └── send-support-message.js         # Emails the Help & Support form to the site owner
-```
-
-> **Note:** never commit a Firebase service-account `.json` key file to this repository. It grants full Admin SDK access (bypasses all Firestore rules) and must only ever live in Netlify's encrypted environment variables. If one was ever committed or shared anywhere, treat it as compromised — revoke it in Firebase Console → Project Settings → Service Accounts immediately and generate a new one.
+You choose your company's bank once (under Settings → Edit Company Details), and every export is automatically formatted for that bank.
 
 ## Getting Started
 
-### Prerequisites
+1. Open the PayFlow Pro website.
+2. Click **Sign Up**, enter your name, email, and a password (or use **Sign in with Google**).
+3. Verify your email if prompted.
+4. You'll land on the Employees page with **5 free credits** already in your wallet — enough for your first export.
+5. A short guided tour starts automatically to show you around. You can skip it any time, and replay it later from Settings if you want.
 
-- A [Firebase](https://console.firebase.google.com) project (free **Spark** plan is enough)
-- A [Razorpay](https://dashboard.razorpay.com/signup) account (Test Mode is free to start)
-- A [Netlify](https://app.netlify.com) account
-- A Gmail account for the Help & Support inbox (can be any Gmail address)
+## How to Use
 
-### 1. Clone the repo
+### 1. Set up your company details
 
-```bash
-git clone https://github.com/<your-username>/<your-repo>.git
-cd <your-repo>
-```
+Before your first export, tell PayFlow Pro which bank you pay salaries from:
 
-### 2. Firebase setup
+1. Go to **Settings** (the ⚙️ icon in the sidebar) → **Edit Company Details**.
+2. Select your **company's bank** first (SBI / HDFC / ICICI / PNB) — this decides both the export file format and which IFSC prefix is expected.
+3. Enter your **Company Name**, **Account Number** (typed twice to confirm), and your account's **IFSC code** (also typed twice). Every Indian bank's IFSC is 11 characters — the app checks the format and warns you if it doesn't match the bank you selected.
+4. Click **Save Company Profile**.
 
-1. Create a Firebase project at the [Firebase Console](https://console.firebase.google.com).
-2. Enable **Authentication** → Sign-in methods: Email/Password and Google.
-3. Enable **Cloud Firestore** (Native mode).
-4. Go to **Project Settings → Service Accounts → Generate new private key**. This downloads a `.json` file — you'll need three values from it (`project_id`, `client_email`, `private_key`) for step 5. **Do not commit this file** — delete it from your machine once the values are copied into Netlify.
-5. Go to **Firestore Database → Rules**, paste the contents of this repo's `firestore.rules`, and **Publish**. This is what stops the browser from ever writing `credits` or `walletInitialized` directly.
-6. Copy your Firebase web app config into the `<script>` block near the top of `index.html` / `app.js` (`apiKey`, `authDomain`, `projectId`, etc.) if you haven't already.
+### 2. Add your employees
 
-### 3. Razorpay setup
+Go to the **Employees** page:
 
-1. Sign up at the [Razorpay Dashboard](https://dashboard.razorpay.com/signup) (KYC can be completed later; Test Mode works immediately).
-2. Go to **Settings → API Keys → Generate Test Key** (switch to Live Keys once you're ready to accept real payments).
-3. Copy the **Key Id** and **Key Secret** — both are needed as environment variables.
+- Click **+ Add Employee** and fill in their name, employee code, mobile, email, account number (typed twice), IFSC (typed twice), and transfer type.
+- Already have your team's details in a spreadsheet? Click **Bulk Import CSV** instead — download the sample CSV first to match the expected columns, then upload your file. You'll see a preview of exactly what will be imported (and what will be skipped, with the reason) before anything is saved.
+- Use **Export Ledger CSV** any time to download your current employee list as a CSV.
+- Search, sort, edit, or delete employees directly from the table. Select multiple rows to bulk-delete.
 
-### 4. Deploy to Netlify
+### 3. Run payroll and export the payment file
 
-1. Log in to [Netlify](https://app.netlify.com) (GitHub login works).
-2. **Add new site → Import an existing project**, and connect this repository.
-3. Build settings (already set in `netlify.toml`, nothing to change):
-   - Publish directory: `.`
-   - Functions directory: `netlify/functions`
-4. Deploy the site.
+Go to the **Payroll Run** page:
 
-### 5. Environment variables
+1. Choose the **Transfer Type** (Same Bank / Other Bank), the **Payroll Cycle** (month), and the **Transfer Date**.
+2. Enter the salary amount for each employee — the **Batch Total** at the bottom updates live as you type.
+3. Click **Export File**, then choose how to pay for the export:
+   - **Pay via Wallet** — uses your existing credit balance.
+   - **Pay via Razorpay** — buy more credits first, then export.
+4. Once payment is confirmed, the bulk payment file downloads automatically, formatted for your selected bank.
 
-In Netlify: **Site configuration → Environment variables**, add:
+Every export costs a small number of credits from your wallet (see [Wallet & Credits](#wallet--credits) below).
 
-| Key | Value |
-|---|---|
-| `RAZORPAY_KEY_ID` | From Razorpay dashboard |
-| `RAZORPAY_KEY_SECRET` | From Razorpay dashboard |
-| `FIREBASE_PROJECT_ID` | `project_id` from the service account JSON |
-| `FIREBASE_CLIENT_EMAIL` | `client_email` from the service account JSON |
-| `FIREBASE_PRIVATE_KEY` | `private_key` from the service account JSON (paste the full `-----BEGIN PRIVATE KEY-----...` block) |
-| `SUPPORT_EMAIL_APP_PASSWORD` | See [Help & Support email setup](#6-help--support-email-setup) below |
+### 4. Upload the file to your bank
 
-After adding these, trigger a redeploy (**Deploys tab → Trigger deploy**).
+Log in to your bank's corporate/net-banking portal, find its **bulk upload / bulk payment** section, and upload the file PayFlow Pro just generated. Your bank will handle the actual transfer to each employee's account from there — PayFlow Pro only prepares the file, it never moves money itself.
 
-### 6. Help & Support email setup
+### 5. Review past exports
 
-The in-app "Help & Support" form emails the site owner directly via Gmail SMTP.
+The **Exports** page keeps a full history of every batch you've generated — click any row to expand it and see the exact employee-by-employee breakdown that was included, and re-download the file if you need it again.
 
-1. Sign in to the Gmail account that should receive support messages.
-2. Turn on **2-Step Verification** at [myaccount.google.com/security](https://myaccount.google.com/security) (required for app passwords).
-3. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords), create a new app password (any name, e.g. "PayFlow Support").
-4. Copy the 16-character password into the `SUPPORT_EMAIL_APP_PASSWORD` environment variable above.
-5. Update the `SUPPORT_INBOX` constant in `netlify/functions/send-support-message.js` to your own address.
+### 6. Check the Activity Log
 
-Full details in [`HELP_SUPPORT_SETUP.md`](./HELP_SUPPORT_SETUP.md).
+The 📋 icon in the sidebar opens the **Activity Log** — a searchable, filterable record of every employee added/edited/deleted and every export run, with who did it and when.
 
-### 7. Point the frontend at your functions
+## Wallet & Credits
 
-In `app.js`, find:
+- New accounts get **5 free credits** automatically on first sign-in.
+- Each payroll export costs a fixed number of credits.
+- When you run low, open the **Wallet** page (the 🪙 chip in the sidebar shows your current balance) and pick a credit pack — bigger packs work out cheaper per credit.
+- Payments are handled securely through **Razorpay**.
 
-```js
-const FUNCTIONS_BASE_URL = ""; // "" = same origin
-```
+## Settings
 
-- If the whole site (HTML/CSS/JS **and** the functions) is on the same Netlify site → leave this as `""`.
-- If the frontend is hosted elsewhere (e.g. GitHub Pages) and only the functions live on Netlify → set this to your Netlify site's URL, e.g. `"https://your-site.netlify.app"`.
+From the ⚙️ icon in the sidebar you can:
 
-Also update `ALLOWED_ORIGINS` in `netlify/functions/_firebaseAdmin.js` to include whatever origin(s) actually serve the frontend — this is required for the functions' CORS headers to allow the browser's requests through.
+- **Appearance** — switch between the dark theme and a lighter, grey interface. Your choice is saved to your account, so it follows you to any device you sign in on.
+- **Sign-in Email / Password** — update your login credentials (not available if you signed in with Google — those are managed through your Google Account).
+- **Edit Company Details** — update your company name, bank, account number, or IFSC.
+- **Replay Guided Tour** — see the app walkthrough again any time.
+- **About PayFlow Pro** — a quick summary of what the app does.
 
-Full details in [`BILLING_SETUP.md`](./BILLING_SETUP.md).
+## Help & Support
 
-## Wallet & Billing Model
+Click the ❓ icon in the sidebar, fill in a subject and message, and hit **Send**. Your message goes straight to the PayFlow Pro support inbox, and any reply lands directly in your own email — no ticket numbers, no separate portal to check.
 
-- Every new user gets **5 free credits** automatically on their first login (once, ever — enforced by a Firestore transaction so a double-click or two open tabs can't grant it twice).
-- Every payroll export costs **5 credits**.
-- When exporting, the user can choose:
-  - **Pay via Wallet** — deducts directly from the current balance (fails cleanly if the balance is insufficient).
-  - **Pay via Razorpay** — buy a credit pack (bigger packs get a steeper per-credit discount), verified server-side, then the export proceeds.
-- All pricing lives in **one place**: `netlify/functions/_creditPacks.js`. The copy of the price table in `app.js` is for **display only** — the amount actually charged always comes from the server file, so editing the client copy in DevTools changes nothing about what gets billed.
-- Payment verification recomputes Razorpay's HMAC signature server-side and re-fetches the order from Razorpay's API to read the real credit amount — the browser can never claim it paid for more credits than it actually did, and a captured/replayed payment confirmation can only ever be credited once.
+## Data Security
 
-See [`BILLING_SETUP.md`](./BILLING_SETUP.md) for the full setup walkthrough and default pricing table.
+- Your account is protected by Firebase Authentication (email/password or Google sign-in).
+- Account numbers are shown masked by default in the app.
+- Employee bank details are typed twice everywhere they're entered, with live mismatch warnings, to catch typos before they ever reach a real bank file.
+- Wallet balances and billing are enforced entirely on the server — nothing about your credits or pricing can be changed from the browser.
 
-## Supported Banks & File Formats
+## FAQ
 
-| Bank | IFSC prefix |
-|---|---|
-| State Bank of India (SBI) | `SBIN` |
-| HDFC Bank | `HDFC` |
-| ICICI Bank | `ICIC` |
-| Punjab National Bank (PNB) | `PUNB` |
+**Do I need to install anything?**
+No — PayFlow Pro runs entirely in your browser. Works on desktop and mobile.
 
-Every Indian bank's IFSC is **11 characters** — 4 letters (bank code) + a fixed `0` + 6 characters (branch code) — this is an RBI-wide standard and doesn't vary by bank. The app validates both the general 11-character format **and** that the code's prefix matches whichever bank is selected for the company profile.
+**What happens if I enter the wrong account number?**
+Every account number and IFSC field is typed twice, with an immediate warning if the two don't match — so mistakes get caught before they're saved.
 
-Each bank has its own bulk-file column layout/delimiter, implemented in `app.js`'s `BankFormatters`. Transfer mode (Same Bank / NEFT / RTGS / IMPS) is auto-detected per beneficiary by comparing the company's and employee's IFSC prefixes.
+**Can I edit an export after it's been generated?**
+No — exports are a permanent record for your Activity Log and audit trail. If details were wrong, correct the employee/amount and run a fresh export.
 
-## Security
+**What if I run out of credits mid-export?**
+You'll be prompted to top up via Razorpay before the export continues — nothing is generated until payment is confirmed.
 
-- **Server-enforced billing** — all balance checks, price lookups, and payment verification happen in Netlify Functions using the Firebase Admin SDK; Firestore rules independently block the browser from writing `credits` or `walletInitialized` directly, so both layers have to agree before a balance ever changes.
-- **Payment replay protection** — each verified Razorpay payment is recorded (by `razorpay_payment_id`) in the same atomic transaction that credits the wallet, so a captured/resent payment confirmation can't be used to claim credits more than once.
-- **Authenticated functions only** — every Netlify function requires a valid Firebase ID token (`Authorization: Bearer <token>`); there is no unauthenticated write path.
-- **Double-entry data guards** — account numbers and IFSC codes are typed twice (employee form and company profile) with live mismatch detection, to catch typos before they reach a real bank file.
-- **Never commit secrets** — Razorpay keys, the Firebase service-account private key, and the support-email app password must live only in Netlify environment variables, never in the repository.
-
-If you discover a security issue in this app, please do not open a public GitHub issue — contact the maintainer privately first.
-
-## Local Development
-
-Netlify Functions can be run locally with the [Netlify CLI](https://docs.netlify.com/cli/get-started/):
-
-```bash
-npm install -g netlify-cli
-netlify login
-netlify dev
-```
-
-This serves `index.html` and the functions together on `http://localhost:8888`, using the same environment variables configured in your Netlify site (or a local `.env` file — never commit it).
-
-## Migrating Existing Users
-
-If you already had live users on an older `freeExportUsed` / 1-credit-per-export system before adding the wallet, their existing `credits` values won't match the new 5-credits-per-export scale. Before deploying, either manually update Firestore or run a one-time script to:
-
-1. Multiply each user's existing `credits` by 5.
-2. Set `walletInitialized: true` on their document, so they don't get another free grant.
-
-## Troubleshooting
-
-| Symptom | Likely cause |
-|---|---|
-| "Checking..." hangs forever on export/buy | A CORS error — add your frontend's origin to `ALLOWED_ORIGINS` in `_firebaseAdmin.js` and redeploy. |
-| "Could not reach the billing server" | `FUNCTIONS_BASE_URL` in `app.js` doesn't point at your actual Netlify functions URL. |
-| Support emails land in Spam | First-time self-to-self Gmail sends are sometimes flagged — mark "Not Spam" once and it self-corrects. |
-| Browser tab shows no icon | Make sure `favicon.svg`, `favicon.ico`, and the `icon-*.png` files are uploaded alongside `index.html` in the site root. |
-| "This IFSC doesn't look like a [Bank] code" on save | The entered IFSC's 4-letter prefix doesn't match the selected bank — double check the code or the bank selection. |
-
-## License
-
-Add your preferred license here (e.g. MIT) before making this repository public.
+**Is my data shared with anyone?**
+No. Your employee list, company details, and export history are private to your account.

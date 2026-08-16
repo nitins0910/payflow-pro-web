@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="10" fill="#0A0F1E"/>
-  <rect x="4" y="4" width="56" height="56" rx="7" fill="#111A2E" stroke="#243349" stroke-width="1.5"/>
-  <text x="32" y="45" font-family="'Space Grotesk','Arial',sans-serif" font-weight="700" font-size="34" fill="#3B82F6" text-anchor="middle">P</text>
+  <rect x="1.5" y="1.5" width="61" height="61" fill="#2563EB" stroke="#60A5FA" stroke-width="3"/>
+  <text x="32" y="32" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono','Consolas',monospace" font-weight="700"
+        font-size="28" letter-spacing="0.5" fill="#FFFFFF">PF</text>
 </svg>

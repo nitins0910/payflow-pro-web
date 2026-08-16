@@ -121,14 +121,25 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-// SESSION persistence: Firebase's default (LOCAL) keeps the user signed
-// in even after the browser is fully closed and reopened. SESSION ties
-// the sign-in to the current tab instead — the moment the tab or the
-// whole browser window is closed, the sign-in state is gone, so the
-// next visit lands back on the Sign In screen instead of walking
-// straight into the dashboard. Must be set before any sign-in call.
-auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(err => {
-  console.warn('[Auth] Could not set session persistence:', err.message);
+// LOCAL persistence (Firebase's own default, and what almost every
+// consumer web app uses — Gmail, banking apps, etc.): the sign-in
+// state lives in durable, origin-scoped storage (IndexedDB), not tied
+// to a single browser tab. Users stay signed in across reloads, new
+// tabs, and even fully closing and reopening the browser — until they
+// explicitly tap "Logout".
+//
+// We used to use SESSION persistence (tab-scoped sessionStorage) so
+// that closing the tab/browser would auto sign-out. That backfired on
+// mobile: opening the Terms/Privacy link (target="_blank") spawns a
+// new tab, and on memory-constrained phones the browser would often
+// silently discard and later reload the original app tab in the
+// background. SESSION storage doesn't reliably survive that, so
+// returning to the app after just reading the Terms could dump the
+// user back on the Sign In screen mid-consent, even though they never
+// actually logged out. LOCAL persistence isn't tied to any one tab's
+// lifecycle, so that whole class of bug goes away.
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
+  console.warn('[Auth] Could not set persistence:', err.message);
 });
 
 // IMPORTANT: this must be your real, live Firebase Hosting URL

@@ -20,6 +20,17 @@
 <link rel="icon" type="image/png" sizes="16x16" href="icon-16.png">
 <link rel="shortcut icon" href="favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+
+<!-- PWA: makes "Add to Home Screen" a real install (manifest +
+     service worker, see sw.js/manifest.json + app.js's
+     beforeinstallprompt handling), not just a shortcut. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A0F1E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PayFlow Pro">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -405,6 +416,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span class="nav-item-label">Help &amp; Support</span>
         </div>
+        <div class="nav-item" data-page="payments" data-tooltip="Payment History">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
+          <span class="nav-item-label">Payment History</span>
+        </div>
       </div>
 
       <div class="sidebar-footer">
@@ -775,6 +790,43 @@
           <div id="walletTxnEmptyState" class="empty-state hidden">
             <div class="empty-state__icon">🧾</div>
             No transactions yet.
+          </div>
+        </div>
+      </section>
+
+      <!-- Payment History — real-money receipts only (every Razorpay
+           payment that actually charged a card/UPI/net-banking
+           instrument), separate from the Wallet page's credit ledger
+           above. Each row also records what the payment was FOR: a
+           direct per-export payment, or a wallet recharge. Sourced
+           from the same users/{uid}/transactions collection, filtered
+           client-side to type === 'credit_purchase' — see
+           renderPaymentHistory() in app.js. -->
+      <section id="page-payments" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Payment History</h2>
+            <p>Every real payment you've made — whether to recharge your wallet or to pay directly for a single export.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Date</th>
+                <th>Paid for</th>
+                <th>Amount</th>
+                <th>Credits</th>
+                <th>Payment ID</th>
+                <th>Status</th>
+              </tr></thead>
+              <tbody id="paymentHistoryTableBody"></tbody>
+            </table>
+          </div>
+          <div id="paymentHistoryLoading" style="text-align:center; padding:20px; color:var(--muted, #888); font-size:13px;">Loading payment history…</div>
+          <div id="paymentHistoryEmptyState" class="empty-state hidden">
+            <div class="empty-state__icon">🧾</div>
+            No payments yet.
           </div>
         </div>
       </section>

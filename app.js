@@ -299,9 +299,83 @@ function openPwaGuideModal() {
   if (modal) modal.classList.remove('hidden');
 }
 
+// ---------------------------------------------------------
+// Real install trigger. Previously both "Add to Home Screen" buttons
+// only ever opened the manual how-to guide — which works, but reads
+// as "the button doesn't do anything" on Android/Chrome, where the
+// browser can actually install the app natively with one tap. Chrome/
+// Edge fire `beforeinstallprompt` once the site meets installability
+// criteria (a web app manifest + a registered service worker, both
+// added alongside this — see manifest.json / sw.js); we capture that
+// event and fire it on demand instead of letting the browser show its
+// own mini-infobar.
+//
+// iOS Safari has no such API at all, and Chrome won't fire the event
+// if the app is already installed or the browser hasn't decided it's
+// installable yet — triggerInstallOrGuide() below always falls back
+// to the manual guide in every one of those cases, so the button never
+// does nothing.
+// ---------------------------------------------------------
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  toast('PayFlow Pro installed — find it on your home screen.', 'success');
+});
+
+// Already running as an installed app (standalone display mode)? Hide
+// both install entry points instead of showing a guide for something
+// that's already done. Covers Android/Chrome (display-mode media
+// query) and iOS Safari (navigator.standalone) with the same check.
+function isRunningInstalled() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    window.navigator.standalone === true;
+}
+
+async function triggerInstallOrGuide() {
+  if (deferredInstallPrompt) {
+    const promptEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    promptEvent.prompt();
+    try {
+      const { outcome } = await promptEvent.userChoice;
+      if (outcome !== 'accepted') openPwaGuideModal();
+    } catch (e) {
+      openPwaGuideModal();
+    }
+    return;
+  }
+  // No native prompt ready (iOS Safari, not installable yet, or this
+  // is a repeat call) — the manual guide always works as a fallback.
+  openPwaGuideModal();
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((err) => {
+      console.warn('[PWA] Service worker registration failed:', err.message);
+    });
+  });
+}
+
 function wirePwaGuideModal() {
+  registerServiceWorker();
+
   const authBtn = document.getElementById('authPwaGuideBtn');
-  if (authBtn) authBtn.addEventListener('click', openPwaGuideModal);
+  const settingsBtn = document.getElementById('openPwaGuideBtn');
+  if (isRunningInstalled()) {
+    if (authBtn) authBtn.classList.add('hidden');
+    if (settingsBtn) settingsBtn.classList.add('hidden');
+  } else {
+    if (authBtn) authBtn.addEventListener('click', triggerInstallOrGuide);
+    if (settingsBtn) settingsBtn.addEventListener('click', triggerInstallOrGuide);
+  }
 
   const tabs = document.querySelectorAll('.pwa-guide-tab');
   const panels = { android: document.getElementById('pwaGuideAndroid'), ios: document.getElementById('pwaGuideIos') };
@@ -328,9 +402,18 @@ function wirePwaGuideModal() {
 // Opens Razorpay's hosted checkout for a specific credit pack. Resolves
 // true only after the payment has been verified server-side
 // (verify-payment.js) — never on the client-side success callback alone.
-function buyCreditPack(pack) {
+//
+// `purpose` tags WHY the money is being paid — 'recharge' (topping up
+// the wallet from the Wallet page, to spend later) or 'export' (the
+// export-confirm modal's "Pay via Razorpay" button, paying for exactly
+// one export right now). It travels through create-order's order notes
+// and comes back on the verified transaction record, so the Payment
+// History page can show what each real payment was actually for. It
+// has no effect on price or credits — those still only ever come from
+// the server-side pack lookup.
+function buyCreditPack(pack, purpose = 'recharge') {
   return new Promise(async (resolve) => {
-    const order = await callBillingFunction('create-order', { packId: pack.id });
+    const order = await callBillingFunction('create-order', { packId: pack.id, purpose });
     if (!order.ok) {
       toast((order.data && order.data.error) || 'Could not start payment. Please try again.', 'error');
       resolve(false);
@@ -403,7 +486,7 @@ function renderCreditPacks(container, onBought) {
       const pack = CREDIT_PACKS.find(p => p.id === btn.dataset.pack);
       const prevLabel = btn.textContent;
       btn.disabled = true; btn.textContent = 'Opening payment...';
-      const ok = await buyCreditPack(pack);
+      const ok = await buyCreditPack(pack, 'recharge');
       btn.disabled = false; btn.textContent = prevLabel;
       if (ok && onBought) onBought();
     });
@@ -471,6 +554,66 @@ async function renderWalletTransactions() {
         <td><span class="txn-type ${meta.cls}">${meta.icon} ${escapeHtml(meta.label)}</span></td>
         <td class="${isCredit ? 'txn-amount-positive' : 'txn-amount-negative'}">${creditsLabel}</td>
         <td>${amount}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Labels for the `purpose` tag stored on every 'credit_purchase'
+// transaction (set in buyCreditPack() -> create-order -> verify-payment).
+// Older payments made before this field existed have no `purpose` at
+// all — those are shown as "Wallet Recharge" too, since that was the
+// only kind of payment possible back then.
+const PAYMENT_PURPOSE_META = {
+  export: { label: 'Payroll export payment', icon: '📤' },
+  recharge: { label: 'Wallet recharge', icon: '🔋' }
+};
+
+// Payment History page — real-money receipts only (every Razorpay
+// payment that actually charged the user), pulled from the same
+// users/{uid}/transactions collection as the Wallet page's credit
+// ledger but filtered down to type === 'credit_purchase' and shown
+// with what the payment was actually FOR. Read-only, same data source
+// as renderWalletTransactions() (Api.getTransactions()) — nothing new
+// to fetch, just a different view of it.
+async function renderPaymentHistory() {
+  const body = document.getElementById('paymentHistoryTableBody');
+  const emptyState = document.getElementById('paymentHistoryEmptyState');
+  const loading = document.getElementById('paymentHistoryLoading');
+  if (!body) return;
+
+  if (loading) loading.classList.remove('hidden');
+  if (emptyState) emptyState.classList.add('hidden');
+  body.innerHTML = '';
+
+  let rows = [];
+  try {
+    const all = await Api.getTransactions();
+    rows = all.filter(r => r.type === 'credit_purchase');
+  } catch (e) {
+    if (loading) loading.classList.add('hidden');
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--danger, #e5484d);">Could not load payment history.</td></tr>`;
+    return;
+  }
+  if (loading) loading.classList.add('hidden');
+
+  if (!rows.length) {
+    if (emptyState) emptyState.classList.remove('hidden');
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const purposeMeta = PAYMENT_PURPOSE_META[r.purpose] || PAYMENT_PURPOSE_META.recharge;
+    const amount = r.amountRupees ? `₹${Number(r.amountRupees).toFixed(2)}` : '—';
+    const paymentId = r.paymentId ? `<span style="font-family:var(--font-mono); font-size:12px;">${escapeHtml(r.paymentId)}</span>` : '—';
+    return `
+      <tr>
+        <td>${formatTxnTimestamp(r.createdAt)}</td>
+        <td><span class="txn-type">${purposeMeta.icon} ${escapeHtml(purposeMeta.label)}</span></td>
+        <td>${amount}</td>
+        <td class="txn-amount-positive">+${r.credits} credits</td>
+        <td>${paymentId}</td>
+        <td><span class="txn-type txn-credit">✓ Paid</span></td>
       </tr>
     `;
   }).join('');
@@ -1943,6 +2086,7 @@ function showAppPage(page) {
   if (page === 'audit') loadAuditTrail();
   if (page === 'exports') loadExportHistory();
   if (page === 'wallet') renderWalletPage();
+  if (page === 'payments') renderPaymentHistory();
 }
 function goToPage(page) { showAppPage(page); }
 
@@ -3168,7 +3312,7 @@ async function openExportPreview() {
     setBusy(true);
     razorpayBtn.textContent = 'Opening payment...';
     try {
-      const bought = await buyCreditPack(EXPORT_RAZORPAY_PACK);
+      const bought = await buyCreditPack(EXPORT_RAZORPAY_PACK, 'export');
       if (!bought) return;
 
       const res = await callBillingFunction('consume-credits');
@@ -3760,7 +3904,9 @@ function wireSettingsForms() {
     document.getElementById('aboutModal').classList.remove('hidden');
   });
 
-  document.getElementById('openPwaGuideBtn').addEventListener('click', openPwaGuideModal);
+  // "Add to Home Screen" is wired once, in wirePwaGuideModal() (boot
+  // sequence, runs before login) — not here, so it isn't double-bound
+  // and so the same install-or-guide logic covers both entry points.
 
   // ---- Change email ----
   document.getElementById('changeEmailForm').addEventListener('submit', async (e) => {

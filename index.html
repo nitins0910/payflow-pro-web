@@ -935,6 +935,38 @@
     </div>
   </div>
 
+  <!-- Terms & Privacy consent gate — shown once per account (and again
+       after a policy update) BEFORE anything else, including the
+       free-credits modal below. No close button and no Cancel option
+       on purpose: this modal is not dismissible until the user agrees.
+       Wired in ensureTermsAccepted() in app.js. -->
+  <div id="termsGateModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:460px;">
+      <div class="modal-head">
+        <h3>Before you continue</h3>
+      </div>
+      <p style="font-size:13px; color:var(--text2); line-height:1.7;">
+        PayFlow Pro stores your company and employee payroll data (including bank account
+        numbers and IFSC codes) to generate your bank-upload files, and shares payment
+        details with Razorpay to process credit purchases. Please review how your data is
+        handled before continuing.
+      </p>
+      <p style="font-size:13px; margin:10px 0 16px;">
+        <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a>
+        &nbsp;&middot;&nbsp;
+        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+      </p>
+      <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--text2); cursor:pointer;">
+        <input type="checkbox" id="termsGateCheckbox" style="margin-top:3px;">
+        <span>I have read and agree to the Terms of Service and Privacy Policy.</span>
+      </label>
+      <div id="termsGateError" class="field-hint" style="color:var(--danger); margin-top:8px;"></div>
+      <div class="modal-actions" style="margin-top:16px;">
+        <button type="button" class="btn-inline" id="termsGateAgreeBtn" style="width:100%;" disabled>Agree &amp; Continue</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Shown once, right after the free 5 credits are granted on a
        brand-new account (see initWallet() in app.js). -->
   <div id="freeCreditsModal" class="modal-backdrop hidden">
@@ -1054,7 +1086,7 @@
   <div id="toastHost" class="toast-host" aria-live="polite"></div>
 </div>
 
-<footer class="site-footer">All rights reserved by EnginX &amp; Co © 2026</footer>
+<footer class="site-footer">All rights reserved by EnginX &amp; Co © 2026 &nbsp;&middot;&nbsp; <a href="terms.html" target="_blank" rel="noopener">Terms</a> &nbsp;&middot;&nbsp; <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></footer>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>

@@ -163,6 +163,12 @@ const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 const FUNCTIONS_BASE_URL = "https://incomparable-cat-722533.netlify.app/"; // "" = same origin, or "https://your-site.netlify.app"
 
 const EXPORT_COST_CREDITS = 5;
+
+// Bump this whenever the Terms of Service / Privacy Policy materially
+// change — existing users whose stored termsVersion is lower than this
+// will see the consent gate again on their next login.
+const TERMS_VERSION = 1;
+
 const CREDIT_PACKS = [
   { id: 'pack_5', credits: 5, priceRupees: 50, discountPct: 0, label: 'Quick top-up' },
   { id: 'pack_15', credits: 15, priceRupees: 135, discountPct: 10, label: '' },
@@ -372,6 +378,71 @@ async function initUserContext(uid) {
 
 function userRef() {
   return db.collection('users').doc(currentUserId);
+}
+
+// ---------------------------------------------------------
+// 1c. TERMS & PRIVACY CONSENT GATE
+// Blocks the entire app — nothing behind the modal is reachable, since
+// it's a full-screen .modal-backdrop with no close button — until the
+// signed-in user explicitly agrees to the Terms of Service and Privacy
+// Policy. Runs BEFORE initWallet(), so it always appears ahead of the
+// "Congratulations, 5 free credits" modal on a brand-new signup, and
+// ahead of everything else on every other login too.
+//
+// Consent is recorded on the user's own Firestore doc (allowed by
+// firestore.rules — only the wallet fields are locked to server-only
+// writes) with a server-generated timestamp, so the write itself can't
+// be backdated from devtools even though the client performs it.
+// termsVersion lets a future policy update re-prompt existing users:
+// bump TERMS_VERSION above and everyone with an older stored version
+// sees the gate again on their next login.
+async function ensureTermsAccepted() {
+  let alreadyAccepted = false;
+  try {
+    const snap = await userRef().get();
+    const data = snap.exists ? snap.data() : {};
+    alreadyAccepted = Number(data.termsVersion || 0) >= TERMS_VERSION;
+  } catch (e) {
+    // Can't confirm consent was ever recorded — safer to show the gate
+    // again than to silently let it slide.
+    alreadyAccepted = false;
+  }
+  if (alreadyAccepted) return;
+
+  await new Promise((resolve) => {
+    const modal = document.getElementById('termsGateModal');
+    const checkbox = document.getElementById('termsGateCheckbox');
+    const agreeBtn = document.getElementById('termsGateAgreeBtn');
+    const errEl = document.getElementById('termsGateError');
+    if (!modal || !checkbox || !agreeBtn) { resolve(); return; }
+
+    errEl.textContent = '';
+    checkbox.checked = false;
+    agreeBtn.disabled = true;
+    agreeBtn.textContent = 'Agree & Continue';
+    modal.classList.remove('hidden');
+
+    checkbox.onchange = () => { agreeBtn.disabled = !checkbox.checked; };
+
+    agreeBtn.onclick = async () => {
+      if (!checkbox.checked) return;
+      agreeBtn.disabled = true;
+      agreeBtn.textContent = 'Saving...';
+      errEl.textContent = '';
+      try {
+        await userRef().set({
+          termsVersion: TERMS_VERSION,
+          termsAcceptedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        modal.classList.add('hidden');
+        resolve();
+      } catch (e) {
+        errEl.textContent = 'Could not save your acceptance. Please check your connection and try again.';
+        agreeBtn.disabled = false;
+        agreeBtn.textContent = 'Agree & Continue';
+      }
+    };
+  });
 }
 
 const Api = {
@@ -1340,6 +1411,8 @@ async function bootDashboard(user) {
     toast('Could not load your account: ' + err.message, 'error');
     return;
   }
+
+  await ensureTermsAccepted();
 
   const walletInitPromise = initWallet();
   initDisbursementDateFields();

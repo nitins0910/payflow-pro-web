@@ -27,6 +27,10 @@ Yeh table sirf **`netlify/functions/_creditPacks.js`** me hai — wahi asli pric
 
 **Client kabhi bhi `credits` ya `walletInitialized` field ko directly nahi likh sakta** — Firestore rules isko block karte hain. Sirf yeh Netlify functions (jo Admin SDK use karte hain) likh sakte hain.
 
+### Transaction History
+
+Har credit-affecting event (free signup grant, credit-pack purchase, export debit) `users/{uid}/transactions/{id}` me ek row bhi likhta hai — yeh bhi sirf server-side functions (Admin SDK) se hi likha jaata hai, `firestore.rules` client ko is subcollection me write karne se block karta hai (sirf apna record read kar sakta hai). Wallet page par "Transaction History" table isi data se banti hai (`Api.getTransactions()` → `app.js`), sabse naya transaction sabse upar.
+
 ---
 
 ## Setup Steps
@@ -99,7 +103,7 @@ Agar aapke paas pehle se live users hain jo purane `freeExportUsed` / `credits` 
 - `netlify/functions/consume-credits.js` — export se pehle 5 credits atomically deduct karta hai
 - `netlify/functions/create-order.js` — chuni hui pack ka Razorpay order banata hai
 - `netlify/functions/verify-payment.js` — payment signature verify karke order ke asli credits wallet me add karta hai
-- `firestore.rules` — `credits` / `walletInitialized` ko client-write se protect karta hai
+- `firestore.rules` — `credits` / `walletInitialized` aur `transactions` subcollection ko client-write se protect karta hai (read allowed, write sirf Admin SDK se)
 - `package.json`, `netlify.toml` — Netlify deployment config
 - `index.html` — Wallet page, Buy Credits modal, "Congratulations" modal, sidebar wallet balance chip
 - `style.css` — wallet chip + credit-pack card styling

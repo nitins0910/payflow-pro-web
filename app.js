@@ -365,6 +365,66 @@ function renderWalletPage() {
   setWalletBalance(walletBalance);
   const grid = document.getElementById('walletPackGrid');
   if (grid) renderCreditPacks(grid, () => {});
+  renderWalletTransactions();
+}
+
+// Labels/icons for each transaction type written by the billing
+// functions (see consume-credits.js, verify-payment.js, init-wallet.js).
+const TRANSACTION_TYPE_META = {
+  credit_purchase: { label: 'Credit Purchase', icon: '🛒', cls: 'txn-credit' },
+  export_debit: { label: 'Payroll Export', icon: '📤', cls: 'txn-debit' },
+  free_signup_credit: { label: 'Free Signup Credits', icon: '🎉', cls: 'txn-credit' }
+};
+
+function formatTxnTimestamp(ts) {
+  if (!ts || typeof ts.toDate !== 'function') return '—';
+  const d = ts.toDate();
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// Pulls the signed-in user's credit transaction history (purchases,
+// export debits, free-signup grant) and renders it as a table on the
+// Wallet page. Read-only data — see firestore.rules and
+// Api.getTransactions().
+async function renderWalletTransactions() {
+  const body = document.getElementById('walletTxnTableBody');
+  const emptyState = document.getElementById('walletTxnEmptyState');
+  const loading = document.getElementById('walletTxnLoading');
+  if (!body) return;
+
+  if (loading) loading.classList.remove('hidden');
+  if (emptyState) emptyState.classList.add('hidden');
+  body.innerHTML = '';
+
+  let rows = [];
+  try {
+    rows = await Api.getTransactions();
+  } catch (e) {
+    if (loading) loading.classList.add('hidden');
+    body.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--danger, #e5484d);">Could not load transaction history.</td></tr>`;
+    return;
+  }
+  if (loading) loading.classList.add('hidden');
+
+  if (!rows.length) {
+    if (emptyState) emptyState.classList.remove('hidden');
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const meta = TRANSACTION_TYPE_META[r.type] || { label: r.type || 'Transaction', icon: '•', cls: '' };
+    const isCredit = Number(r.credits) > 0;
+    const creditsLabel = `${isCredit ? '+' : ''}${r.credits} credits`;
+    const amount = r.type === 'credit_purchase' && r.amountRupees ? `₹${Number(r.amountRupees).toFixed(2)}` : '—';
+    return `
+      <tr>
+        <td>${formatTxnTimestamp(r.createdAt)}</td>
+        <td><span class="txn-type ${meta.cls}">${meta.icon} ${escapeHtml(meta.label)}</span></td>
+        <td class="${isCredit ? 'txn-amount-positive' : 'txn-amount-negative'}">${creditsLabel}</td>
+        <td>${amount}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ---------------------------------------------------------
@@ -559,6 +619,14 @@ const Api = {
   },
   async getAuditTrail() {
     const snap = await userRef().collection('auditTrail').orderBy('timestamp', 'desc').limit(300).get();
+    return snap.docs.map(d => d.data());
+  },
+  // Credit transaction history (free-signup grant, purchases, export
+  // debits). These rows are written ONLY by the billing functions
+  // (Admin SDK) — see firestore.rules, the client has read-only access
+  // to this subcollection, same as the credits field itself.
+  async getTransactions() {
+    const snap = await userRef().collection('transactions').orderBy('createdAt', 'desc').limit(200).get();
     return snap.docs.map(d => d.data());
   }
 };

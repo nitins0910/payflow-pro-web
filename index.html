@@ -87,6 +87,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
           <span>Full audit trail of every payroll run, always accessible</span>
         </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Works great on mobile too — generate and download your bank file right from your phone, no desktop needed</span>
+        </li>
       </ul>
     </div>
 
@@ -185,6 +189,13 @@
             <span id="switchToSignupWrap">New here? <button type="button" id="switchToSignup">Create an account</button></span>
             <span id="switchToLoginWrap" class="hidden">Already have an account? <button type="button" id="switchToLogin">Sign in</button></span>
           </div>
+
+          <p style="text-align:center; font-size:11.5px; color:var(--text3); margin-top:16px; line-height:1.6;">
+            By continuing, you agree to our
+            <a href="terms.html" target="_blank" rel="noopener" style="color:var(--text2); text-decoration:underline;">Terms of Service</a>
+            and
+            <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--text2); text-decoration:underline;">Privacy Policy</a>.
+          </p>
 
         </div>
       </div>
@@ -737,6 +748,31 @@
         </div>
 
         <div id="walletPackGrid" class="credit-pack-grid"></div>
+
+        <div class="page-head" style="margin-top:32px;">
+          <div>
+            <h2 style="font-size:18px;">Transaction History</h2>
+            <p>Every credit purchase and payroll export debit, most recent first.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Credits</th>
+                <th>Amount</th>
+              </tr></thead>
+              <tbody id="walletTxnTableBody"></tbody>
+            </table>
+          </div>
+          <div id="walletTxnLoading" style="text-align:center; padding:20px; color:var(--muted, #888); font-size:13px;">Loading transaction history…</div>
+          <div id="walletTxnEmptyState" class="empty-state hidden">
+            <div class="empty-state__icon">🧾</div>
+            No transactions yet.
+          </div>
+        </div>
       </section>
 
       <section id="page-settings" class="hidden">

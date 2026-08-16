@@ -221,6 +221,8 @@ function setWalletBalance(credits) {
   walletBalance = Number(credits) || 0;
   const chip = document.getElementById('walletBalanceValue');
   if (chip) chip.textContent = walletBalance;
+  const mobileChip = document.getElementById('walletBalanceValueMobile');
+  if (mobileChip) mobileChip.textContent = walletBalance;
   const pageBalance = document.getElementById('walletPageBalance');
   if (pageBalance) pageBalance.textContent = walletBalance;
 }
@@ -1363,6 +1365,7 @@ async function bootDashboard(user) {
   if (!dashboardBooted) {
     dashboardBooted = true;
     wireNav();
+    wireMobileDrawer();
     wireEmployeeForm();
     wireEmployeeTableControls();
     wireBulkImport();
@@ -1487,7 +1490,16 @@ function endTour() {
   tourEls.spotlight.remove();
   tourEls.card.remove();
   tourEls = null;
+  closeMobileDrawer(); // in case a drawer-targeting step left it open
   try { localStorage.setItem('payflow-tour-seen', '1'); } catch (e) { /* ignore */ }
+}
+
+// Two tour steps (Activity Log, profile/logout) point at items that
+// live inside the sidebar — a permanent column on desktop, but an
+// off-canvas drawer on mobile (see wireMobileDrawer). This opens/closes
+// that drawer to match whichever step is showing.
+function stepNeedsDrawer(step) {
+  return step.target.indexOf('.sidebar') === 0 || step.target === '.user-chip';
 }
 
 function renderTourStep() {
@@ -1531,7 +1543,18 @@ function renderTourStep() {
   const backBtn = tourEls.card.querySelector('#tourBackBtn');
   if (backBtn) backBtn.onclick = () => { tourStepIndex--; renderTourStep(); };
 
-  positionTourAround(target);
+  if (stepNeedsDrawer(step)) {
+    // Give the drawer's slide-in transition time to finish before
+    // measuring the target's position — measuring immediately would
+    // still catch it mid-animation (or off-screen on desktop, where
+    // the drawer classes are a no-op and the target is simply the
+    // permanent sidebar column, already in place).
+    openMobileDrawer();
+    setTimeout(() => { if (tourEls) positionTourAround(target); }, 240);
+  } else {
+    closeMobileDrawer();
+    positionTourAround(target);
+  }
 }
 
 // Positions the spotlight cutout directly over the target's bounding
@@ -1709,9 +1732,11 @@ function goToPage(page) { showAppPage(page); }
 function wireNav() {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
-      // The Help & Support sidebar icon reuses .nav-item styling but has
-      // no data-page — it opens a modal instead, wired separately in
-      // wireHelpSupport(). Nothing to do for it here.
+      // Any tap inside the (mobile) sidebar drawer should close it,
+      // whether it's a real page nav or the Help & Support icon,
+      // which has no data-page and opens a modal instead (wired
+      // separately in wireHelpSupport()).
+      closeMobileDrawer();
       if (!item.dataset.page) return;
       showAppPage(item.dataset.page);
     });
@@ -1720,6 +1745,32 @@ function wireNav() {
     e.preventDefault();
     showAppPage('settings');
   });
+}
+
+// ---------------------------------------------------------
+// MOBILE DRAWER — on phones the sidebar (Activity Log / Settings /
+// Help & Support / wallet / account / logout) becomes a slide-in
+// drawer instead of a permanent column. Opened from the hamburger
+// button in the topbar; closed via the × button, tapping the dimmed
+// backdrop, or tapping any item inside (handled in wireNav above).
+// No-ops harmlessly on desktop, where these elements stay hidden.
+// ---------------------------------------------------------
+function openMobileDrawer() {
+  document.querySelector('.sidebar').classList.add('is-open');
+  document.getElementById('sidebarBackdrop').classList.add('is-open');
+  document.getElementById('mobileMenuBtn').setAttribute('aria-expanded', 'true');
+}
+function closeMobileDrawer() {
+  document.querySelector('.sidebar').classList.remove('is-open');
+  document.getElementById('sidebarBackdrop').classList.remove('is-open');
+  document.getElementById('mobileMenuBtn').setAttribute('aria-expanded', 'false');
+}
+function wireMobileDrawer() {
+  document.getElementById('mobileMenuBtn').addEventListener('click', openMobileDrawer);
+  document.getElementById('sidebarCloseBtn').addEventListener('click', closeMobileDrawer);
+  document.getElementById('sidebarBackdrop').addEventListener('click', closeMobileDrawer);
+  document.getElementById('walletChipMobile').addEventListener('click', () => showAppPage('wallet'));
+  document.getElementById('logoutBtn').addEventListener('click', closeMobileDrawer);
 }
 
 // Renders N placeholder rows into a <tbody> while a Firestore read is

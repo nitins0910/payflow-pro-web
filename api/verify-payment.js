@@ -54,6 +54,10 @@ module.exports = async (req, res) => {
   if (!credits || credits <= 0) {
     return json(res, 500, { error: 'Payment verified but the order has no credit amount on it. Contact support with payment ID: ' + razorpay_payment_id });
   }
+  // Older orders (created before this field existed) have no
+  // notes.purpose at all — default those to 'recharge', since a
+  // wallet top-up was the only kind of payment possible back then.
+  const purpose = notes.purpose === 'export' ? 'export' : 'recharge';
 
   const userRef = db.collection('users').doc(decoded.uid);
   const paymentRef = db.collection('processed_payments').doc(razorpay_payment_id);
@@ -88,7 +92,14 @@ module.exports = async (req, res) => {
         packId: notes.packId || null,
         orderId: razorpay_order_id,
         paymentId: razorpay_payment_id,
-        description: `Purchased ${credits} credits`,
+        // What this real-money payment was FOR — 'export' (paid
+        // directly for one export) or 'recharge' (wallet top-up).
+        // Read by the Payment History page (see renderPaymentHistory()
+        // in app.js) to separate the two, on top of the existing
+        // credit ledger on the Wallet page which already showed this
+        // same row either way.
+        purpose,
+        description: purpose === 'export' ? `Paid for a payroll export (${credits} credits)` : `Purchased ${credits} credits`,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 

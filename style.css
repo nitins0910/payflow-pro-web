@@ -1,8 +1,8 @@
 /* ============================================================
    PayFlow Pro — Web Edition
-   A ledger-grade payroll console. Dark navy throughout, sharp
-   rectangular edges (Windows 10 inspired), and a monochrome
-   palette — no colorful accents, no circular chrome. Green/red
+   A ledger-grade payroll console. Dark navy throughout, soft
+   rounded corners with subtle depth (glow + layered shadows),
+   and a monochrome palette — no rainbow of accent colors. Green/red
    are kept ONLY as functional validation states (match/mismatch,
    success/error toasts), never as decoration.
    ============================================================ */
@@ -46,16 +46,16 @@
   --cyan:      var(--blue-bright);
   --cyan-dim:  var(--blue-dim);
   --border2:   var(--blue-dim);
-  /* Sharp, rectangular edges everywhere (Windows 10 inspired) — no
-     rounded cards, buttons, or inputs. */
-  --radius:    0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.20);
-  --shadow-md: 0 4px 10px rgba(0,0,0,0.24);
-  --shadow-lg: 0 10px 24px rgba(0,0,0,0.32);
-  --shadow-glow: 0 0 0 2px var(--blue-glow);
+  /* Soft rounded corners everywhere — cards, buttons, inputs, modals
+     all pull from these so the whole app stays visually consistent. */
+  --radius:    10px;
+  --radius-sm: 9px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.24);
+  --shadow-md: 0 6px 16px rgba(0,0,0,0.28);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.34), 0 2px 8px rgba(0,0,0,0.2);
+  --shadow-glow: 0 0 0 4px var(--blue-glow);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Consolas', monospace;
@@ -81,9 +81,9 @@ html[data-theme="light"]{
   --text:      #14181F;
   --text2:     #454A52;
   --text3:     rgba(20,24,31,0.6);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 10px rgba(0,0,0,0.10);
-  --shadow-lg: 0 10px 24px rgba(0,0,0,0.14);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 6px 16px rgba(0,0,0,0.10);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
 }
 
 *{box-sizing:border-box; margin:0; padding:0;}
@@ -103,7 +103,7 @@ a{color:var(--blue-bright); text-decoration:none;}
 
 ::selection{ background:var(--blue-dim); color:#fff; }
 
-:focus-visible{ outline:2px solid var(--blue-bright); outline-offset:2px; border-radius:0; }
+:focus-visible{ outline:2px solid var(--blue-bright); outline-offset:2px; }
 
 @media (prefers-reduced-motion: reduce){
   *, *::before, *::after{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
@@ -421,9 +421,15 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
 .btn:disabled{ opacity:0.5; cursor:not-allowed; }
 
 .btn-primary{
-  background:var(--blue-dim);
+  background:linear-gradient(135deg, var(--blue-bright), var(--blue-dim));
   color:#fff; font-weight:700;
+  box-shadow:0 6px 16px rgba(37,99,235,0.32);
 }
+.btn-primary:hover{
+  box-shadow:0 8px 22px rgba(37,99,235,0.42);
+  transform:translateY(-1px);
+}
+.btn-primary:active{ transform:translateY(0); }
 
 .btn-google{
   background:var(--surface2);
@@ -652,7 +658,7 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
   padding:18px 20px;
   transition:box-shadow .18s var(--ease), transform .18s var(--ease), border-color .18s var(--ease);
 }
-.kpi-card:hover{ box-shadow:var(--shadow-md); transform:translateY(-2px); border-color:var(--border); }
+.kpi-card:hover{ box-shadow:0 12px 28px rgba(0,0,0,0.22); transform:translateY(-3px); border-color:var(--blue-dim); }
 .kpi-card__icon{
   width:34px; height:34px; border-radius:var(--radius-sm);
   display:flex; align-items:center; justify-content:center;

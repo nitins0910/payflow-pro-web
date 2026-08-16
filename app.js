@@ -370,10 +370,11 @@ function registerServiceWorker() {
 // ---------------------------------------------------------
 // Sidebar expand/collapse — desktop only (the mobile drawer is a
 // temporary overlay with its own hamburger open/close and always
-// shows full labels, see the max-width:800px CSS block). Expanded is
-// the default; collapsing shrinks the column down to an icon rail
-// (labels hidden, wallet/account rows drop to icon-only). The choice
-// is remembered across visits via localStorage.
+// shows full labels, see the max-width:800px CSS block). Collapsed
+// (icon rail only) is the default; clicking the toggle expands it,
+// and clicking anywhere outside the sidebar — or the toggle again —
+// collapses it back. The choice is remembered across visits via
+// localStorage.
 // ---------------------------------------------------------
 const SIDEBAR_COLLAPSE_KEY = 'pfp_sidebar_collapsed';
 
@@ -389,14 +390,35 @@ function wireSidebarCollapse() {
     toggleBtn.setAttribute('data-tooltip', collapsed ? 'Expand' : 'Collapse');
   };
 
-  let collapsed = false;
-  try { collapsed = localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === 'true'; } catch (e) { /* ignore */ }
+  const setCollapsed = (collapsed) => {
+    applyState(collapsed);
+    try { localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(collapsed)); } catch (e) { /* ignore */ }
+  };
+
+  // Collapsed is the default the very first time (nothing saved yet)
+  // — only an explicit past choice keeps it expanded on load.
+  let collapsed = true;
+  try {
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSE_KEY);
+    if (saved !== null) collapsed = saved === 'true';
+  } catch (e) { /* ignore */ }
   applyState(collapsed);
 
-  toggleBtn.addEventListener('click', () => {
-    const next = !sidebar.classList.contains('is-collapsed');
-    applyState(next);
-    try { localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(next)); } catch (e) { /* ignore */ }
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setCollapsed(!sidebar.classList.contains('is-collapsed'));
+  });
+
+  // Clicking anywhere outside the sidebar — the main content, empty
+  // space, anywhere — collapses it back if it's currently expanded.
+  // Desktop only: on the mobile drawer, .is-collapsed has no layout
+  // effect (see the max-width:800px CSS), and the drawer already has
+  // its own open/close via the hamburger, backdrop, and × button.
+  document.addEventListener('click', (e) => {
+    if (window.innerWidth <= 800) return;
+    if (sidebar.classList.contains('is-collapsed')) return;
+    if (sidebar.contains(e.target)) return;
+    setCollapsed(true);
   });
 }
 

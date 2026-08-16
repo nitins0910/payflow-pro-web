@@ -21,12 +21,22 @@ firebase.initializeApp(firebaseConfig);
 
 // ---------------------------------------------------------
 // 1a. THEME (Dark / Light)
-// Dark navy is the default. Light mode swaps the main dark-blue
-// surfaces for a neutral grey (rgb(208,208,208)) via CSS variables
-// scoped under html[data-theme="light"] — see style.css. The initial
-// theme is already applied by an inline <head> script (before this
-// file loads) to avoid a flash of the wrong theme; this just keeps
-// the Settings toggle in sync and handles switching at runtime.
+// Light is the default theme everywhere. In the CSS (style.css), the
+// dark-navy palette lives on :root and the light palette is the
+// html[data-theme="light"] override — that mapping is unchanged, we
+// just make sure "light" is what gets applied by default now. This
+// preference only ever applies to the DASHBOARD; the sign-in/sign-up
+// /verification screens are always forced to light, for every user,
+// no exceptions — that's handled centrally in showScreen() below.
+//
+// The preference is synced two ways so it follows the user across
+// devices, not just this one browser:
+//   - localStorage: a same-device cache, applied instantly so there's
+//     no flash of the wrong theme while Firestore is still loading.
+//   - Firestore (users/{uid}.theme): the source of truth. Written on
+//     every toggle, and re-read on every dashboard boot (loadUserTheme)
+//     so a change made on one device shows up on another next time
+//     that device opens/refreshes the dashboard.
 // ---------------------------------------------------------
 const THEME_STORAGE_KEY = 'payflow-theme';
 
@@ -36,9 +46,12 @@ function getStoredTheme() {
 function isLightTheme() { return document.documentElement.getAttribute('data-theme') === 'light'; }
 function applyTheme(theme, opts) {
   opts = opts || {};
-  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  else document.documentElement.removeAttribute('data-theme');
-  try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch (e) { /* ignore */ }
+  if (theme === 'dark') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', 'light');
+  try { localStorage.setItem(THEME_STORAGE_KEY, theme === 'dark' ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+
+  const toggle = document.getElementById('darkModeToggle');
+  if (toggle) toggle.checked = theme === 'dark';
 
   // Persist to the user's Firestore profile too, so the preference
   // follows them to any other device/browser they sign in on — not
@@ -53,20 +66,21 @@ function applyTheme(theme, opts) {
   }
 }
 function wireThemeToggle() {
-  const toggle = document.getElementById('lightModeToggle');
+  const toggle = document.getElementById('darkModeToggle');
   if (!toggle) return;
-  toggle.checked = isLightTheme();
+  toggle.checked = !isLightTheme();
   toggle.addEventListener('change', () => {
-    applyTheme(toggle.checked ? 'light' : 'dark');
+    applyTheme(toggle.checked ? 'dark' : 'light');
   });
 }
 
 // Called once per dashboard boot (alongside loadEmployees/loadCompanyProfile)
 // to pull the user's saved theme from Firestore and apply it — so a
-// preference set on one device shows up on another, instead of each
+// preference set on one device (e.g. switched to light on mobile) shows
+// up on another (e.g. desktop, on its next refresh) instead of each
 // browser only ever remembering its own localStorage value. Falls back
-// silently to whatever the anti-flash inline <head> script + localStorage
-// already applied if the fetch fails or no preference is saved yet.
+// silently to whatever showScreen() already applied from the local
+// device cache if the fetch fails or no preference is saved yet.
 async function loadUserTheme() {
   try {
     const snap = await userRef().get();
@@ -747,6 +761,19 @@ function showScreen(name) {
   SCREENS.forEach(s => {
     document.getElementById('screen-' + s).classList.toggle('hidden', s !== name);
   });
+
+  if (name === 'dashboard') {
+    // Restore this device's last-known theme immediately (avoids a
+    // flash of the wrong theme while Firestore is still loading).
+    // loadUserTheme() reconciles this against Firestore right after,
+    // in case another device changed the preference more recently.
+    applyTheme(getStoredTheme() === 'dark' ? 'dark' : 'light', { skipRemoteSave: true });
+  } else {
+    // Sign-in, sign-up, verification, and reset-password screens are
+    // always light — for every user, every time — no matter what
+    // dark/light preference is saved for their dashboard.
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
 }
 
 // ---------------------------------------------------------

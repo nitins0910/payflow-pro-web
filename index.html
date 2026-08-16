@@ -13,13 +13,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script>
-  // Applied synchronously in <head>, before first paint, so a saved
-  // "light" preference doesn't flash the dark theme for a moment.
+  // Applied synchronously in <head>, before first paint. Light is the
+  // default theme, and the sign-in/sign-up/verification screens must
+  // ALWAYS render in light mode for every user, regardless of a signed
+  // -in user's saved dashboard preference. app.js switches to the
+  // dashboard's real saved theme only once routing actually lands on
+  // the dashboard — see showScreen() in app.js.
   try {
-    if (localStorage.getItem('payflow-theme') === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-  } catch (e) { /* localStorage unavailable (private mode etc.) — default to dark */ }
+    document.documentElement.setAttribute('data-theme', 'light');
+  } catch (e) { /* ignore */ }
 </script>
 </head>
 <body>
@@ -670,10 +672,10 @@
           <div class="settings-list-item" style="cursor:default;">
             <div>
               <div class="settings-list-item__title">Appearance</div>
-              <div class="settings-list-item__subtitle">Switch to a light, grey interface</div>
+              <div class="settings-list-item__subtitle">Switch to the dark interface</div>
             </div>
             <label class="theme-switch">
-              <input type="checkbox" id="lightModeToggle" aria-label="Toggle light mode">
+              <input type="checkbox" id="darkModeToggle" aria-label="Toggle dark mode">
               <span class="theme-switch__track"></span>
             </label>
           </div>

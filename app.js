@@ -160,7 +160,7 @@ const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 // Netlify, replace this with the full Netlify site URL, e.g.
 // "https://payflow-pro-billing.netlify.app".
 // ---------------------------------------------------------
-const FUNCTIONS_BASE_URL = "https://incomparable-cat-722533.netlify.app/"; // "" = same origin, or "https://your-site.netlify.app"
+const FUNCTIONS_BASE_URL = "https://payflow-pro-web-three.vercel.app/"; // "" = same origin, or "https://your-site.netlify.app"
 
 const EXPORT_COST_CREDITS = 5;
 
@@ -197,7 +197,7 @@ async function callBillingFunction(name, body) {
   const idToken = await auth.currentUser.getIdToken();
   let res;
   try {
-    res = await fetch(`${base}/.netlify/functions/${name}`, {
+    res = await fetch(`${base}/api/${name}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

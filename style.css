@@ -350,6 +350,7 @@ input.input-match{
   padding:18px 20px; cursor:pointer; border-bottom:1px solid var(--border-soft);
   transition:background .15s var(--ease);
 }
+a.settings-list-item{ text-decoration:none; color:inherit; }
 .settings-list-item:last-child{ border-bottom:none; }
 .settings-list-item:hover{ background:rgba(99,102,241,0.05); }
 .settings-list-item__title{ font-size:14px; color:var(--text); font-weight:600; }

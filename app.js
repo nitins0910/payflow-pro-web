@@ -367,6 +367,39 @@ function registerServiceWorker() {
   });
 }
 
+// ---------------------------------------------------------
+// Sidebar expand/collapse — desktop only (the mobile drawer is a
+// temporary overlay with its own hamburger open/close and always
+// shows full labels, see the max-width:800px CSS block). Expanded is
+// the default; collapsing shrinks the column down to an icon rail
+// (labels hidden, wallet/account rows drop to icon-only). The choice
+// is remembered across visits via localStorage.
+// ---------------------------------------------------------
+const SIDEBAR_COLLAPSE_KEY = 'pfp_sidebar_collapsed';
+
+function wireSidebarCollapse() {
+  const sidebar = document.querySelector('.sidebar');
+  const toggleBtn = document.getElementById('sidebarCollapseBtn');
+  if (!sidebar || !toggleBtn) return;
+
+  const applyState = (collapsed) => {
+    sidebar.classList.toggle('is-collapsed', collapsed);
+    const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggleBtn.setAttribute('aria-label', label);
+    toggleBtn.setAttribute('data-tooltip', collapsed ? 'Expand' : 'Collapse');
+  };
+
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === 'true'; } catch (e) { /* ignore */ }
+  applyState(collapsed);
+
+  toggleBtn.addEventListener('click', () => {
+    const next = !sidebar.classList.contains('is-collapsed');
+    applyState(next);
+    try { localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(next)); } catch (e) { /* ignore */ }
+  });
+}
+
 function wirePwaGuideModal() {
   registerServiceWorker();
 
@@ -1617,6 +1650,7 @@ function safeInit(name, fn) {
   }
 }
 safeInit('wirePwaGuideModal', wirePwaGuideModal);
+safeInit('wireSidebarCollapse', wireSidebarCollapse);
 safeInit('wireAuthForms', wireAuthForms);
 safeInit('wireVerifyPending', wireVerifyPending);
 safeInit('wireCompleteProfileForm', wireCompleteProfileForm);

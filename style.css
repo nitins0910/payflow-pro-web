@@ -60,6 +60,18 @@
   --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Consolas', monospace;
   --font-body: 'Inter', 'Segoe UI', sans-serif;
+  /* Sidebar (left icon rail) — deliberately NOT theme-driven. It
+     stays this dark-navy shade (matching the topbar) whether the
+     dashboard is in light or dark mode, so these are fixed values,
+     never overridden inside the light-theme block below. */
+  --sidebar-bg:        #0C1730;
+  --sidebar-border:    rgba(255,255,255,0.08);
+  --sidebar-divider:   rgba(255,255,255,0.09);
+  --sidebar-text:      rgba(255,255,255,0.68);
+  --sidebar-text-dim:  rgba(255,255,255,0.45);
+  --sidebar-item-bg:       rgba(255,255,255,0.05);
+  --sidebar-item-border:   rgba(255,255,255,0.09);
+  --sidebar-item-hover-bg: rgba(255,255,255,0.10);
 }
 
 /* ---------------------------------------------------------
@@ -526,38 +538,83 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
 
 .sidebar{
   width:216px;
-  background:var(--surface);
-  border-right:1px solid var(--border);
-  padding:18px 14px;
+  background:var(--sidebar-bg);
+  border-right:1px solid var(--sidebar-border);
+  padding:16px 12px;
   display:flex; flex-direction:column;
   flex-shrink:0;
-  color:var(--text);
+  color:var(--sidebar-text);
+  position:relative;
+  transition:width .2s var(--ease), padding .2s var(--ease);
 }
 .sidebar .brand{ display:none; }
 
-.sidebar-icons{ display:flex; flex-direction:column; gap:8px; }
-.sidebar-icons .nav-item{
-  width:44px; height:44px;
+/* Collapse/expand toggle — desktop only. The mobile drawer (see the
+   max-width:800px block below) is a temporary overlay with its own
+   open/close via the hamburger + × button, so it always shows full
+   labels and never needs this. */
+.sidebar-toggle-row{ display:flex; justify-content:flex-end; margin-bottom:10px; }
+.sidebar-collapse-btn{
   display:flex; align-items:center; justify-content:center;
-  margin:0; padding:0;
-  border-radius:var(--radius-md);
-  background:var(--surface2);
-  border:1px solid var(--border-soft);
-  color:var(--text2);
-  position:relative;
-  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease);
+  width:26px; height:26px; flex-shrink:0;
+  background:var(--sidebar-item-bg);
+  border:1px solid var(--sidebar-item-border);
+  border-radius:var(--radius-sm);
+  color:var(--sidebar-text);
+  cursor:pointer;
+  transition:background .15s var(--ease), color .15s var(--ease);
 }
-.sidebar-icons .nav-item svg{ width:19px; height:19px; opacity:.9; }
-.sidebar-icons .nav-item:hover{ color:var(--text); background:var(--surface3); transform:translateY(-1px); }
+.sidebar-collapse-btn:hover{ background:var(--sidebar-item-hover-bg); color:#fff; }
+.sidebar-collapse-btn svg{ width:14px; height:14px; transition:transform .2s var(--ease); }
+.sidebar.is-collapsed .sidebar-collapse-btn svg{ transform:rotate(180deg); }
+
+.sidebar-icons{ display:flex; flex-direction:column; gap:6px; }
+.sidebar-icons .nav-item{
+  width:100%; height:auto;
+  display:flex; align-items:center; justify-content:flex-start; gap:12px;
+  margin:0; padding:10px 12px;
+  border-radius:var(--radius-md);
+  background:var(--sidebar-item-bg);
+  border:1px solid var(--sidebar-item-border);
+  color:var(--sidebar-text);
+  position:relative;
+  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease), padding .2s var(--ease), justify-content .2s var(--ease);
+}
+.sidebar-icons .nav-item svg{ width:18px; height:18px; opacity:.9; flex-shrink:0; }
+.sidebar-icons .nav-item:hover{ color:#fff; background:var(--sidebar-item-hover-bg); transform:translateY(-1px); }
 .sidebar-icons .nav-item.active{
   color:#fff;
   background:var(--blue-dim);
   border-color:var(--blue-bright);
   box-shadow:0 4px 12px rgba(59,130,246,0.28);
 }
+.nav-item-label{
+  display:inline; font-size:13px; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
 
-/* Hover tooltip for icon-only nav items — name only shows on hover,
-   matching the compact icon-dock pattern of modern apps. */
+/* Collapsed state: icon rail only. Guarded to desktop widths so a
+   collapsed preference saved on desktop can never fight the mobile
+   drawer's own 80vw width (see max-width:800px block below). */
+@media (min-width: 801px){
+  .sidebar.is-collapsed{ width:72px; }
+  .sidebar.is-collapsed .sidebar-toggle-row{ justify-content:center; }
+  .sidebar.is-collapsed .sidebar-icons .nav-item{
+    width:44px; height:44px; padding:0; margin:0 auto; justify-content:center;
+  }
+  .sidebar.is-collapsed .nav-item-label{ display:none; }
+  .sidebar.is-collapsed .wallet-chip{ justify-content:center; padding:9px; }
+  .sidebar.is-collapsed .wallet-chip__text{ display:none; }
+  .sidebar.is-collapsed .user-chip{ justify-content:center; }
+  .sidebar.is-collapsed .user-chip__text{ display:none; }
+  /* The hover tooltip is redundant once labels are already visible
+     (expanded state) — only show it once collapsed. */
+  .sidebar:not(.is-collapsed) .nav-item[data-tooltip]:hover::after{ opacity:0; }
+}
+
+/* Hover tooltip for icon-only nav items — relevant once the sidebar
+   is collapsed (or always, on the mobile topbar tabs which reuse the
+   same data-tooltip pattern in future, if ever added). */
 .nav-item[data-tooltip]::after{
   content:attr(data-tooltip);
   position:absolute; left:calc(100% + 10px); top:50%;
@@ -572,15 +629,16 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
 }
 .nav-item[data-tooltip]:hover::after{ opacity:1; transform:translateY(-50%) translateX(0); }
 
-.sidebar-footer{ margin-top:auto; padding-top:16px; border-top:1px solid var(--border-soft); }
+.sidebar-footer{ margin-top:auto; padding-top:16px; border-top:1px solid var(--sidebar-divider); }
 .wallet-chip{
   display:flex; align-items:center; gap:8px; width:100%; margin-bottom:10px;
-  padding:9px 12px; background:var(--surface2); border:1px solid var(--border);
-  border-radius:var(--radius-sm); color:var(--text2); font-size:12.5px; cursor:pointer;
+  padding:9px 12px; background:var(--sidebar-item-bg); border:1px solid var(--sidebar-item-border);
+  border-radius:var(--radius-sm); color:var(--sidebar-text); font-size:12.5px; cursor:pointer;
   text-align:left;
+  transition:border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease);
 }
-.wallet-chip:hover{ border-color:var(--blue-bright); color:var(--text); }
-.wallet-chip strong{ color:var(--text); font-size:13.5px; }
+.wallet-chip:hover{ border-color:var(--blue-bright); color:#fff; background:var(--sidebar-item-hover-bg); }
+.wallet-chip strong{ color:#fff; font-size:13.5px; }
 .wallet-chip__icon{ font-size:15px; }
 
 .credit-pack-grid{
@@ -610,36 +668,37 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
 .txn-type.txn-debit{ color:var(--text2); }
 .txn-amount-positive{ color:var(--success, #22c55e); font-weight:600; }
 .txn-amount-negative{ color:var(--danger, #F43F5E); font-weight:600; }
-.user-chip{ font-size:12.5px; color:var(--text2); margin-bottom:12px; word-break:break-all; display:flex; align-items:center; gap:10px; }
-.user-chip strong{ color:var(--text); display:block; font-size:13.5px; margin-bottom:2px; }
+.user-chip{ font-size:12.5px; color:var(--sidebar-text); margin-bottom:12px; word-break:break-all; display:flex; align-items:center; gap:10px; }
+.user-chip strong{ color:#fff; display:block; font-size:13.5px; margin-bottom:2px; }
 .user-chip__text{ min-width:0; overflow:hidden; }
 .user-chip__text span{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .user-avatar{
   width:36px; height:36px; border-radius:50%; flex-shrink:0;
-  object-fit:cover; border:1px solid var(--border);
-  background:var(--surface2);
+  object-fit:cover; border:1px solid var(--sidebar-item-border);
+  background:var(--sidebar-item-bg);
 }
 .user-avatar-fallback{
   width:36px; height:36px; border-radius:50%; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
-  background:var(--surface3);
-  border:1px solid var(--border);
+  background:var(--sidebar-item-bg);
+  border:1px solid var(--sidebar-item-border);
   color:var(--blue-bright); font-family:var(--font-mono); font-size:13px; font-weight:700;
 }
+.sidebar .btn-inline.secondary{ background:var(--sidebar-item-bg); border:1px solid var(--sidebar-item-border); color:var(--sidebar-text); }
+.sidebar .btn-inline.secondary:hover{ color:#fff; border-color:var(--grey-dim); background:var(--sidebar-item-hover-bg); filter:none; }
 .settings-notice{
   padding:16px 20px; font-size:12.5px; color:var(--text2); line-height:1.6;
   display:flex; align-items:center; gap:10px;
 }
 
 /* Mobile-only chrome (hamburger button, topbar wallet chip, drawer
-   backdrop/close button, nav item text labels) — hidden by default so
-   the desktop layout is completely unaffected; re-enabled inside the
-   max-width:800px block further down. */
+   backdrop/close button, the desktop-only collapse toggle) — hidden
+   by default so the desktop layout is completely unaffected;
+   re-enabled/disabled inside the max-width:800px block further down. */
 .mobile-menu-btn,
 .wallet-chip-mobile,
 .sidebar-backdrop,
-.sidebar-close,
-.nav-item-label{ display:none; }
+.sidebar-close{ display:none; }
 
 .main{ flex:1; padding:30px 38px; overflow-y:auto; }
 .main > section{ animation:page-in .28s var(--ease); }
@@ -1138,19 +1197,26 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     padding-top:56px;
   }
   .sidebar.is-open{ transform:translateX(0); }
+  /* Belt-and-braces: a collapsed preference saved on desktop must
+     never shrink the mobile drawer, which always shows full labels. */
+  .sidebar.is-collapsed{ width:80vw; max-width:300px; }
+
+  /* Collapse/expand is a desktop-only affordance — the drawer opens
+     and closes instead, via the hamburger + × button. */
+  .sidebar-toggle-row{ display:none; }
 
   .sidebar-close{
     display:flex; align-items:center; justify-content:center;
     position:absolute; top:10px; right:10px; z-index:1;
-    width:32px; height:32px; background:var(--surface2); border:1px solid var(--border-soft);
-    color:var(--text2); cursor:pointer; border-radius:var(--radius-sm); padding:0;
+    width:32px; height:32px; background:var(--sidebar-item-bg); border:1px solid var(--sidebar-item-border);
+    color:var(--sidebar-text); cursor:pointer; border-radius:var(--radius-sm); padding:0;
   }
   .sidebar-close svg{ width:16px; height:16px; }
 
-  /* Icon-only 44×44 squares work fine on desktop but are hard to
-     scan in a drawer — stack them into a full-width labelled list
-     instead, and skip the hover-only tooltip (nothing to hover on
-     a touchscreen; the label is now always visible). */
+  /* Icon-only 44×44 squares work fine collapsed on desktop but are
+     hard to scan in a drawer — always stack them into a full-width
+     labelled list here, and skip the hover-only tooltip (nothing to
+     hover on a touchscreen; the label is always visible). */
   .sidebar-icons{ flex-direction:column; gap:4px; }
   .sidebar-icons .nav-item{
     width:100%; height:auto; justify-content:flex-start; gap:12px;
@@ -1160,6 +1226,9 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
   .nav-item[data-tooltip]::after{ display:none; }
   .nav-item-label{ display:inline; font-size:13.5px; font-weight:600; }
 
+  .wallet-chip{ justify-content:flex-start; }
+  .wallet-chip__text{ display:inline; }
+  .user-chip{ justify-content:flex-start; }
   .user-chip__text{ display:block; }
 }
 

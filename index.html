@@ -403,6 +403,13 @@
       <button type="button" class="sidebar-close" id="sidebarCloseBtn" aria-label="Close menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
+
+      <div class="sidebar-toggle-row">
+        <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseBtn" aria-label="Collapse sidebar" data-tooltip="Collapse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"/></svg>
+        </button>
+      </div>
+
       <div class="sidebar-icons">
         <div class="nav-item" data-page="audit" data-tooltip="Activity Log">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -425,7 +432,7 @@
       <div class="sidebar-footer">
         <button type="button" class="wallet-chip" id="walletChip" title="Wallet">
           <span class="wallet-chip__icon">🪙</span>
-          <span><strong id="walletBalanceValue">0</strong> credits</span>
+          <span class="wallet-chip__text"><strong id="walletBalanceValue">0</strong> credits</span>
         </button>
         <div class="user-chip">
           <img id="userAvatarImg" class="user-avatar hidden" alt="Profile photo">

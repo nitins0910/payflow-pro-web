@@ -902,7 +902,7 @@
       <div class="modal-actions" style="flex-wrap:wrap; gap:8px;">
         <button type="button" class="btn-inline secondary" id="cancelExportBtn">Cancel</button>
         <button type="button" class="btn-inline secondary" id="payWalletExportBtn" style="flex:1; min-width:160px;">💳 Pay via Wallet</button>
-        <button type="button" class="btn-inline" id="payRazorpayExportBtn" style="flex:1; min-width:160px;">🔒 Pay via Razorpay</button>
+        <button type="button" class="btn-inline" id="payRazorpayExportBtn" style="flex:1; min-width:160px;">🔒 Pay ₹50 via Razorpay</button>
       </div>
     </div>
   </div>
@@ -946,19 +946,6 @@
       <h3 style="margin:0 0 6px;">Congratulations!</h3>
       <p style="margin:0 0 18px;">You've got <strong id="freeCreditsAmount">5</strong> free credits to get started — enough for your first payroll export.</p>
       <button type="button" class="btn-inline" style="width:100%;" id="freeCreditsGoBtn">Let's go</button>
-    </div>
-  </div>
-
-  <!-- Low-balance prompt — shown from ensureExportAllowed() in app.js
-       when a file export is blocked by an insufficient wallet balance. -->
-  <div id="buyCreditsModal" class="modal-backdrop hidden">
-    <div class="modal" style="max-width:640px;">
-      <div class="modal-head">
-        <h3>Buy Credits</h3>
-        <button type="button" class="modal-close" data-modal="buyCreditsModal" aria-label="Close">×</button>
-      </div>
-      <p class="field-hint" style="margin-top:-6px;" id="buyCreditsReason"></p>
-      <div id="buyCreditsGrid" class="credit-pack-grid"></div>
     </div>
   </div>
 

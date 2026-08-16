@@ -171,6 +171,17 @@ const CREDIT_PACKS = [
   { id: 'pack_120', credits: 120, priceRupees: 720, discountPct: 40, label: 'Best value' }
 ];
 
+// The pack whose credits exactly match one export's cost — this is what
+// "Pay via Razorpay" on the export-confirm modal charges directly (flat
+// ₹50, no pack picker). Bulk-discount packs are only ever offered from
+// the Wallet page itself, not mid-export.
+const EXPORT_RAZORPAY_PACK = CREDIT_PACKS.find(p => p.credits === EXPORT_COST_CREDITS) || CREDIT_PACKS[0];
+
+// Biggest bulk-discount percentage across all packs — used to tease the
+// Wallet page's recharge discounts from the export-confirm modal without
+// actually showing the pack picker there.
+const MAX_PACK_DISCOUNT_PCT = Math.max(...CREDIT_PACKS.map(p => p.discountPct));
+
 let walletBalance = 0;
 
 async function callBillingFunction(name, body) {
@@ -348,32 +359,6 @@ function renderWalletPage() {
   setWalletBalance(walletBalance);
   const grid = document.getElementById('walletPackGrid');
   if (grid) renderCreditPacks(grid, () => {});
-}
-
-// Low-balance / "Pay via Razorpay" prompt shown from the export-payment
-// buttons wired in openExportPreview(). Resolves true as soon as any
-// pack purchase is verified (the modal closes itself); resolves false
-// if the user dismisses it without buying.
-function openBuyCreditsModal({ reason }) {
-  return new Promise((resolve) => {
-    const modal = document.getElementById('buyCreditsModal');
-    const grid = document.getElementById('buyCreditsGrid');
-    document.getElementById('buyCreditsReason').textContent = reason || '';
-    let settled = false;
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      modal.classList.add('hidden');
-      resolve(result);
-    };
-
-    renderCreditPacks(grid, () => finish(true));
-
-    modal.classList.remove('hidden');
-    modal.querySelectorAll('.modal-close').forEach(el => {
-      el.addEventListener('click', () => finish(false));
-    });
-  });
 }
 
 // ---------------------------------------------------------
@@ -2871,16 +2856,26 @@ async function openExportPreview() {
     <p><strong>Employees:</strong> ${lines.length}</p>
     <p style="font-size:20px; color:var(--success); font-weight:700; margin-top:10px;">₹ ${total.toFixed(2)}</p>
     <p style="margin-top:10px;">This export costs <strong>${EXPORT_COST_CREDITS} credits</strong> · Wallet balance: <strong id="exportPreviewWalletBalance">${walletBalance}</strong> credits</p>
+    <p style="margin-top:4px; font-size:12px; color:var(--muted, #888);">Exporting often? <a href="#" id="exportPreviewWalletLink">Recharge in bulk from Wallet</a> and save up to ${MAX_PACK_DISCOUNT_PCT}% per credit.</p>
     ${warningsHtml}
   `;
   document.getElementById('exportPreviewModal').classList.remove('hidden');
+
+  const walletLink = document.getElementById('exportPreviewWalletLink');
+  if (walletLink) {
+    walletLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('exportPreviewModal').classList.add('hidden');
+      showAppPage('wallet');
+    });
+  }
 
   const cancelBtn = document.getElementById('cancelExportBtn');
   const walletBtn = document.getElementById('payWalletExportBtn');
   const razorpayBtn = document.getElementById('payRazorpayExportBtn');
 
   const walletBtnLabel = '💳 Pay via Wallet';
-  const razorpayBtnLabel = '🔒 Pay via Razorpay';
+  const razorpayBtnLabel = `🔒 Pay ₹${EXPORT_RAZORPAY_PACK.priceRupees} via Razorpay`;
 
   // Both payment buttons share one busy-state so a click on either one
   // locks out the other (and Cancel) until it resolves — prevents a
@@ -2933,17 +2928,15 @@ async function openExportPreview() {
     }
   };
 
-  // Option 2: same as before — go straight to Razorpay to buy a
-  // credit pack, then consume credits and export once payment is
-  // verified server-side.
+  // Option 2: charge straight through Razorpay for exactly this export's
+  // credits (flat ₹50 at current pricing) — no pack picker. Bigger,
+  // discounted packs are only ever offered from the Wallet page.
   razorpayBtn.onclick = async () => {
     if (busy) return;
     setBusy(true);
     razorpayBtn.textContent = 'Opening payment...';
     try {
-      const bought = await openBuyCreditsModal({
-        reason: `Pay via Razorpay to buy credits for this export (each export costs ${EXPORT_COST_CREDITS} credits).`
-      });
+      const bought = await buyCreditPack(EXPORT_RAZORPAY_PACK);
       if (!bought) return;
 
       const res = await callBillingFunction('consume-credits');

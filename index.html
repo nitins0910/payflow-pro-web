@@ -197,6 +197,10 @@
             <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--text2); text-decoration:underline;">Privacy Policy</a>.
           </p>
 
+          <button type="button" id="authPwaGuideBtn" class="pwa-guide-link">
+            📲 Using this on your phone? <span>Add it to your Home Screen →</span>
+          </button>
+
         </div>
       </div>
     </div>
@@ -828,6 +832,13 @@
             </div>
             <span class="settings-list-item__chevron">›</span>
           </div>
+          <div class="settings-list-item" id="openPwaGuideBtn" role="button" tabindex="0">
+            <div>
+              <div class="settings-list-item__title">Add to Home Screen</div>
+              <div class="settings-list-item__subtitle">Use PayFlow Pro like an app on your phone</div>
+            </div>
+            <span class="settings-list-item__chevron">›</span>
+          </div>
           <div class="settings-list-item" id="openAboutBtn" role="button" tabindex="0">
             <div>
               <div class="settings-list-item__title">About PayFlow Pro</div>
@@ -1096,7 +1107,45 @@
     </div>
   </div>
 
-  <!-- About — opened from Settings, explains what the app does. -->
+  <!-- Add to Home Screen guide — opened from the login screen (mobile)
+       and from Settings (once logged in). Same modal, two instructions
+       tabs since Android (Chrome) and iOS (Safari) use different menus. -->
+  <div id="pwaGuideModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-head">
+        <h3>📲 Add to Home Screen</h3>
+        <button type="button" class="modal-close" data-modal="pwaGuideModal" aria-label="Close">×</button>
+      </div>
+      <p style="font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:16px;">
+        Add PayFlow Pro to your phone's home screen and it opens full-screen, just like an
+        installed app — no App Store download needed. Your login and wallet stay exactly
+        the same, this just adds a shortcut.
+      </p>
+
+      <div class="pwa-guide-tabs" role="tablist">
+        <button type="button" class="pwa-guide-tab active" data-pwa-tab="android">🤖 Android</button>
+        <button type="button" class="pwa-guide-tab" data-pwa-tab="ios">🍏 iPhone / iPad</button>
+      </div>
+
+      <ol class="pwa-guide-steps" id="pwaGuideAndroid">
+        <li>Open <strong>PayFlow Pro</strong> in <strong>Chrome</strong> on your phone.</li>
+        <li>Tap the <strong>⋮ (three-dot) menu</strong> in the top-right corner.</li>
+        <li>Tap <strong>"Add to Home screen"</strong> (or <strong>"Install app"</strong>).</li>
+        <li>Confirm by tapping <strong>"Add"</strong> / <strong>"Install"</strong>.</li>
+        <li>A PayFlow Pro icon now appears on your home screen — tap it any time to open the app full-screen.</li>
+      </ol>
+
+      <ol class="pwa-guide-steps hidden" id="pwaGuideIos">
+        <li>Open <strong>PayFlow Pro</strong> in <strong>Safari</strong> on your iPhone/iPad (this only works in Safari, not Chrome).</li>
+        <li>Tap the <strong>Share icon</strong> <span style="font-family:var(--font-mono);">□↑</span> in the bottom toolbar.</li>
+        <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
+        <li>Confirm the name and tap <strong>"Add"</strong> in the top-right corner.</li>
+        <li>A PayFlow Pro icon now appears on your home screen — tap it any time to open the app full-screen.</li>
+      </ol>
+    </div>
+  </div>
+
+
   <div id="aboutModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:560px;">
       <div class="modal-head">

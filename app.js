@@ -276,6 +276,44 @@ function wireFreeCreditsModal() {
   if (goBtn) goBtn.addEventListener('click', closeFreeCreditsModal);
 }
 
+// ---------------------------------------------------------
+// "Add to Home Screen" guide — reachable from the login screen
+// (before sign-in, mobile only) and from Settings (after sign-in).
+// Same modal both places; just switches between an Android/Chrome
+// tab and an iOS/Safari tab, since the two platforms use different
+// menus to install a site as a home-screen app.
+// ---------------------------------------------------------
+function openPwaGuideModal() {
+  const modal = document.getElementById('pwaGuideModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function wirePwaGuideModal() {
+  const authBtn = document.getElementById('authPwaGuideBtn');
+  if (authBtn) authBtn.addEventListener('click', openPwaGuideModal);
+
+  const tabs = document.querySelectorAll('.pwa-guide-tab');
+  const panels = { android: document.getElementById('pwaGuideAndroid'), ios: document.getElementById('pwaGuideIos') };
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.pwaTab;
+      Object.keys(panels).forEach(key => {
+        if (panels[key]) panels[key].classList.toggle('hidden', key !== target);
+      });
+    });
+  });
+
+  // Default to the platform the visitor is actually on, so the more
+  // relevant tab is already open when the modal appears.
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isIOS) {
+    const iosTab = document.querySelector('.pwa-guide-tab[data-pwa-tab="ios"]');
+    if (iosTab) iosTab.click();
+  }
+}
+
 // Opens Razorpay's hosted checkout for a specific credit pack. Resolves
 // true only after the payment has been verified server-side
 // (verify-payment.js) — never on the client-side success callback alone.
@@ -1411,6 +1449,7 @@ wireVerifyPending();
 wireCompleteProfileForm();
 wirePasswordToggles();
 wirePasswordStrengthMeter();
+wirePwaGuideModal();
 
 (function boot() {
   const params = new URLSearchParams(window.location.search);
@@ -3709,6 +3748,8 @@ function wireSettingsForms() {
   document.getElementById('openAboutBtn').addEventListener('click', () => {
     document.getElementById('aboutModal').classList.remove('hidden');
   });
+
+  document.getElementById('openPwaGuideBtn').addEventListener('click', openPwaGuideModal);
 
   // ---- Change email ----
   document.getElementById('changeEmailForm').addEventListener('submit', async (e) => {

@@ -283,6 +283,12 @@ function setWalletBalance(credits) {
   if (mobileChip) mobileChip.textContent = walletBalance;
   const mobileChipBtn = document.getElementById('walletChipMobile');
   if (mobileChipBtn) mobileChipBtn.title = `Wallet — ${walletBalance} credit${walletBalance === 1 ? '' : 's'}`;
+  // Desktop topbar wallet chip (replaces the old sidebar wallet chip
+  // now that the sidebar is desktop-hidden — see style.css).
+  const desktopChip = document.getElementById('walletBalanceValueDesktop');
+  if (desktopChip) desktopChip.textContent = walletBalance;
+  const desktopChipBtn = document.getElementById('walletChipDesktop');
+  if (desktopChipBtn) desktopChipBtn.title = `Wallet — ${walletBalance} credit${walletBalance === 1 ? '' : 's'}`;
   const pageBalance = document.getElementById('walletPageBalance');
   if (pageBalance) pageBalance.textContent = walletBalance;
 }
@@ -2035,24 +2041,32 @@ function isGoogleAccount(user) {
     user.providerData.some(p => p.providerId === 'google.com');
 }
 function applyUserProfileUI(user) {
-  const imgEl = document.getElementById('userAvatarImg');
-  const fallbackEl = document.getElementById('userAvatarFallback');
+  // Sidebar avatar (mobile drawer) + desktop topbar account-menu
+  // avatar are kept in sync with the same photo/initials logic.
+  [
+    { img: 'userAvatarImg', fallback: 'userAvatarFallback' },
+    { img: 'userAvatarImgTop', fallback: 'userAvatarFallbackTop' }
+  ].forEach(({ img, fallback }) => {
+    const imgEl = document.getElementById(img);
+    const fallbackEl = document.getElementById(fallback);
+    if (!imgEl || !fallbackEl) return;
 
-  if (user.photoURL) {
-    imgEl.src = user.photoURL;
-    imgEl.classList.remove('hidden');
-    fallbackEl.classList.add('hidden');
-    // Google photo URLs can occasionally fail to load (revoked, rate
-    // limited, offline) — fall back to initials instead of a broken image.
-    imgEl.onerror = () => {
+    if (user.photoURL) {
+      imgEl.src = user.photoURL;
+      imgEl.classList.remove('hidden');
+      fallbackEl.classList.add('hidden');
+      // Google photo URLs can occasionally fail to load (revoked, rate
+      // limited, offline) — fall back to initials instead of a broken image.
+      imgEl.onerror = () => {
+        imgEl.classList.add('hidden');
+        fallbackEl.classList.remove('hidden');
+      };
+    } else {
       imgEl.classList.add('hidden');
+      fallbackEl.textContent = getInitials(user.displayName, user.email);
       fallbackEl.classList.remove('hidden');
-    };
-  } else {
-    imgEl.classList.add('hidden');
-    fallbackEl.textContent = getInitials(user.displayName, user.email);
-    fallbackEl.classList.remove('hidden');
-  }
+    }
+  });
 
   const google = isGoogleAccount(user);
   document.getElementById('settingsCredentialsList').classList.toggle('hidden', google);
@@ -2063,6 +2077,11 @@ async function bootDashboard(user) {
   currentUser = user;
   document.getElementById('userName').textContent = user.displayName || 'PayFlow User';
   document.getElementById('userEmail').textContent = user.email;
+  // Desktop topbar account-dropdown copies of the same two fields.
+  const nameTop = document.getElementById('userNameTop');
+  if (nameTop) nameTop.textContent = user.displayName || 'PayFlow User';
+  const emailTop = document.getElementById('userEmailTop');
+  if (emailTop) emailTop.textContent = user.email;
   applyUserProfileUI(user);
 
   try {
@@ -2101,6 +2120,7 @@ async function bootDashboard(user) {
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     const walletChip = document.getElementById('walletChip');
     if (walletChip) walletChip.addEventListener('click', () => { closeMobileDrawer(); showAppPage('wallet'); });
+    safeInit('wireAccountMenu', wireAccountMenu);
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
 
     // First-ever dashboard visit for this browser: auto-start the tour.
@@ -2132,9 +2152,15 @@ async function bootDashboard(user) {
 // to be faked — no page switch required since the Employees page is
 // already the default active page when the tour starts.
 // ---------------------------------------------------------
+// Several steps below point at an item that now lives in two places:
+// the desktop topbar icon nav (permanent) or the mobile sidebar
+// drawer (off-canvas, opened via the hamburger menu). `target` is the
+// desktop selector; `mobileTarget`, when set, is used instead on
+// narrow viewports (see resolveTourTarget/stepNeedsDrawer below).
 const TOUR_STEPS = [
   {
-    target: '.nav-item[data-page="settings"]',
+    target: '.topbar-icons .nav-item[data-page="settings"]',
+    mobileTarget: '.sidebar-icons .nav-item[data-page="settings"]',
     title: 'Start with Company Details',
     body: 'First, come here and fill in your company name, bank, and account number. These details are printed on every exported payment file.'
   },
@@ -2159,14 +2185,16 @@ const TOUR_STEPS = [
     body: 'Every batch you\'ve exported before shows up here — you can re-download them anytime.'
   },
   {
-    target: '.sidebar-icons .nav-item[data-page="audit"]',
+    target: '.topbar-icons .nav-item[data-page="audit"]',
+    mobileTarget: '.sidebar-icons .nav-item[data-page="audit"]',
     title: 'Activity Log',
     body: 'Every add, edit, delete, and export is tracked here automatically — who did what, and when.'
   },
   {
-    target: '.user-chip',
+    target: '#accountMenuBtn',
+    mobileTarget: '.user-chip',
     title: 'Your profile',
-    body: 'Your name and email show up here, with a Logout button below it. That\'s it — go explore!'
+    body: 'Your name and email show up here — tap to find the Logout button. That\'s it — go explore!'
   }
 ];
 
@@ -2213,18 +2241,30 @@ function endTour() {
   try { localStorage.setItem('payflow-tour-seen', '1'); } catch (e) { /* ignore */ }
 }
 
-// Two tour steps (Activity Log, profile/logout) point at items that
-// live inside the sidebar — a permanent column on desktop, but an
-// off-canvas drawer on mobile (see wireMobileDrawer). This opens/closes
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 800px)').matches;
+}
+
+// Resolves which selector to actually use for a step: its (desktop)
+// `target`, or `mobileTarget` when one is set and we're on a narrow
+// viewport, since that item currently lives inside the mobile sidebar
+// drawer instead of the permanent desktop topbar icon nav.
+function resolveTourTarget(step) {
+  return (isMobileViewport() && step.mobileTarget) ? step.mobileTarget : step.target;
+}
+
+// Some steps point at an item that, on mobile only, lives inside the
+// sidebar — an off-canvas drawer there (see wireMobileDrawer), rather
+// than the always-visible desktop topbar icon nav. This opens/closes
 // that drawer to match whichever step is showing.
 function stepNeedsDrawer(step) {
-  return step.target.indexOf('.sidebar') === 0 || step.target === '.user-chip';
+  return isMobileViewport() && !!step.mobileTarget;
 }
 
 function renderTourStep() {
   if (!tourEls) return;
   const step = TOUR_STEPS[tourStepIndex];
-  const target = document.querySelector(step.target);
+  const target = document.querySelector(resolveTourTarget(step));
 
   // If a target isn't in the DOM for some reason, skip straight past
   // it rather than leaving the spotlight stuck on nothing.
@@ -2314,7 +2354,7 @@ function positionTourAround(target) {
 function repositionTourStep() {
   if (!tourEls) return;
   const step = TOUR_STEPS[tourStepIndex];
-  const target = document.querySelector(step.target);
+  const target = document.querySelector(resolveTourTarget(step));
   if (target) positionTourAround(target);
 }
 
@@ -2336,21 +2376,28 @@ function wireModalCloseButtons() {
 // no dashboard, just "it lands in the inbox."
 function wireHelpSupport() {
   const modal = document.getElementById('helpSupportModal');
+  // openBtn: the sidebar drawer version (mobile). openBtnDesktop: the
+  // icon-only topbar version (desktop) — see index.html/style.css.
+  // Both open the same modal.
   const openBtn = document.getElementById('helpSupportBtn');
+  const openBtnDesktop = document.getElementById('helpSupportBtnDesktop');
   const cancelBtn = document.getElementById('cancelHelpSupportBtn');
   const form = document.getElementById('helpSupportForm');
   const submitBtn = document.getElementById('submitHelpSupportBtn');
   const msgEl = document.getElementById('helpSupportMsg');
 
+  function openModal() {
+    form.reset();
+    msgEl.innerHTML = '';
+    modal.classList.remove('hidden');
+  }
+
   function closeModal() {
     modal.classList.add('hidden');
   }
 
-  openBtn.addEventListener('click', () => {
-    form.reset();
-    msgEl.innerHTML = '';
-    modal.classList.remove('hidden');
-  });
+  openBtn.addEventListener('click', openModal);
+  if (openBtnDesktop) openBtnDesktop.addEventListener('click', openModal);
   cancelBtn.addEventListener('click', closeModal);
 
   form.addEventListener('submit', async (e) => {
@@ -2437,8 +2484,10 @@ async function renderEmployeeKpis() {
 // Details when the profile is incomplete).
 function showAppPage(page) {
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
-  if (navItem) navItem.classList.add('active');
+  // querySelectorAll (not querySelector): the same page now has two
+  // nav-item entries — the desktop topbar icon and the mobile sidebar
+  // drawer icon (see index.html) — both need the active state.
+  document.querySelectorAll(`.nav-item[data-page="${page}"]`).forEach(i => i.classList.add('active'));
   document.querySelectorAll('#screen-dashboard main > section').forEach(s => s.classList.add('hidden'));
   const section = document.getElementById('page-' + page);
   if (section) section.classList.remove('hidden');
@@ -2465,6 +2514,48 @@ function wireNav() {
     e.preventDefault();
     showAppPage('settings');
   });
+}
+
+// ---------------------------------------------------------
+// DESKTOP ACCOUNT MENU — the topbar avatar button at the extreme
+// right (replaces the old sidebar-footer user chip on desktop, see
+// style.css). Click to open/close a small dropdown with name, email,
+// and Log Out; also wires the desktop wallet chip next to it.
+// No-op harmlessly on mobile, where these elements are CSS-hidden.
+// ---------------------------------------------------------
+function wireAccountMenu() {
+  const menuBtn = document.getElementById('accountMenuBtn');
+  const dropdown = document.getElementById('accountDropdown');
+  if (!menuBtn || !dropdown) return;
+
+  function closeDropdown() {
+    dropdown.classList.add('hidden');
+    menuBtn.setAttribute('aria-expanded', 'false');
+  }
+  function toggleDropdown() {
+    const willOpen = dropdown.classList.contains('hidden');
+    dropdown.classList.toggle('hidden', !willOpen);
+    menuBtn.setAttribute('aria-expanded', String(willOpen));
+  }
+
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleDropdown();
+  });
+  document.addEventListener('click', (e) => {
+    if (!dropdown.classList.contains('hidden') && !dropdown.contains(e.target) && e.target !== menuBtn) {
+      closeDropdown();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDropdown();
+  });
+
+  const logoutBtnDesktop = document.getElementById('logoutBtnDesktop');
+  if (logoutBtnDesktop) logoutBtnDesktop.addEventListener('click', () => { closeDropdown(); auth.signOut(); });
+
+  const walletChipDesktop = document.getElementById('walletChipDesktop');
+  if (walletChipDesktop) walletChipDesktop.addEventListener('click', () => showAppPage('wallet'));
 }
 
 // ---------------------------------------------------------

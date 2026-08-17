@@ -614,6 +614,13 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
    collapsed preference saved on desktop can never fight the mobile
    drawer's own 80vw width (see max-width:800px block below). */
 @media (min-width: 801px){
+  /* The vertical sidebar is fully replaced by the topbar icon nav +
+     wallet chip + account menu above — remove it from the desktop
+     layout entirely so .main (flex:1 inside .app-shell) expands to
+     fill the freed width. It's still present in the DOM (untouched)
+     for the mobile drawer below the 800px breakpoint. */
+  .sidebar{ display:none; }
+
   .sidebar.is-collapsed{ width:72px; }
   .sidebar.is-collapsed .sidebar-toggle-row{ justify-content:center; }
   .sidebar.is-collapsed .sidebar-icons .nav-item{
@@ -649,6 +656,95 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
   z-index:30;
 }
 .nav-item[data-tooltip]:hover::after{ opacity:1; transform:translateY(-50%) translateX(0); }
+
+/* ---------------- Desktop top-bar icon nav — replaces the old
+   vertical sidebar. Activity Log / Settings / Help & Support /
+   Payment History live here as icon-only buttons; the label is a
+   hover tooltip (see the .nav-item[data-tooltip] rule above), which
+   we reposition below (rather than to the right of) the icon since
+   this is a horizontal strip. Hidden on mobile, where the same pages
+   stay reachable through the hamburger drawer. ---------------- */
+.topbar-icons{
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+  padding:0 4px; margin-right:2px;
+}
+.topbar-icons .nav-item{
+  position:relative;
+  width:38px; height:38px;
+  display:flex; align-items:center; justify-content:center;
+  margin:0; padding:0;
+  border-radius:var(--radius-sm);
+  background:transparent; border:1px solid transparent;
+  color:rgba(255,255,255,0.66);
+  cursor:pointer;
+  transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
+}
+.topbar-icons .nav-item svg{ width:18px; height:18px; opacity:.85; transition:opacity .15s var(--ease); }
+.topbar-icons .nav-item:hover{ color:#fff; background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.14); }
+.topbar-icons .nav-item:hover svg{ opacity:1; }
+.topbar-icons .nav-item.active{
+  color:#fff; background:var(--blue-dim); border-color:var(--blue-bright);
+}
+.topbar-icons .nav-item.active svg{ opacity:1; }
+.topbar-icons .nav-item .nav-item-label{ display:none; }
+
+/* Tooltip drops down below icon-only topbar controls instead of the
+   sidebar's to-the-right placement. */
+.topbar-icons .nav-item[data-tooltip]::after,
+.wallet-chip-topbar[data-tooltip]::after,
+.account-menu-btn[data-tooltip]::after{
+  left:50%; top:calc(100% + 10px); right:auto;
+  transform:translateX(-50%) translateY(-4px);
+}
+.topbar-icons .nav-item[data-tooltip]:hover::after,
+.wallet-chip-topbar[data-tooltip]:hover::after,
+.account-menu-btn[data-tooltip]:hover::after{
+  transform:translateX(-50%) translateY(0);
+}
+
+.wallet-chip-topbar{
+  position:relative;
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14);
+  color:#fff; border-radius:var(--radius-sm);
+  height:38px; padding:0 12px; font-size:12.5px; cursor:pointer;
+  transition:border-color .15s var(--ease), background .15s var(--ease);
+}
+.wallet-chip-topbar:hover{ border-color:var(--blue-bright); background:rgba(255,255,255,0.12); }
+.wallet-chip-topbar .wallet-chip__icon{ font-size:14px; }
+.wallet-chip-topbar strong{ font-family:var(--font-mono); font-size:13px; }
+
+.account-menu{ position:relative; flex-shrink:0; margin-left:4px; }
+.account-menu-btn{
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  width:38px; height:38px; padding:0; border-radius:50%;
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14);
+  cursor:pointer;
+  transition:border-color .15s var(--ease), background .15s var(--ease);
+}
+.account-menu-btn:hover{ border-color:var(--blue-bright); background:rgba(255,255,255,0.12); }
+.account-menu-btn .user-avatar,
+.account-menu-btn .user-avatar-fallback{ width:30px; height:30px; font-size:11.5px; }
+.account-dropdown{
+  position:absolute; top:calc(100% + 10px); right:0; z-index:40;
+  width:220px; background:var(--sidebar-bg); border:1px solid var(--sidebar-border);
+  border-radius:var(--radius-md); box-shadow:0 12px 28px rgba(0,0,0,0.35);
+  padding:12px;
+}
+.account-dropdown__user{
+  padding:2px 4px 10px; margin-bottom:8px; border-bottom:1px solid var(--sidebar-divider);
+}
+.account-dropdown__user strong{ display:block; color:#fff; font-size:13.5px; margin-bottom:2px; }
+.account-dropdown__user span{ display:block; color:var(--sidebar-text); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-dropdown__item{
+  display:flex; align-items:center; gap:8px; width:100%;
+  padding:9px 10px; background:var(--sidebar-item-bg); border:1px solid var(--sidebar-item-border);
+  border-radius:var(--radius-sm); color:var(--sidebar-text); font-size:12.5px; cursor:pointer;
+  text-align:left;
+  transition:border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease);
+}
+.account-dropdown__item:hover{ border-color:var(--blue-bright); color:#fff; background:var(--sidebar-item-hover-bg); }
 
 .sidebar-footer{ margin-top:auto; padding-top:16px; border-top:1px solid var(--sidebar-divider); }
 .wallet-chip{
@@ -1252,6 +1348,13 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
      labels on phones. */
   .topbar{ justify-content:flex-start; }
   .topbar .brand{ margin-right:auto; }
+
+  /* Desktop-only replacements for the sidebar (icon nav, wallet
+     chip, account menu) — on mobile these pages/actions stay
+     reachable through the hamburger drawer instead, unchanged. */
+  .topbar-icons,
+  .wallet-chip-topbar,
+  .account-menu{ display:none; }
   .topbar__tabs{
     position:fixed; left:0; right:0; bottom:22px; z-index:15;
     height:58px; background:#0C1730; border-top:1px solid var(--border);

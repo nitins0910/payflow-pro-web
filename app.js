@@ -3261,7 +3261,7 @@ function renderDisbursementList() {
       <td data-label="Emp Code">${escapeHtml(emp.empCode)}</td>
       <td data-label="Employee">${escapeHtml(emp.name)}</td>
       <td data-label="Account"><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
-      <td data-label="Mode"><span data-mode>${isSbi ? badgeForMode(tft) : badgeForMode('—')}</span></td>
+      <td data-label="Mode"><span data-mode>${isSbi ? badgeForMode(tft === 'Same Bank' ? 'Same Bank' : (parseFloat(prefill) >= SBI_RTGS_THRESHOLD ? 'RTGS' : 'NEFT')) : badgeForMode('—')}</span></td>
       <td data-label="Amount (₹)" style="text-align:right;">
         <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
           <span style="font-size:10px; color:var(--danger); font-weight:700;" data-warn></span>
@@ -3276,8 +3276,10 @@ function renderDisbursementList() {
     const modeEl  = tr.querySelector('[data-mode]');
     inputEl.addEventListener('input', () => {
       validateLiveAmountEntry(inputEl, warnEl);
-      if (!isSbi) {
-        const v = parseFloat(inputEl.value);
+      const v = parseFloat(inputEl.value);
+      if (isSbi) {
+        modeEl.innerHTML = badgeForMode(tft === 'Same Bank' ? 'Same Bank' : ((isNaN(v) ? 0 : v) >= SBI_RTGS_THRESHOLD ? 'RTGS' : 'NEFT'));
+      } else {
         modeEl.innerHTML = badgeForMode(currentModeFor(emp.ifsc, isNaN(v) ? 0 : v));
       }
     });
@@ -3337,6 +3339,16 @@ function wireDisbursement() {
   renderDisbursementList();
 }
 
+// SBI's own RTGS threshold (₹2,00,000) — same cutoff already used for
+// every other bank via determineTransactionMode(). Kept as its own
+// constant here since SBI's "Other Bank" split (see executeExport)
+// needs it directly, without going through the IFSC-prefix check that
+// determineTransactionMode also does — SBI's Same Bank / Other Bank
+// split is driven by the employee's own stored transferType, not a
+// live IFSC lookup, so re-deriving "sameness" from IFSC here would
+// risk disagreeing with that and silently reclassifying a row.
+const SBI_RTGS_THRESHOLD = 200000;
+
 function collectBatchLines() {
   const bankKey = companyProfile.bankName || 'SBI';
   const isSbi = bankKey === 'SBI';
@@ -3350,7 +3362,17 @@ function collectBatchLines() {
     if (isNaN(v)) { hasInvalid = true; continue; }
     if (v <= 0) continue;
     total += v;
-    const mode = isSbi ? tft : currentModeFor(md.ifsc, v);
+    // For SBI: "Same Bank" stays a single literal mode (unchanged —
+    // still one file; see note above executeExport). "Other Bank" now
+    // resolves to a real RTGS/NEFT mode per line instead of the coarse
+    // tft literal, so the export step can split the file the way SBI's
+    // instructions require. Every other bank is unchanged.
+    let mode;
+    if (isSbi) {
+      mode = tft === 'Same Bank' ? 'Same Bank' : (v >= SBI_RTGS_THRESHOLD ? 'RTGS' : 'NEFT');
+    } else {
+      mode = currentModeFor(md.ifsc, v);
+    }
     lines.push({ acc, empCode: md.empCode, name: md.name, ifsc: md.ifsc, amount: v, mode });
   }
   return { tft, lines, total, hasInvalid };
@@ -3467,7 +3489,17 @@ async function openExportPreview() {
   const { monthName, year } = getPayrollCycle();
 
   const modeSummary = isSbi
-    ? `<p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>`
+    ? (tft === 'Other Bank'
+        ? (() => {
+            const counts = {};
+            lines.forEach(l => { counts[l.mode] = (counts[l.mode] || 0) + 1; });
+            const breakdown = Object.entries(counts).map(([m, c]) => `${escapeHtml(m)}: ${c}`).join(' &nbsp;•&nbsp; ');
+            const fileCount = Object.keys(counts).length;
+            return `<p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>`
+              + `<p><strong>Split:</strong> ${breakdown}</p>`
+              + `<p style="font-size:12px; color:var(--muted, #888);">SBI requires NEFT and RTGS in separate files — this will download as ${fileCount} file${fileCount === 1 ? '' : 's'}.</p>`;
+          })()
+        : `<p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>`)
     : (() => {
         const counts = {};
         lines.forEach(l => { counts[l.mode] = (counts[l.mode] || 0) + 1; });
@@ -3595,13 +3627,13 @@ async function openExportPreview() {
 // file-content generation to that bank's BankFormatters strategy, and
 // keeps the existing batch counter / disbursement history / audit
 // logging behaviour unchanged for every bank.
-// Works out the batch-ID prefix. For SBI this is unchanged (driven by
-// the Same Bank / Other Bank selector). For every other bank the SBI-
-// only selector is hidden and not meaningful, so instead we look at
-// the actual per-row modes in this batch: NEFT/RTGS/IMPS map directly
-// (they're already 4 letters), a batch that's 100% Same Bank gets
-// SBST, and a batch mixing more than one mode gets MULT — so the
-// batch ID always reflects what's really inside that file.
+// Works out the batch-ID prefix. For SBI Same Bank / non-SBI banks
+// this is unchanged. For every other bank the SBI-only selector is
+// hidden and not meaningful, so instead we look at the actual per-row
+// modes in this batch: NEFT/RTGS/IMPS map directly (they're already 4
+// letters), a batch that's 100% Same Bank gets SBST, and a batch
+// mixing more than one mode gets MULT — so the batch ID always
+// reflects what's really inside that file.
 function getBatchPrefix(isSbi, tft, lines) {
   if (isSbi) return tft === 'Same Bank' ? 'SBST' : 'OBST';
   const modes = new Set(lines.map(l => l.mode));
@@ -3612,70 +3644,109 @@ function getBatchPrefix(isSbi, tft, lines) {
   return 'MULT';
 }
 
+// Splits collectBatchLines()'s output into one or more sub-batches to
+// actually export. Every bank except SBI's "Other Bank" case still
+// gets exactly one sub-batch (unchanged behaviour). SBI's "Other Bank"
+// batch is split into a NEFT sub-batch and an RTGS sub-batch — SBI's
+// own upload instructions say these must be fed as separate files, and
+// collectBatchLines() already tagged each line with its real RTGS/NEFT
+// mode for exactly this purpose. An empty sub-batch (e.g. every line
+// this run happens to be NEFT) is simply omitted rather than
+// downloading an empty RTGS file.
+// "Same Bank" is deliberately NOT split here — SBI's intra-bank
+// transfers go through a separate "Bulk Intra Bank" upload with its
+// own file format, which we don't have a spec for yet, so it still
+// exports as a single file under the existing (possibly incomplete)
+// format, same as before this change.
+function splitIntoSubBatches(isSbi, tft, lines) {
+  if (isSbi && tft === 'Other Bank') {
+    const rtgsLines = lines.filter(l => l.mode === 'RTGS');
+    const neftLines = lines.filter(l => l.mode === 'NEFT');
+    const subBatches = [];
+    if (rtgsLines.length) subBatches.push({ prefix: 'OBRT', label: 'RTGS', lines: rtgsLines });
+    if (neftLines.length) subBatches.push({ prefix: 'OBNE', label: 'NEFT', lines: neftLines });
+    return subBatches;
+  }
+  return [{ prefix: getBatchPrefix(isSbi, tft, lines), label: null, lines }];
+}
+
 async function executeExport() {
-  const { tft, lines, total } = collectBatchLines();
+  const { tft, lines } = collectBatchLines();
   const bankKey = companyProfile.bankName || 'SBI';
   const isSbi = bankKey === 'SBI';
   const bank = BANK_BY_KEY[bankKey] || BANK_BY_KEY.SBI;
   const formatter = BankFormatters[bankKey] || BankFormatters.SBI;
 
-  const prefix = getBatchPrefix(isSbi, tft, lines);
   const { monthRaw, monthName, year } = getPayrollCycle();
   const shortYear = year.slice(2);
   const txnDate = getTransferDateDDMMYYYY();
   if (!txnDate) { toast('Please select a Transfer Date before exporting.', 'error'); return; }
 
-  let seq;
-  try {
-    seq = await Api.getAndIncrementCounter();
-  } catch (err) {
-    toast('Could not generate batch number: ' + err.message, 'error');
-    return;
-  }
-  const batchId = `${prefix}${shortYear}${monthRaw}${seq}`;
-  // Most banks are happy with a free-text filename; HDFC's portal
-  // enforces a strict "ABCDDDMM.001" convention, so its formatter
-  // supplies its own fileName() instead of using the generic pattern.
-  const fileName = typeof formatter.fileName === 'function'
-    ? formatter.fileName({ companyProfile, txnDate, seq })
-    : `${bankKey.toLowerCase()}_salary_${monthName}_${year}.${formatter.ext}`;
+  const subBatches = splitIntoSubBatches(isSbi, tft, lines);
 
-  // Every row carries a full snapshot of the company profile and payroll
-  // cycle as they were AT THE TIME of this export — not just the
-  // employee/amount fields. Without this, re-downloading an old batch
-  // later would silently use today's company profile (which may have
-  // since changed bank, account, or IFSC) instead of what was actually
-  // used to generate that file originally.
-  const logRows = lines.map(({ acc, empCode, name, ifsc, amount, mode }) => ({
-    batchId, transferDate: txnDate, empCode, employeeName: name, accountNumber: acc, ifsc,
-    amount: amount.toFixed(2), transferType: mode, bank: bankKey,
-    monthName, year, monthRaw, shortYear, fileName,
-    companySnapshot: {
-      name: companyProfile.name, accountNumber: companyProfile.accountNumber,
-      ifsc: companyProfile.ifsc, sysId: companyProfile.sysId, bankName: bankKey
+  // One credit charge already covers this whole export click (handled
+  // by the caller before executeExport() runs) — splitting SBI's
+  // "Other Bank" batch into two files here is purely a file-format fix,
+  // not two billable exports, so credits are not touched per sub-batch.
+  for (const sub of subBatches) {
+    const subTotal = sub.lines.reduce((s, l) => s + l.amount, 0);
+
+    let seq;
+    try {
+      seq = await Api.getAndIncrementCounter();
+    } catch (err) {
+      toast('Could not generate batch number: ' + err.message, 'error');
+      return;
     }
-  }));
+    const batchId = `${sub.prefix}${shortYear}${monthRaw}${seq}`;
+    // Most banks are happy with a free-text filename; HDFC's portal
+    // enforces a strict "ABCDDDMM.001" convention, so its formatter
+    // supplies its own fileName() instead of using the generic pattern.
+    // For a split SBI batch, the sub-batch label (RTGS/NEFT) is folded
+    // into the filename so the two downloads are never confused with
+    // each other.
+    const fileName = typeof formatter.fileName === 'function'
+      ? formatter.fileName({ companyProfile, txnDate, seq })
+      : `${bankKey.toLowerCase()}_salary_${monthName}_${year}${sub.label ? '_' + sub.label.toLowerCase() : ''}.${formatter.ext}`;
 
-  const output = formatter.generate({
-    companyProfile, lines, total, batchId, txnDate, monthRaw, shortYear, monthName, year, tft
-  });
+    // Every row carries a full snapshot of the company profile and payroll
+    // cycle as they were AT THE TIME of this export — not just the
+    // employee/amount fields. Without this, re-downloading an old batch
+    // later would silently use today's company profile (which may have
+    // since changed bank, account, or IFSC) instead of what was actually
+    // used to generate that file originally.
+    const logRows = sub.lines.map(({ acc, empCode, name, ifsc, amount, mode }) => ({
+      batchId, transferDate: txnDate, empCode, employeeName: name, accountNumber: acc, ifsc,
+      amount: amount.toFixed(2), transferType: mode, bank: bankKey,
+      monthName, year, monthRaw, shortYear, fileName,
+      companySnapshot: {
+        name: companyProfile.name, accountNumber: companyProfile.accountNumber,
+        ifsc: companyProfile.ifsc, sysId: companyProfile.sysId, bankName: bankKey
+      }
+    }));
 
-  downloadTextFile(fileName, output, formatter.mime);
+    const output = formatter.generate({
+      companyProfile, lines: sub.lines, total: subTotal, batchId, txnDate, monthRaw, shortYear, monthName, year, tft
+    });
 
-  try {
-    await Api.addDisbursementRows(logRows);
-    await Api.logAudit(currentUser.email, currentUser.displayName, 'EXPORT FILE',
-      `Batch: ${batchId} | Bank: ${bank.label} | Total: ₹${total.toFixed(2)} | Employees: ${lines.length} | File: ${fileName}`);
-    // Remembers what each employee was paid in this batch, so next
-    // cycle's Disbursement page can pre-fill the same amount instead of
-    // starting blank — most salaries don't change month to month.
-    await Api.updateEmployeeLastAmounts(
-      lines.map(l => ({ accountNumber: l.acc, amount: l.amount }))
-    );
-    renderEmployeeKpis();
-  } catch (err) {
-    toast('File downloaded, but logging to the ledger failed: ' + err.message, 'error');
+    downloadTextFile(fileName, output, formatter.mime);
+
+    try {
+      await Api.addDisbursementRows(logRows);
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'EXPORT FILE',
+        `Batch: ${batchId} | Bank: ${bank.label}${sub.label ? ' (' + sub.label + ')' : ''} | Total: ₹${subTotal.toFixed(2)} | Employees: ${sub.lines.length} | File: ${fileName}`);
+      // Remembers what each employee was paid in this batch, so next
+      // cycle's Disbursement page can pre-fill the same amount instead of
+      // starting blank — most salaries don't change month to month.
+      await Api.updateEmployeeLastAmounts(
+        sub.lines.map(l => ({ accountNumber: l.acc, amount: l.amount }))
+      );
+    } catch (err) {
+      toast(`${fileName} downloaded, but logging to the ledger failed: ` + err.message, 'error');
+    }
   }
+
+  renderEmployeeKpis();
 }
 
 function downloadTextFile(filename, content, mime) {

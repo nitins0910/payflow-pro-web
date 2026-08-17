@@ -705,13 +705,15 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
 .wallet-chip-topbar{
   position:relative;
   display:flex; align-items:center; gap:6px; flex-shrink:0;
-  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14);
+  background:rgba(255,255,255,0.08); border:1px solid transparent;
   color:#fff; border-radius:var(--radius-sm);
   height:38px; padding:0 12px; font-size:12.5px; cursor:pointer;
-  transition:border-color .15s var(--ease), background .15s var(--ease);
+  transition:background .15s var(--ease);
 }
-.wallet-chip-topbar:hover{ border-color:var(--blue-bright); background:rgba(255,255,255,0.12); }
+.wallet-chip-topbar:hover{ background:rgba(255,255,255,0.12); }
 .wallet-chip-topbar .wallet-chip__icon{ font-size:14px; }
+.wallet-chip-topbar .wallet-chip__icon svg{ display:block; opacity:.9; }
+.wallet-chip__icon{ display:inline-flex; align-items:center; }
 .wallet-chip-topbar strong{ font-family:var(--font-mono); font-size:13px; }
 
 .account-menu{ position:relative; flex-shrink:0; margin-left:4px; }
@@ -1261,7 +1263,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
    Triggered from app.js (startTour / renderTourStep).
 --------------------------------------------------------- */
 .tour-help-btn{
-  width:28px; height:28px; margin-left:10px;
+  width:28px; height:28px; margin-left:10px; flex-shrink:0;
   border-radius:50%; border:1px solid var(--border); background:var(--surface2);
   color:var(--text2); font-family:var(--font-display); font-weight:700; font-size:13px;
   cursor:pointer; display:flex; align-items:center; justify-content:center;
@@ -1404,7 +1406,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
   /* "?" guided-tour button needs a real 44x44 tap target on touch
      screens (desktop keeps the compact size defined earlier, since
      that's mouse-driven). */
-  .tour-help-btn{ width:44px; height:44px; }
+  .tour-help-btn{ width:44px; height:44px; flex-shrink:0; }
   .wallet-chip-mobile .wallet-chip__icon{ font-size:13px; }
   .wallet-chip-mobile strong{ font-family:var(--font-mono); }
 

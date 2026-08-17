@@ -151,7 +151,8 @@ const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 
 // ---------------------------------------------------------
 // 1b. BILLING CONFIG — credit wallet
-// Every new user gets 5 free credits on signup. Every export costs
+// Every new user gets FREE_SIGNUP_CREDITS free credits on signup (50,
+// see api/lib/creditPacks.js). Every export costs
 // EXPORT_COST_CREDITS credits, deducted from the wallet balance
 // (free or purchased credits spend the same way). When the balance
 // runs out, the user buys a credit pack — bigger packs cost less per
@@ -199,6 +200,33 @@ const EXPORT_RAZORPAY_PACK = CREDIT_PACKS.find(p => p.credits === EXPORT_COST_CR
 // actually showing the pack picker there.
 const MAX_PACK_DISCOUNT_PCT = Math.max(...CREDIT_PACKS.map(p => p.discountPct));
 
+// ---------------------------------------------------------
+// CUSTOM CREDIT AMOUNT — mirrors api/lib/creditPacks.js's
+// CUSTOM_CREDIT_DISCOUNT_TIERS / priceForCustomCredits() exactly, for
+// live preview only, the same way CREDIT_PACKS above mirrors the fixed
+// packs. The ₹ amount actually charged always comes back from
+// create-order.js (server-side) — this is display-only.
+// ---------------------------------------------------------
+const CUSTOM_CREDIT_MIN = 1;
+const CUSTOM_CREDIT_MAX = 100000;
+const CUSTOM_CREDIT_DISCOUNT_TIERS = [
+  { minCredits: 120, discountPct: 40 },
+  { minCredits: 60, discountPct: 30 },
+  { minCredits: 30, discountPct: 20 },
+  { minCredits: 15, discountPct: 10 },
+  { minCredits: 1, discountPct: 0 }
+];
+function previewCustomCreditPrice(credits) {
+  if (!Number.isInteger(credits) || credits < CUSTOM_CREDIT_MIN || credits > CUSTOM_CREDIT_MAX) return null;
+  const tier = CUSTOM_CREDIT_DISCOUNT_TIERS.find(t => credits >= t.minCredits);
+  const discountPct = tier ? tier.discountPct : 0;
+  const priceRupees = Math.round(credits * BASE_RUPEES_PER_CREDIT * (1 - discountPct / 100));
+  return { credits, priceRupees, discountPct };
+}
+// Mirrors BASE_RUPEES_PER_CREDIT from api/lib/creditPacks.js, for the
+// preview calculation above only.
+const BASE_RUPEES_PER_CREDIT = 10;
+
 let walletBalance = 0;
 
 async function callBillingFunction(name, body) {
@@ -228,8 +256,8 @@ async function callBillingFunction(name, body) {
 }
 
 // Called once per dashboard boot (every login). Idempotent server-side —
-// only the very first call for a given user actually grants the 5 free
-// credits; every call after that just reads the current balance back.
+// only the very first call for a given user actually grants the free
+// signup credits; every call after that just reads the current balance back.
 // Returns the server response ({ credits, granted }) so bootDashboard()
 // can decide how to schedule the guided tour, or null on failure.
 async function initWallet() {
@@ -478,7 +506,14 @@ function wirePwaGuideModal() {
 // the server-side pack lookup.
 function buyCreditPack(pack, purpose = 'recharge') {
   return new Promise(async (resolve) => {
-    const order = await callBillingFunction('create-order', { packId: pack.id, purpose });
+    const orderBody = { packId: pack.id, purpose };
+    // pack.id === 'custom' comes from the Wallet page's "load a custom
+    // amount" input (see wireCustomCreditPurchase()) — the requested
+    // credit count has to travel to create-order.js so it can look up
+    // the correct volume-discount tier server-side; pack.priceRupees
+    // here is display-only and never what actually gets charged.
+    if (pack.id === 'custom') orderBody.customCredits = pack.credits;
+    const order = await callBillingFunction('create-order', orderBody);
     if (!order.ok) {
       toast((order.data && order.data.error) || 'Could not start payment. Please try again.', 'error');
       resolve(false);
@@ -563,6 +598,47 @@ function renderWalletPage() {
   const grid = document.getElementById('walletPackGrid');
   if (grid) renderCreditPacks(grid, () => {});
   renderWalletTransactions();
+}
+
+// Wires the "load a custom amount" box on the Wallet page — lets a user
+// type any number of credits instead of only picking a fixed pack size,
+// priced with the same volume-discount tiers the packs use (see
+// previewCustomCreditPrice() above and priceForCustomCredits() in
+// api/lib/creditPacks.js, which is what actually decides the charge).
+function wireCustomCreditPurchase() {
+  const input = document.getElementById('customCreditInput');
+  const preview = document.getElementById('customCreditPreview');
+  const btn = document.getElementById('buyCustomCreditBtn');
+  if (!input || !preview || !btn) return;
+
+  function updatePreview() {
+    const credits = parseInt(input.value, 10);
+    const priced = previewCustomCreditPrice(credits);
+    if (!priced) {
+      preview.textContent = input.value ? `Enter a whole number between ${CUSTOM_CREDIT_MIN} and ${CUSTOM_CREDIT_MAX}.` : '';
+      btn.disabled = true;
+      return;
+    }
+    btn.disabled = false;
+    const rate = (priced.priceRupees / priced.credits).toFixed(1);
+    preview.textContent = priced.discountPct
+      ? `₹${priced.priceRupees} for ${priced.credits} credits (₹${rate}/credit — ${priced.discountPct}% off)`
+      : `₹${priced.priceRupees} for ${priced.credits} credits (₹${rate}/credit)`;
+  }
+  input.addEventListener('input', updatePreview);
+  updatePreview();
+
+  btn.addEventListener('click', async () => {
+    const credits = parseInt(input.value, 10);
+    const priced = previewCustomCreditPrice(credits);
+    if (!priced) return;
+    const prevLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Opening payment...';
+    const ok = await buyCreditPack({ id: 'custom', credits: priced.credits, priceRupees: priced.priceRupees }, 'recharge');
+    btn.textContent = prevLabel;
+    updatePreview();
+    if (ok) input.value = '';
+  });
 }
 
 // Labels/icons for each transaction type written by the billing
@@ -703,7 +779,7 @@ function userRef() {
 // it's a full-screen .modal-backdrop with no close button — until the
 // signed-in user explicitly agrees to the Terms of Service and Privacy
 // Policy. Runs BEFORE initWallet(), so it always appears ahead of the
-// "Congratulations, 5 free credits" modal on a brand-new signup, and
+// "Congratulations, free credits" modal on a brand-new signup, and
 // ahead of everything else on every other login too.
 //
 // Consent is recorded on the user's own Firestore doc (allowed by
@@ -2021,6 +2097,7 @@ async function bootDashboard(user) {
     safeInit('wireHelpSupport', wireHelpSupport);
     safeInit('wireFreeCreditsModal', wireFreeCreditsModal);
     safeInit('wireGuidedTour', wireGuidedTour);
+    safeInit('wireCustomCreditPurchase', wireCustomCreditPurchase);
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     const walletChip = document.getElementById('walletChip');
     if (walletChip) walletChip.addEventListener('click', () => { closeMobileDrawer(); showAppPage('wallet'); });
@@ -2035,7 +2112,7 @@ async function bootDashboard(user) {
     try { tourAlreadySeen = !!localStorage.getItem('payflow-tour-seen'); } catch (e) { /* ignore */ }
 
     if (walletInit && walletInit.granted) {
-      // Brand-new signup: the "Congratulations, 5 free credits" modal is
+      // Brand-new signup: the "Congratulations, free credits" modal is
       // already showing (triggered inside initWallet()). Don't also fire
       // the tour on a timer — closeFreeCreditsModal() starts it the
       // instant the user dismisses that dialog, so the walkthrough reads
@@ -2808,8 +2885,30 @@ function wireEmployeeForm() {
     }
     checkPair(fAcc, fAccC, accMismatchLbl, isDuplicate);
     checkPair(fIfsc, fIfscC, ifscMismatchLbl, false);
+    autoDetectTransferType();
   }
   [fAcc, fAccC, fIfsc, fIfscC].forEach(el => el.addEventListener('input', validateLive));
+
+  // Auto-detects Same Bank vs Other Bank from the employee's own IFSC,
+  // compared against the company's own bank (Company Details page),
+  // instead of leaving it to the user to remember/pick correctly every
+  // time. This is what actually decides Same Bank (intra-bank) vs Other
+  // Bank (inter-bank, NEFT/RTGS/IMPS) for the export — a wrong manual
+  // pick here used to be the only way that could go wrong, since
+  // nothing cross-checked it against the real IFSC. The dropdown stays
+  // editable in case a genuine edge case needs a manual override, but
+  // it's now pre-filled correctly the moment a full, matching IFSC is
+  // entered.
+  function autoDetectTransferType() {
+    const ifsc = fIfsc.value.trim().toUpperCase();
+    const ifscC = fIfscC.value.trim().toUpperCase();
+    if (!ifsc || ifsc !== ifscC || ifsc.length < 4) return;
+    const companyIfscPrefix = String(companyProfile.ifsc || '').toUpperCase().slice(0, 4);
+    const bank = BANK_BY_KEY[companyProfile.bankName || 'SBI'];
+    const ownPrefix = companyIfscPrefix || (bank && bank.ifscPrefix) || '';
+    if (!ownPrefix) return;
+    fType.value = ifsc.startsWith(ownPrefix) ? 'Same Bank' : 'Other Bank';
+  }
 
   function resetForm() {
     employeeForm.reset();
@@ -2951,8 +3050,8 @@ function wireEmployeeForm() {
 // only ever existed in source code, not anywhere in the UI.
 function downloadSampleCsv() {
   const sample = [
-    'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code',
-    'JOHN DOE,123456789012,SBIN0001234,Same Bank,01'
+    'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code,Mobile,Email',
+    'JOHN DOE,123456789012,SBIN0001234,Same Bank,01,9876543210,john.doe@example.com'
   ].join('\r\n') + '\r\n';
   downloadTextFile('payflow_bulk_import_sample.csv', sample, 'text/csv;charset=utf-8');
 }
@@ -2962,8 +3061,8 @@ function downloadSampleCsv() {
 // out for backup/editing and back in again.
 function exportLedgerCsv() {
   if (!employees.length) { toast('No employees to export yet.', 'error'); return; }
-  const header = 'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code';
-  const rows = employees.map(e => csvRow([e.name, e.accountNumber, e.ifsc, e.transferType, e.empCode]));
+  const header = 'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code,Mobile,Email';
+  const rows = employees.map(e => csvRow([e.name, e.accountNumber, e.ifsc, e.transferType, e.empCode, e.mobile || '', e.email || '']));
   const content = [header, ...rows].join('\r\n') + '\r\n';
   downloadTextFile(`payflow_employee_ledger_${new Date().toISOString().slice(0, 10)}.csv`, content, 'text/csv;charset=utf-8');
 }
@@ -3119,11 +3218,19 @@ function parseCsv(text, existingAccounts) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (!lines.length) return { rows: [], errors: [] };
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  const idxAcc  = headers.indexOf('account number');
-  const idxIfsc = headers.indexOf('ifsc_branchcode');
-  const idxName = headers.indexOf('employee name');
-  const idxType = headers.indexOf('transfer type');
-  const idxCode = headers.indexOf('emp code');
+  const idxAcc    = headers.indexOf('account number');
+  const idxIfsc   = headers.indexOf('ifsc_branchcode');
+  const idxName   = headers.indexOf('employee name');
+  const idxType   = headers.indexOf('transfer type');
+  const idxCode   = headers.indexOf('emp code');
+  // Mobile/Email are required on every employee record everywhere else
+  // in the app (see the manual Add Employee form) — bulk import used to
+  // silently skip reading these two columns entirely, so CSV-imported
+  // employees ended up with no phone/email on file even when the
+  // uploaded sheet had them. Reading + validating them here the same
+  // way the manual form does keeps both entry paths in sync.
+  const idxMobile = headers.indexOf('mobile');
+  const idxEmail  = headers.indexOf('email');
 
   const rows = [];
   const errors = [];
@@ -3141,6 +3248,8 @@ function parseCsv(text, existingAccounts) {
     const name = (cols[idxName >= 0 ? idxName : 2] || '').toUpperCase();
     const rawType = (cols[idxType >= 0 ? idxType : 3] || 'Same Bank').trim();
     const empCode = ((cols[idxCode >= 0 ? idxCode : 4] || '01').replace(/[^0-9]/g, '') || '01').padStart(2, '0');
+    const mobile = (cols[idxMobile >= 0 ? idxMobile : 5] || '').replace(/[^0-9]/g, '');
+    const email = (cols[idxEmail >= 0 ? idxEmail : 6] || '').trim().toLowerCase();
 
     if (!accountNumber || !name) {
       errors.push({ line: lineNo, reason: 'Missing Account Number or Employee Name.' });
@@ -3155,6 +3264,14 @@ function parseCsv(text, existingAccounts) {
       errors.push({ line: lineNo, reason: `Invalid Transfer Type "${rawType}" — must be "Same Bank" or "Other Bank".` });
       continue;
     }
+    if (!/^[6-9][0-9]{9}$/.test(mobile)) {
+      errors.push({ line: lineNo, reason: `Missing or invalid Mobile number "${cols[idxMobile >= 0 ? idxMobile : 5] || ''}" — must be a valid 10-digit number.` });
+      continue;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.push({ line: lineNo, reason: `Missing or invalid Email "${cols[idxEmail >= 0 ? idxEmail : 6] || ''}".` });
+      continue;
+    }
     if (existing.has(accountNumber) || seenInFile.has(accountNumber)) {
       errors.push({ line: lineNo, reason: `Duplicate Account Number ${accountNumber} (already in ledger or repeated in this file).` });
       continue;
@@ -3165,7 +3282,7 @@ function parseCsv(text, existingAccounts) {
     }
     seenInFile.add(accountNumber);
     seenCodes.add(empCode);
-    rows.push({ accountNumber, ifsc, name, transferType, empCode });
+    rows.push({ accountNumber, ifsc, name, transferType, empCode, mobile, email });
   }
   return { rows, errors };
 }
@@ -4415,13 +4532,35 @@ const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 let lastActivity = Date.now();
 
 function markActivity() { lastActivity = Date.now(); }
-['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(evt =>
+// 'scroll' does NOT bubble to document like other DOM events do, so a
+// plain document-level listener only ever saw page-level scrolling and
+// missed activity inside any inner scrollable panel (tables, modals,
+// the sidebar) — the single biggest source of "I was clearly using the
+// app but got logged out" reports. Listening in the CAPTURE phase (the
+// `true` 3rd arg) is what actually fixes it: capture-phase listeners
+// on an ancestor still see a descendant's scroll event on its way down,
+// even though it never bubbles back up.
+['click', 'keydown', 'mousemove', 'touchstart'].forEach(evt =>
   document.addEventListener(evt, markActivity, { passive: true })
 );
+document.addEventListener('scroll', markActivity, { passive: true, capture: true });
 
 function checkInactivity() {
   if (auth.currentUser && Date.now() - lastActivity > INACTIVITY_LIMIT_MS) {
-    auth.signOut();
+    // Fire-and-forget signOut() alone used to be silently swallowed
+    // when suppressAutoRoute was left "true" by an in-flight Google
+    // sign-in / email-verification flow — Firebase would sign the user
+    // out under the hood, but onAuthStateChanged's routeUser() call
+    // would be suppressed, so the dashboard just kept showing until the
+    // next manual refresh and it LOOKED like auto-logout wasn't
+    // happening at all. Force both explicitly here so the redirect to
+    // the login screen always happens the moment the timeout fires,
+    // regardless of what else is going on.
+    auth.signOut().finally(() => {
+      suppressAutoRoute = false;
+      goToAuthScreen();
+      toast('You were signed out after 15 minutes of inactivity.', 'error');
+    });
   }
 }
 

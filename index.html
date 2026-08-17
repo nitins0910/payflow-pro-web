@@ -800,6 +800,19 @@
 
         <div id="walletPackGrid" class="credit-pack-grid"></div>
 
+        <div class="panel" style="margin-top:20px;">
+          <h3 style="font-size:15px; margin:0 0 4px;">Load a custom amount</h3>
+          <p style="font-size:12.5px; color:var(--muted, #888); margin:0 0 12px;">Need a different number of credits? Type in any amount — the same bulk discount as the packs above applies automatically (10% at 15+, 20% at 30+, 30% at 60+, 40% at 120+).</p>
+          <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+            <div>
+              <label for="customCreditInput" style="display:block; font-size:12px; color:var(--muted, #888); margin-bottom:4px;">Number of credits</label>
+              <input type="number" id="customCreditInput" min="1" step="1" placeholder="e.g. 40" style="width:140px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:8px 10px;">
+            </div>
+            <button type="button" class="btn-inline primary" id="buyCustomCreditBtn" disabled>Buy</button>
+          </div>
+          <div id="customCreditPreview" style="margin-top:10px; font-size:13px; color:var(--muted, #888);"></div>
+        </div>
+
         <div class="page-head" style="margin-top:32px;">
           <div>
             <h2 style="font-size:18px;">Transaction History</h2>
@@ -1184,7 +1197,7 @@
     </div>
   </div>
 
-  <!-- Shown once, right after the free 5 credits are granted on a
+  <!-- Shown once, right after the free signup credits are granted on a
        brand-new account (see initWallet() in app.js). -->
   <div id="freeCreditsModal" class="modal-backdrop hidden">
     <div class="modal" style="max-width:380px; text-align:center;">
@@ -1193,7 +1206,7 @@
       </div>
       <div style="font-size:40px; margin-bottom:6px;">🎉</div>
       <h3 style="margin:0 0 6px;">Congratulations!</h3>
-      <p style="margin:0 0 18px;">You've got <strong id="freeCreditsAmount">5</strong> free credits to get started — enough for your first payroll export.</p>
+      <p style="margin:0 0 18px;">You've got <strong id="freeCreditsAmount">50</strong> free credits to get started — enough for your first payroll export.</p>
       <button type="button" class="btn-inline" style="width:100%;" id="freeCreditsGoBtn">Let's go</button>
     </div>
   </div>
@@ -1267,7 +1280,7 @@
           <li>Manage your <strong>company details</strong> (name, bank, account number, IFSC)
             that get stamped onto every export file.</li>
         </ul>
-        <p><strong>How billing works:</strong> every new account starts with 5 free credits.
+        <p><strong>How billing works:</strong> every new account starts with 50 free credits.
           Generating one payroll export file costs 5 credits. Once your balance runs out,
           you can top up your wallet with a credit pack — the bigger the pack, the bigger
           the per-credit discount. See the Wallet page for current pack pricing.</p>

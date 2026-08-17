@@ -1,6 +1,6 @@
 # Wallet & Credits Billing — Setup Guide
 
-Har naye user ko signup pe **5 free credits** milte hain (turant, "🎉 Congratulations" popup ke saath). Har payroll export **5 credits** use karta hai. Jab wallet khaali ho jaaye, user credit-pack khareed sakta hai (Razorpay se) — jitna bada pack utna zyada discount. Yeh sab server-side (**Vercel Serverless Functions**, `/api/*`) enforce hota hai — koi bhi browser/devtools se bypass nahi kar sakta.
+Har naye user ko signup pe **50 free credits** milte hain (turant, "🎉 Congratulations" popup ke saath). Har payroll export **5 credits** use karta hai. Jab wallet khaali ho jaaye, user credit-pack khareed sakta hai (Razorpay se) — jitna bada pack utna zyada discount. Yeh sab server-side (**Vercel Serverless Functions**, `/api/*`) enforce hota hai — koi bhi browser/devtools se bypass nahi kar sakta.
 
 ## Credit packs (default pricing)
 
@@ -16,7 +16,7 @@ Yeh table sirf **`api/lib/creditPacks.js`** me hai — wahi asli price hai jo ch
 
 ## Kaise kaam karta hai (short version)
 
-1. User pehli baar login/signup karta hai → browser `init-wallet` function call karta hai. Agar wallet pehli baar init ho rahi hai, 5 credits mil jaate hain aur "Congratulations" popup dikhta hai. Baad ke har login pe yeh sirf current balance return karta hai (dobara credits nahi milte).
+1. User pehli baar login/signup karta hai → browser `init-wallet` function call karta hai. Agar wallet pehli baar init ho rahi hai, 50 credits mil jaate hain aur "Congratulations" popup dikhta hai. Baad ke har login pe yeh sirf current balance return karta hai (dobara credits nahi milte).
 2. User "Confirm → Export" click karta hai → browser `consume-credits` function ko call karta hai:
    - Balance ≥ 5 → 5 credits minus karke turant "allowed" bhej deta hai.
    - Balance < 5 → "insufficient_credits" bhejta hai, kitne credits kam hain wo bhi bataata hai.
@@ -85,7 +85,7 @@ Agar aapke paas pehle se live users hain jo purane `freeExportUsed` / `credits` 
 
 ### 8. Test karein
 1. Test Mode Razorpay keys ke saath, checkout me test card use karein: `4111 1111 1111 1111`, koi bhi future expiry, koi bhi CVV.
-2. Naya account banayein — login hote hi "Congratulations, 5 free credits" popup dikhna chahiye.
+2. Naya account banayein — login hote hi "Congratulations, 50 free credits" popup dikhna chahiye.
 3. Pehla export try karein — 5 credits minus hone chahiye, balance 0 dikhna chahiye Wallet page pe.
 4. Doosra export try karein — "Buy Credits" modal khulna chahiye. Koi bhi pack chunein, payment ke baad file download honi chahiye aur balance update hona chahiye.
 

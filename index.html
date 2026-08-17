@@ -765,6 +765,16 @@
             </div>
             <div class="field-hint" id="companyIfscPreview"></div>
           </div>
+          <div class="field hidden" id="companyHdfcClientCodeWrap">
+            <label>HDFC Corporate Client Code</label>
+            <input type="text" id="companyHdfcClientCodeInput" maxlength="4" placeholder="e.g. ABCD" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
+            <div class="field-hint">The 4-character client code HDFC assigned your company — required to build the strict "ABCDDDMM.001" filename HDFC's CBX/ENET portal expects.</div>
+          </div>
+          <div class="field hidden" id="companyIciciCorporateIdWrap">
+            <label>ICICI Corporate Login ID</label>
+            <input type="text" id="companyIciciCorporateIdInput" maxlength="20" placeholder="e.g. CORPID123" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
+            <div class="field-hint">Your Corporate Login ID on ICICI's CIB portal — stamped onto the Master Debit Record of every export.</div>
+          </div>
           <div class="modal-actions">
             <button type="button" class="btn-inline secondary" id="cancelCompanyEditBtn">Cancel</button>
             <button type="button" class="btn-inline" id="saveCompanyBtn" style="flex:1;">Save Company Profile</button>

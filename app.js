@@ -806,12 +806,17 @@ const Api = {
       accountNumber: d.accountNumber || '',
       ifsc: d.ifsc || '',
       sysId: d.sysId || '',
-      bankName: d.bankName || 'SBI'
+      bankName: d.bankName || 'SBI',
+      // Bank-specific identifiers, only ever relevant/required when
+      // that bank is selected — see HDFC/ICICI BankFormatters.
+      hdfcClientCode: d.hdfcClientCode || '',
+      iciciCorporateId: d.iciciCorporateId || ''
     };
   },
-  async updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName }) {
+  async updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId }) {
     await userRef().set({
       companyName: name, accountNumber, ifsc, sysId, bankName,
+      hdfcClientCode: hdfcClientCode || '', iciciCorporateId: iciciCorporateId || '',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   },
@@ -991,16 +996,28 @@ function confirmDialog(message, { title = 'Please confirm', danger = true } = {}
 // bank needs to be added — nothing else in the export pipeline is
 // bank-specific.
 //
-// NOTE: the exact CSV/TXT column layouts below follow the specs
-// supplied for SBI, HDFC, ICICI and PNB — the only 4 banks this app
-// supports. Confirm the live column order with each bank's CMS /
-// corporate net banking portal before using these in production.
+// NOTE: the exact CSV/TXT column layouts below follow "Corporate Bulk
+// Payment File Specifications" (PNB IBS / HDFC CBX-ENET / ICICI CIB
+// PAB-SAL master spec doc). SBI's layout was supplied separately.
+// Confirm the live column order with each bank's CMS / corporate net
+// banking portal before using these in production, since banks do
+// revise their bulk-upload formats from time to time.
+//
+// supportsRtgs / supportsImps reflect each bank's bulk-file spec
+// exactly — they are NOT generic capability flags:
+//   - PNB:   Supported Transfer Modes = Internal(PMT), NEFT, RTGS.
+//            No IMPS credit line exists in this file format.
+//   - HDFC:  Supported Transfer Modes = Internal(I), NEFT(N), RTGS(R).
+//            No IMPS credit line exists in this file format.
+//   - ICICI: Supported Transfer Modes = Internal(MCW), NEFT(MCO) only.
+//            No RTGS and no IMPS credit line exists in this format —
+//            every cross-bank credit record is a fixed "NFT" literal.
 // ---------------------------------------------------------
 const BANKS = [
-  { key: 'SBI',   label: 'State Bank of India (SBI)',  ifscPrefix: 'SBIN' },
-  { key: 'HDFC',  label: 'HDFC Bank (HDFC)',            ifscPrefix: 'HDFC' },
-  { key: 'ICICI', label: 'ICICI Bank (ICICI)',          ifscPrefix: 'ICIC' },
-  { key: 'PNB',   label: 'Punjab National Bank (PNB)',  ifscPrefix: 'PUNB' },
+  { key: 'SBI',   label: 'State Bank of India (SBI)',  ifscPrefix: 'SBIN', supportsRtgs: true,  supportsImps: true  },
+  { key: 'HDFC',  label: 'HDFC Bank (HDFC)',            ifscPrefix: 'HDFC', supportsRtgs: true,  supportsImps: false },
+  { key: 'ICICI', label: 'ICICI Bank (ICICI)',          ifscPrefix: 'ICIC', supportsRtgs: false, supportsImps: false },
+  { key: 'PNB',   label: 'Punjab National Bank (PNB)',  ifscPrefix: 'PUNB', supportsRtgs: true,  supportsImps: false },
 ];
 const BANK_BY_KEY = Object.fromEntries(BANKS.map(b => [b.key, b]));
 
@@ -1034,31 +1051,61 @@ function determineTransactionMode(bankKey, ifsc, amount, preferImps) {
   if (!bank) return 'NEFT';
   const sameBank = bank.ifscPrefix && String(ifsc || '').toUpperCase().startsWith(bank.ifscPrefix);
   if (sameBank) return 'Same Bank';
-  if (preferImps) return 'IMPS';
+  if (preferImps && bank.supportsImps) return 'IMPS';
+  // ICICI's bulk file (MCO record) has no RTGS credit type at all — every
+  // cross-bank credit is NEFT regardless of amount. PNB/HDFC do support
+  // RTGS per their spec, so the ₹2L threshold still applies to them.
+  if (bank.supportsRtgs === false) return 'NEFT';
   return amount >= 200000 ? 'RTGS' : 'NEFT';
 }
 
-// "Same Bank" is a UI-only label (shown in the mode badge on the
-// Payroll Run screen) meaning "this is an intra-bank transfer" — it
-// is NOT a value any bank's bulk-upload portal recognises in a
-// TxnType column, and uploading it as-is risks the file being
-// rejected. NEFT is accepted for same-bank transfers too, so the
-// exported file always carries a real network code while the badge
-// the user sees keeps the more informative "Same Bank" label.
-function txnTypeCodeForFile(mode) {
+// "Same Bank" / "NEFT" / "RTGS" / "IMPS" are UI-only labels (used for
+// the mode badge on the Payroll Run screen). Each bank's real bulk
+// file has its OWN literal code for the same concept — e.g. PNB wants
+// "PMT" for an intra-bank transfer while HDFC wants "I" for the exact
+// same thing — so a single shared code was never going to be correct
+// for more than one bank at a time. This is the single place that
+// converts the generic UI mode into the bank-specific file code.
+function bankTxnCode(bankKey, mode) {
+  if (bankKey === 'PNB') {
+    if (mode === 'Same Bank') return 'PMT';
+    if (mode === 'RTGS') return 'RTG';
+    return 'NFT'; // NEFT
+  }
+  if (bankKey === 'HDFC') {
+    if (mode === 'Same Bank') return 'I';
+    if (mode === 'RTGS') return 'R';
+    return 'N'; // NEFT
+  }
+  // Fallback for any bank without its own bulk-file spec on file yet.
   return mode === 'Same Bank' ? 'NEFT' : mode;
 }
 
-// SBI's bulk .txt file wants only the numeric branch-code part of the
-// IFSC — everything after the 4-letter bank code and the reserved
-// '0' that always follows it — with any further leading zeros on
-// that stripped too. e.g. SBIN0030127 -> branch portion "030127" ->
-// leading zero stripped -> "30127". Only used for SBI; the other
-// banks' formatters still write the full IFSC as before.
-function sbiBranchCodeFromIfsc(ifsc) {
-  const clean = String(ifsc || '').trim().toUpperCase();
-  const branch = clean.slice(5); // drop the 4-letter bank code + reserved '0'
-  return branch.replace(/^0+(?=\d)/, ''); // strip extra leading zeros, keep at least one digit
+// HDFC's bulk file requires the beneficiary's bank NAME as free text
+// (column 26 — e.g. "HDFC BANK", "SBI BANK") in addition to the IFSC.
+// Best-effort lookup covering the most common Indian banks by their
+// 4-letter IFSC prefix; anything not in the table falls back to
+// "<PREFIX> BANK", which is still a safe, parseable value.
+const IFSC_BANK_NAMES = {
+  SBIN: 'SBI BANK', HDFC: 'HDFC BANK', ICIC: 'ICICI BANK', PUNB: 'PNB BANK',
+  UTIB: 'AXIS BANK', KKBK: 'KOTAK BANK', BARB: 'BANK OF BARODA', CNRB: 'CANARA BANK',
+  UBIN: 'UNION BANK', IDIB: 'INDIAN BANK', IOBA: 'INDIAN OVERSEAS BANK', IDFB: 'IDFC FIRST BANK',
+  YESB: 'YES BANK', INDB: 'INDUSIND BANK', RATN: 'RBL BANK', FDRL: 'FEDERAL BANK',
+  CBIN: 'CENTRAL BANK OF INDIA', MAHB: 'BANK OF MAHARASHTRA', PSIB: 'PUNJAB & SIND BANK',
+  UCBA: 'UCO BANK', BKID: 'BANK OF INDIA', SIBL: 'SOUTH INDIAN BANK', DCBL: 'DCB BANK'
+};
+function bankNameFromIfsc(ifsc) {
+  const prefix = String(ifsc || '').trim().toUpperCase().slice(0, 4);
+  return IFSC_BANK_NAMES[prefix] || (prefix ? `${prefix} BANK` : '');
+}
+
+// ICICI's File Header Record wants the execution date as MM/DD/YYYY —
+// the one field in the whole app that isn't DD/MM/YYYY. Converts the
+// already-picked Transfer Date just for that one field.
+function ddmmyyyyToMmddyyyy(ddmmyyyy) {
+  const [d, m, y] = String(ddmmyyyy || '').split('/');
+  if (!d || !m || !y) return ddmmyyyy || '';
+  return `${m}/${d}/${y}`;
 }
 
 // ctx passed to every generate() below:
@@ -1066,6 +1113,20 @@ function sbiBranchCodeFromIfsc(ifsc) {
 //   lines[]  { acc, empCode, name, ifsc, amount, mode }
 //   total, batchId, txnDate ('DD/MM/YYYY'), monthName, year, tft
 const BankFormatters = {
+  // SBI Bulk INTER Bank Transaction Upload Format (RTGS/NEFT to other
+  // banks) — confirmed against the real sample workbook. 8 '#'-delimited
+  // fields, NO header/column-label row, NO trailing '#'. Row 1 (serial
+  // 001) is always the DEBIT row (the company's own SBI account); every
+  // row after that is a CREDIT row (one per employee):
+  //   DEBIT row:  AccNo # BranchCode # Date # DrAmount # (blank) # UniqueRef # AccountName # Description
+  //   CREDIT row: AccNo # IFSC       # Date # (blank) # CrAmount # UniqueRef # AccountName # Description
+  // Field 2 differs by row type: the debit row uses the company's own
+  // SBI BRANCH CODE (sysId — there's no IFSC needed for your own SBI
+  // account), while every credit row uses the beneficiary's FULL IFSC
+  // code (e.g. "UTIB0000000") — confirmed by the sample file's credit
+  // rows, which show complete 11-char IFSCs, not a stripped branch code.
+  // A stripped branch-code fragment on credit rows was the old (wrong)
+  // behavior here and would misroute or bounce every cross-bank credit.
   SBI: {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
@@ -1078,42 +1139,127 @@ const BankFormatters = {
       // still telling you which employee (and which batch) it belongs to.
       const empLines = ctx.lines.map(l => {
         const seqStr = `${ctx.batchId}E${l.empCode}`;
-        return `${d(l.acc)}#${d(sbiBranchCodeFromIfsc(l.ifsc))}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
+        return `${d(l.acc)}#${d(l.ifsc)}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}`;
       });
-      const header = `${d(ctx.companyProfile.accountNumber)}#${d(ctx.companyProfile.sysId)}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${d(ctx.companyProfile.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
+      const header = `${d(ctx.companyProfile.accountNumber)}#${d(ctx.companyProfile.sysId)}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${d(ctx.companyProfile.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}`;
       return [header, ...empLines].join('\n') + '\n';
     }
   },
+  // PNB IBS — "Combined" bulk NEFT/RTGS/Within-PNB file. 7 comma-delimited
+  // columns exactly per spec: TxnType(NFT/RTG/PMT), 16-digit DebitAcc,
+  // Amount, Currency(always INR), BenAcc, IFSC, Remarks (<=30 chars,
+  // optional). NO header row — confirmed against PNB's own sample .txt
+  // and .xlsx files (User Guide for Corporate Internet Banking Users,
+  // Section 10.C "Bulk NEFT/RTGS Transfer File"), both of which start
+  // directly with a data row (e.g. "NFT,1120010101111,4000,INR,...").
+  // A header here would either get bounced or misread as a transaction,
+  // same reasoning as HDFC below.
   PNB: {
     ext: 'csv', mime: 'text/csv;charset=utf-8',
     generate(ctx) {
-      const header = 'DebitAcc,BenAcc,Amount,BenName,IFSC,TxnType,TxnDate,Remarks';
+      const remarks = `SALARY OF ${ctx.monthName} ${ctx.year}`.slice(0, 30);
       const rows = ctx.lines.map(l => csvRow([
-        ctx.companyProfile.accountNumber, l.acc, l.amount.toFixed(2), l.name, l.ifsc, txnTypeCodeForFile(l.mode),
-        ctx.txnDate, `SALARY OF ${ctx.monthName} ${ctx.year}`
+        bankTxnCode('PNB', l.mode),
+        ctx.companyProfile.accountNumber,
+        l.amount.toFixed(2),
+        'INR',
+        l.acc,
+        l.ifsc,
+        remarks
       ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
+      return rows.join('\r\n') + '\r\n'; // deliberately no header row
     }
   },
+  // HDFC CBX/ENET — strict 28-column CSV, NO header row (HDFC's parser
+  // treats row 1 as a transaction if a header is present, so the file
+  // must start directly with data). Column indices below are 0-based
+  // (col N in the spec = cols[N-1] here); every column not explicitly
+  // set stays blank, matching the spec's optional fields.
   HDFC: {
     ext: 'csv', mime: 'text/csv;charset=utf-8',
     generate(ctx) {
-      const header = 'TxnType,DebitAcc,BenAcc,BenName,Amount,IFSC,TxnDate,Email,Remarks';
-      const rows = ctx.lines.map(l => csvRow([
-        txnTypeCodeForFile(l.mode), ctx.companyProfile.accountNumber, l.acc, l.name, l.amount.toFixed(2), l.ifsc,
-        ctx.txnDate, '', `SALARY OF ${ctx.monthName} ${ctx.year}`
-      ]));
-      return [header, ...rows].join('\r\n') + '\r\n';
+      // "No special characters" per spec — keep this alphanumeric only.
+      const custRef = `SALARY${(ctx.monthName || '').slice(0, 3).toUpperCase()}${ctx.year}`;
+      const rows = ctx.lines.map(l => {
+        const isInternal = l.mode === 'Same Bank';
+        const cols = new Array(28).fill('');
+        cols[0]  = bankTxnCode('HDFC', l.mode);   // 1  Transaction Type: I / N / R
+        cols[1]  = isInternal ? l.acc : '';        // 2  Beneficiary Code (Internal only)
+        cols[2]  = l.acc;                          // 3  Beneficiary Account No.
+        cols[3]  = l.amount.toFixed(2);            // 4  Instrument Amount
+        cols[4]  = l.name.slice(0, 40);            // 5  Beneficiary Name (spec max 40 chars)
+        // 6-7 Drawee/Print Location, 8-12 Bene Address 1-5, 13 Instruction Ref — blank
+        cols[13] = custRef;                        // 14 Customer Reference No.
+        // 15-21 Payment Details 1-7, 22 Cheque Number — blank
+        cols[22] = ctx.txnDate;                    // 23 Chq / Trn Date (DD/MM/YYYY)
+        // 24 MICR Number — blank
+        // 25 IFSC Code — always populated, even for internal (I) transfers.
+        // The written spec only calls IFSC mandatory for N/R, but the real
+        // production sample file fills it on every row including internal
+        // ones, so we no longer blank it out for isInternal.
+        cols[24] = l.ifsc;
+        cols[25] = bankNameFromIfsc(l.ifsc);       // 26 Bene Bank Name
+        // 27 Bene Branch Name — blank
+        cols[27] = '';                             // 28 Beneficiary Email ID (not collected today)
+        return csvRow(cols);
+      });
+      return rows.join('\r\n') + '\r\n'; // deliberately no header row
+    },
+    // Strict HDFC naming convention: "ABCDDDMM.001" = 4-char Corporate
+    // Client Code + transfer day + transfer month + a 3-digit batch
+    // sequence. The app's own export counter is a single running
+    // alphanumeric value (not a per-day reset), so it's folded into a
+    // 1-999 range here to keep the extension valid — if more than one
+    // HDFC batch is uploaded on the same day, double-check the .00X
+    // suffix doesn't collide with one already used with HDFC that day.
+    fileName(ctx) {
+      const code = (ctx.companyProfile.hdfcClientCode || 'XXXX').toUpperCase().slice(0, 4).padEnd(4, 'X');
+      const [dd, mm] = String(ctx.txnDate || '').split('/');
+      const seqNum = ((parseInt(ctx.seq, 36) || 1) % 999) + 1;
+      return `${code}${dd || '01'}${mm || '01'}.${String(seqNum).padStart(3, '0')}`;
     }
   },
+  // ICICI CIB PAB-SAL — pipe (|) delimited fields, caret (^) record
+  // terminator (one per line, not a field separator). Every file needs
+  // a File Header Record (FHR) + Master Debit Record (MDR), then one
+  // Beneficiary Credit Record per employee: MCW (within ICICI, exactly
+  // 12-digit account, IFSC blank) or MCO (other bank — this format only
+  // ever credits via NEFT, the "NFT" literal is fixed, not variable).
   ICICI: {
     ext: 'txt', mime: 'text/plain;charset=utf-8',
     generate(ctx) {
-      const d = v => sanitizeForDelimitedFile(v, '^');
-      const rows = ctx.lines.map(l =>
-        [txnTypeCodeForFile(l.mode), d(ctx.companyProfile.accountNumber), d(l.acc), l.amount.toFixed(2), d(l.name), d(l.ifsc),
-          `SALARY OF ${d(ctx.monthName)} ${ctx.year}`].join('^'));
-      return rows.join('\n') + '\n';
+      const d = (v, max) => {
+        const s = sanitizeForDelimitedFile(v, '|', '^');
+        return max ? s.slice(0, max) : s;
+      };
+      // Beneficiary Name specifically: CIB spec says "No special character
+      // is allowed but Space is allowed" — alphanumeric + space only.
+      // Scoped to name fields only (not debitAcc/IFSC/corporateId, which
+      // have their own separate, already-correct rules above).
+      const dName = (v, max) => {
+        const s = d(v).replace(/[^A-Za-z0-9 ]/g, '');
+        return max ? s.slice(0, max) : s;
+      };
+      const totalRecords = ctx.lines.length + 1; // credit lines + the MDR debit line
+      const execDate = ddmmyyyyToMmddyyyy(ctx.txnDate); // ICICI wants MM/DD/YYYY here
+      const externalRef = `SALARY_${(ctx.monthName || '').slice(0, 3).toUpperCase()}${ctx.year}`;
+      const debitAcc = d(ctx.companyProfile.accountNumber, 12);
+      const corporateId = d(ctx.companyProfile.iciciCorporateId, 20);
+      const narration = d(`SALARY OF ${ctx.monthName} ${ctx.year}`, 30);
+
+      const fhr = `FHR|${totalRecords}|${execDate}|${externalRef}|${ctx.total.toFixed(2)}|INR|${debitAcc}|0011^`;
+      const mdr = `MDR|${debitAcc}|0011|${corporateId}|${ctx.total.toFixed(2)}|INR|${narration}|ICIC0000011|WIB^`;
+
+      const creditLines = ctx.lines.map(l => {
+        const name = dName(l.name, 32);
+        const remarks = d(`SAL ${ctx.monthName}`, 30);
+        if (l.mode === 'Same Bank') {
+          return `MCW|${d(l.acc, 12)}|0011|${name}|${l.amount.toFixed(2)}|INR|${remarks}|ICIC0000011|WIB^`;
+        }
+        return `MCO|${d(l.acc, 34)}|0011|${name}|${l.amount.toFixed(2)}|INR|${remarks}|NFT|${d(l.ifsc)}^`;
+      });
+
+      return [fhr, mdr, ...creditLines].join('\n') + '\n';
     }
   },
 };
@@ -1128,6 +1274,14 @@ function setSelectedCompanyBank(key) {
   document.querySelectorAll('#companyBankGroup .bank-select-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.bank === key);
   });
+  // HDFC's strict filename convention needs a 4-char Corporate Client
+  // Code, and ICICI's Master Debit Record needs a Corporate Login ID —
+  // neither field means anything for the other banks, so only show
+  // whichever one is actually relevant to the bank just selected.
+  const hdfcWrap = document.getElementById('companyHdfcClientCodeWrap');
+  const iciciWrap = document.getElementById('companyIciciCorporateIdWrap');
+  if (hdfcWrap) hdfcWrap.classList.toggle('hidden', key !== 'HDFC');
+  if (iciciWrap) iciciWrap.classList.toggle('hidden', key !== 'ICICI');
 }
 function wireCompanyBankButtons() {
   document.querySelectorAll('#companyBankGroup .bank-select-btn').forEach(btn => {
@@ -1725,7 +1879,7 @@ safeInit('wirePasswordStrengthMeter', wirePasswordStrengthMeter);
 let employees = [];
 let editingEmployeeId = null;
 let salaryInputs = {};
-let companyProfile = { name: '', accountNumber: '', ifsc: '', sysId: '', bankName: 'SBI' };
+let companyProfile = { name: '', accountNumber: '', ifsc: '', sysId: '', bankName: 'SBI', hdfcClientCode: '', iciciCorporateId: '' };
 let dashboardBooted = false;
 let currentUser = null;
 
@@ -3048,15 +3202,23 @@ function updateDisbursementModeUI() {
 
   const subtitle = document.getElementById('disbSubtitle');
   if (subtitle) {
+    const modeList = ['Same Bank', ...(bank.supportsRtgs ? ['RTGS'] : []), 'NEFT', ...(bank.supportsImps ? ['IMPS'] : [])].join(' / ');
     subtitle.textContent = isSbi
       ? 'Enter amounts and export the SBI bulk payment file.'
-      : `Enter amounts and export the ${bank.label} bulk payment file. Mode (Same Bank / RTGS / NEFT / IMPS) is auto-detected per beneficiary.`;
+      : `Enter amounts and export the ${bank.label} bulk payment file. Mode (${modeList}) is auto-detected per beneficiary.`;
   }
 
   const ttWrap = document.getElementById('disbTransferTypeWrap');
   const impsWrap = document.getElementById('disbImpsWrap');
   if (ttWrap) ttWrap.classList.toggle('hidden', !isSbi);
-  if (impsWrap) impsWrap.classList.toggle('hidden', isSbi);
+  // PNB / HDFC / ICICI's bulk-file specs have no IMPS credit line at
+  // all, so the toggle is only shown for banks that actually support it.
+  const showImps = !isSbi && bank.supportsImps;
+  if (impsWrap) impsWrap.classList.toggle('hidden', !showImps);
+  if (!showImps) {
+    const impsCheckbox = document.getElementById('disbUseImps');
+    if (impsCheckbox) impsCheckbox.checked = false;
+  }
 }
 
 // For the currently-selected bank, works out which employees belong in
@@ -3200,7 +3362,17 @@ function collectBatchLines() {
 // account row, which the bank portal will reject. So export must be
 // blocked (not just discouraged) until the Company Profile is saved.
 function isCompanyProfileComplete() {
-  return !!(companyProfile.name && companyProfile.accountNumber && companyProfile.ifsc && companyProfile.bankName);
+  const base = !!(companyProfile.name && companyProfile.accountNumber && companyProfile.ifsc && companyProfile.bankName);
+  if (!base) return false;
+  // Bank-specific requirements from the bulk-file spec — these matter
+  // even for accounts that saved a company profile before these
+  // fields existed, so export must catch it here too, not just at
+  // Company Details save time.
+  if (companyProfile.bankName === 'HDFC' && !/^[A-Z0-9]{4}$/.test(companyProfile.hdfcClientCode || '')) return false;
+  if (companyProfile.bankName === 'ICICI' && !companyProfile.iciciCorporateId) return false;
+  if (companyProfile.bankName === 'PNB' && String(companyProfile.accountNumber || '').length !== 16) return false;
+  if (companyProfile.bankName === 'ICICI' && String(companyProfile.accountNumber || '').length !== 12) return false;
+  return true;
 }
 // Company Details no longer has its own top-level nav tab (it lives
 // under Settings), so jumping there just shows the page section
@@ -3237,6 +3409,16 @@ function buildExportWarnings(isSbi, tft, lines) {
     warnings.push(`${badIfsc.length} row(s) have an IFSC that doesn't match the standard format (4 letters + 0 + 6 characters): ${badIfsc.slice(0, 5).map(l => l.name).join(', ')}${badIfsc.length > 5 ? ', ...' : ''}.`);
   }
 
+  // ICICI's within-bank (MCW) credit record requires an exactly
+  // 12-digit numeric beneficiary account — anything else will fail
+  // ICICI's own validation on upload.
+  if ((companyProfile.bankName || 'SBI') === 'ICICI') {
+    const badIcici = lines.filter(l => l.mode === 'Same Bank' && !/^[0-9]{12}$/.test(String(l.acc)));
+    if (badIcici.length) {
+      warnings.push(`${badIcici.length} within-ICICI beneficiary account(s) are not exactly 12 numeric digits, which ICICI's bulk file requires: ${badIcici.slice(0, 5).map(l => l.name).join(', ')}${badIcici.length > 5 ? ', ...' : ''}.`);
+    }
+  }
+
   // Flags amounts far outside the batch's normal range — a common
   // symptom of a misplaced decimal or a pasted-in wrong figure.
   if (lines.length >= 3) {
@@ -3253,7 +3435,7 @@ function buildExportWarnings(isSbi, tft, lines) {
 
 async function openExportPreview() {
   if (!isCompanyProfileComplete()) {
-    toast('Please fill company details to continue. Company Name, Account Number, IFSC and Bank are required before you can export a payment file.', 'error');
+    toast('Please complete Company Details before exporting — Company Name, Account Number, IFSC, Bank, and (for HDFC/ICICI/PNB) the bank-specific fields are all required.', 'error');
     goToCompanyPage();
     return;
   }
@@ -3451,7 +3633,12 @@ async function executeExport() {
     return;
   }
   const batchId = `${prefix}${shortYear}${monthRaw}${seq}`;
-  const fileName = `${bankKey.toLowerCase()}_salary_${monthName}_${year}.${formatter.ext}`;
+  // Most banks are happy with a free-text filename; HDFC's portal
+  // enforces a strict "ABCDDDMM.001" convention, so its formatter
+  // supplies its own fileName() instead of using the generic pattern.
+  const fileName = typeof formatter.fileName === 'function'
+    ? formatter.fileName({ companyProfile, txnDate, seq })
+    : `${bankKey.toLowerCase()}_salary_${monthName}_${year}.${formatter.ext}`;
 
   // Every row carries a full snapshot of the company profile and payroll
   // cycle as they were AT THE TIME of this export — not just the
@@ -3776,6 +3963,10 @@ function setCompanyEditMode(editing) {
     document.getElementById('companyAccConfirmInput').value = companyProfile.accountNumber || '';
     document.getElementById('companyIfscInput').value = companyProfile.ifsc || '';
     document.getElementById('companyIfscPreview').textContent = '';
+    const hdfcInput = document.getElementById('companyHdfcClientCodeInput');
+    const iciciInput = document.getElementById('companyIciciCorporateIdInput');
+    if (hdfcInput) hdfcInput.value = companyProfile.hdfcClientCode || '';
+    if (iciciInput) iciciInput.value = companyProfile.iciciCorporateId || '';
     setSelectedCompanyBank(companyProfile.bankName || 'SBI');
   }
 }
@@ -3881,6 +4072,8 @@ function wireCompanyForm() {
     const accountNumberConfirm = accConfirmInput.value.trim();
     const ifsc = ifscInput.value.trim().toUpperCase();
     const bankName = selectedCompanyBankKey;
+    const hdfcClientCode = (document.getElementById('companyHdfcClientCodeInput')?.value || '').trim().toUpperCase();
+    const iciciCorporateId = (document.getElementById('companyIciciCorporateIdInput')?.value || '').trim().toUpperCase();
     if (!name || !accountNumber || !accountNumberConfirm || !ifsc || !bankName) {
       toast('Please fill all fields.', 'error'); return;
     }
@@ -3901,13 +4094,33 @@ function wireCompanyForm() {
       toast(`This IFSC doesn't look like a ${bank.label} code (expected it to start with "${bank.ifscPrefix}"). Check the code or select the matching bank.`, 'error');
       return;
     }
+    // PNB's bulk file needs a 16-digit debit account per spec.
+    if (bankName === 'PNB' && accountNumber.length !== 16) {
+      toast('PNB requires a 16-digit Company Account Number for the bulk payment file. Please re-check your account number.', 'error');
+      return;
+    }
+    // ICICI's bulk file needs an exactly 12-digit numeric debit account.
+    if (bankName === 'ICICI' && accountNumber.length !== 12) {
+      toast('ICICI requires an exactly 12-digit Company Account Number for the bulk payment file. Please re-check your account number.', 'error');
+      return;
+    }
+    // HDFC's filename convention needs exactly a 4-character client code.
+    if (bankName === 'HDFC' && !/^[A-Z0-9]{4}$/.test(hdfcClientCode)) {
+      toast('Please enter your 4-character HDFC Corporate Client Code — HDFC assigns this, and it is required to build the correct filename for upload.', 'error');
+      return;
+    }
+    // ICICI's Master Debit Record needs the Corporate Login ID.
+    if (bankName === 'ICICI' && !iciciCorporateId) {
+      toast('Please enter your ICICI Corporate Login ID — it is required on every export\'s Master Debit Record.', 'error');
+      return;
+    }
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
     try {
       const sysId = branchCodeFromIfsc(ifsc);
       ifscPreviewEl.textContent = `Branch code for the file: ${sysId}`;
-      await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName });
-      companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName };
+      await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId });
+      companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId };
       await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Bank: ${bankName}`);
       renderCompanySummary();
       updateDisbursementModeUI();

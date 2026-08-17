@@ -155,23 +155,23 @@ const actionCodeSettings = { url: SITE_URL, handleCodeInApp: true };
 // EXPORT_COST_CREDITS credits, deducted from the wallet balance
 // (free or purchased credits spend the same way). When the balance
 // runs out, the user buys a credit pack — bigger packs cost less per
-// credit. The functions below live on Netlify (see /netlify/functions)
-// and do the actual enforcement + Razorpay verification server-side,
-// so none of this can be bypassed by editing this file in devtools.
+// credit. The functions below live on Vercel (see /api) and do the
+// actual enforcement + Razorpay verification server-side, so none of
+// this can be bypassed by editing this file in devtools.
 //
-// This list mirrors netlify/functions/_creditPacks.js for rendering
-// only — the ACTUAL price charged always comes from that server-side
-// file, never from here, so editing this array client-side changes
-// nothing about what gets billed.
+// This list mirrors api/lib/creditPacks.js for rendering only — the
+// ACTUAL price charged always comes from that server-side file, never
+// from here, so editing this array client-side changes nothing about
+// what gets billed.
 //
-// IMPORTANT: point this at wherever the Netlify functions are actually
-// deployed. If this static site is hosted on the SAME Netlify site as
+// IMPORTANT: point this at wherever the Vercel functions are actually
+// deployed. If this static site is hosted on the SAME Vercel project as
 // the functions, "" (relative) is correct as-is. If the site stays on
 // GitHub Pages (or anywhere else) while only the functions live on
-// Netlify, replace this with the full Netlify site URL, e.g.
-// "https://payflow-pro-billing.netlify.app".
+// Vercel — which is the current setup — this needs the full Vercel
+// deployment URL, e.g. "https://payflow-pro-web-three.vercel.app".
 // ---------------------------------------------------------
-const FUNCTIONS_BASE_URL = "https://payflow-pro-web-three.vercel.app/"; // "" = same origin, or "https://your-site.netlify.app"
+const FUNCTIONS_BASE_URL = "https://payflow-pro-web-three.vercel.app/"; // "" = same origin, or "https://your-project.vercel.app"
 
 const EXPORT_COST_CREDITS = 5;
 
@@ -203,7 +203,7 @@ let walletBalance = 0;
 
 async function callBillingFunction(name, body) {
   // Strip any trailing slash on FUNCTIONS_BASE_URL before joining, so we
-  // never end up with a double slash like ".app//.netlify/functions/...".
+  // never end up with a double slash like ".app//api/...".
   const base = FUNCTIONS_BASE_URL.replace(/\/+$/, '');
   const idToken = await auth.currentUser.getIdToken();
   let res;
@@ -2240,7 +2240,7 @@ function wireModalCloseButtons() {
 }
 
 // Help & Support: a simple one-way message form. Submits to the
-// send-support-message Netlify function, which emails the site owner
+// send-support-message Vercel function, which emails the site owner
 // with the signed-in user's email set as Reply-To — no ticket storage,
 // no dashboard, just "it lands in the inbox."
 function wireHelpSupport() {
@@ -3749,7 +3749,13 @@ async function executeExport() {
     try {
       seq = await Api.getAndIncrementCounter();
     } catch (err) {
-      toast('Could not generate batch number: ' + err.message, 'error');
+      // Credits were already deducted (consume-credits ran before
+      // executeExport was ever called) — this failure happens after
+      // that, so the user is left short of credits with no file. There
+      // is no automatic refund path today, so at least be explicit
+      // about it here instead of a generic error, and point at Help &
+      // Support so it can be corrected manually.
+      toast('Could not generate batch number, so no file was created — your credits were already deducted for this export. Please use Help & Support so we can restore them.', 'error');
       return;
     }
     const batchId = `${sub.prefix}${shortYear}${monthRaw}${seq}`;
@@ -4018,7 +4024,19 @@ function renderExportHistory() {
 function redownloadBatch(batchId) {
   const batch = exportBatches.find(b => b.batchId === batchId);
   if (!batch) return;
-  const formatter = BankFormatters[batch.bank] || BankFormatters.SBI;
+  // SBI has two distinct bulk-file formats depending on transfer type
+  // (see executeExport/BankFormatters.SBI_INTRA above) — a batch whose
+  // rows were originally exported as "Same Bank" MUST be regenerated
+  // with the same SBI_INTRA (branch code, trailing '#') formatter, not
+  // the plain Inter-Bank one, or the re-downloaded file silently comes
+  // out in the wrong format (IFSC instead of branch code, no trailing
+  // '#') and can be misread/rejected by SBI's Intra Bank upload parser.
+  // batch.bank is always the plain bank key ('SBI'), so the Same Bank
+  // case has to be detected from the stored rows' own transferType.
+  const isSbiSameBank = batch.bank === 'SBI' && batch.rows.every(r => r.transferType === 'Same Bank');
+  const formatter = isSbiSameBank
+    ? BankFormatters.SBI_INTRA
+    : (BankFormatters[batch.bank] || BankFormatters.SBI);
   const snapshotProfile = batch.companySnapshot || companyProfile;
 
   const lines = batch.rows.map(r => ({
@@ -4036,7 +4054,7 @@ function redownloadBatch(batchId) {
   const output = formatter.generate({
     companyProfile: snapshotProfile, lines, total, batchId,
     txnDate: batch.transferDate, monthRaw, shortYear, monthName,
-    year: batch.year || `20${shortYear}`, tft: lines[0]?.mode === 'Same Bank' ? 'Same Bank' : 'Other Bank'
+    year: batch.year || `20${shortYear}`, tft: isSbiSameBank ? 'Same Bank' : 'Other Bank'
   });
 
   const fileName = batch.fileName || `${(batch.bank || 'sbi').toLowerCase()}_salary_${monthName}_${batch.year || ''}.${formatter.ext}`;

@@ -6,7 +6,7 @@ Reply karne ke liye normal reply karo — email ka "Reply-To" us user ke apne ac
 
 ## Kaise kaam karta hai
 
-1. User form submit karta hai → browser `send-support-message` Netlify function ko call karta hai (login zaroori hai, jaise baaki functions).
+1. User form submit karta hai → browser `send-support-message` Vercel function ko call karta hai (login zaroori hai, jaise baaki functions).
 2. Function Gmail SMTP (Nodemailer) se `nitins1009@gmail.com` se hi email bhejta hai, khud ko hi, but `Reply-To` user ke email par.
 3. Subject line me `[PayFlow Pro Support]` prefix rehta hai taaki inbox me alag se dikhe.
 
@@ -23,8 +23,8 @@ Normal Gmail password se seedha SMTP login nahi hota — ek alag "App Password" 
 4. Koi bhi naam de dein (jaise "PayFlow Support"), **Create** click karein.
 5. Google ek 16-character password dikhayega (jaise `abcd efgh ijkl mnop`) — ise copy kar lein. (Bina space ke bhi chalega.)
 
-### 2. Netlify Environment Variable set karein
-Netlify Dashboard → aapki site → **Site configuration → Environment variables** → yeh 1 naya add karein:
+### 2. Vercel Environment Variable set karein
+Vercel Dashboard → aapka project → **Settings → Environment Variables** → yeh 1 naya add karein:
 
 | Key | Value |
 |---|---|
@@ -32,7 +32,7 @@ Netlify Dashboard → aapki site → **Site configuration → Environment variab
 
 (Baaki 5 env vars — Razorpay/Firebase wale — pehle se hain, unko chhedna nahi hai.)
 
-Add karne ke baad site ko ek baar **redeploy** kar dein (Deploys tab → "Trigger deploy").
+Add karne ke baad project ko ek baar **redeploy** kar dein (Deployments tab → "..." → "Redeploy").
 
 ### 3. Test karein
 1. App me login karke sidebar ka ❓ icon click karein.
@@ -44,7 +44,7 @@ Add karne ke baad site ko ek baar **redeploy** kar dein (Deploys tab → "Trigge
 
 ## Files jo isme add/change hue
 
-- `netlify/functions/send-support-message.js` — email bhejta hai (Nodemailer + Gmail SMTP)
+- `api/send-support-message.js` — email bhejta hai (Nodemailer + Gmail SMTP)
 - `package.json` — `nodemailer` dependency add hui
 - `index.html` — sidebar me Help & Support icon + modal add hua
 - `style.css` — textarea styling add hui (form ke message box ke liye)

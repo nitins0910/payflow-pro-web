@@ -1145,6 +1145,42 @@ const BankFormatters = {
       return [header, ...empLines].join('\n') + '\n';
     }
   },
+  // SBI Bulk INTRA Bank Transaction Upload Format (SBI-to-SBI only —
+  // used for "Same Bank" exports, uploaded via SBI Net Banking's
+  // File Upload > Transactions > "Intra Bank Transfer", NOT the same
+  // upload screen as the Inter-Bank file above). Confirmed against
+  // SBI's own reference sample workbook + its accompanying upload
+  // instructions (a widely-used public corporate-net-banking guide,
+  // not PayFlow Pro's own bank-issued sample — treat as best-effort
+  // like PNB/HDFC's public specs, not a bank-confirmed production
+  // file). Two concrete differences from the Inter-Bank format above,
+  // both taken directly from the sample file's actual data rows
+  // (not just the instructions text):
+  //   1. Field 2 is the SBI BRANCH CODE, not the IFSC — every account
+  //      in this file is already at some SBI branch, so no bank/IFSC
+  //      lookup is needed, just which branch. Derived from each
+  //      beneficiary's own SBI IFSC via branchCodeFromIfsc(), same
+  //      helper already used (and confirmed) for the company's own
+  //      debit-row branch code in the Inter-Bank format above.
+  //   2. Every row ends with a TRAILING '#' — the sample's raw upload
+  //      strings all end in "...#DESCRIPTION#", unlike the Inter-Bank
+  //      file which explicitly has none. Dropped this and the bank's
+  //      parser would likely misread the row.
+  //   DEBIT row:  AccNo # BranchCode # Date # DrAmount # (blank) # UniqueRef # AccountName # Description #
+  //   CREDIT row: AccNo # BranchCode # Date # (blank) # CrAmount # UniqueRef # AccountName # Description #
+  SBI_INTRA: {
+    ext: 'txt', mime: 'text/plain;charset=utf-8',
+    generate(ctx) {
+      const d = v => sanitizeForDelimitedFile(v, '#');
+      const empLines = ctx.lines.map(l => {
+        const seqStr = `${ctx.batchId}E${l.empCode}`;
+        const branchCode = branchCodeFromIfsc(l.ifsc);
+        return `${d(l.acc)}#${d(branchCode)}#${ctx.txnDate}##${l.amount.toFixed(2)}#${seqStr}#${d(l.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
+      });
+      const header = `${d(ctx.companyProfile.accountNumber)}#${d(ctx.companyProfile.sysId)}#${ctx.txnDate}#${ctx.total.toFixed(2)}##${ctx.batchId}#${d(ctx.companyProfile.name)}#SALARY OF ${d(ctx.monthName)} ${ctx.year}#`;
+      return [header, ...empLines].join('\n') + '\n';
+    }
+  },
   // PNB IBS — "Combined" bulk NEFT/RTGS/Within-PNB file. 7 comma-delimited
   // columns exactly per spec: TxnType(NFT/RTG/PMT), 16-digit DebitAcc,
   // Amount, Currency(always INR), BenAcc, IFSC, Remarks (<=30 chars,
@@ -3441,6 +3477,18 @@ function buildExportWarnings(isSbi, tft, lines) {
     }
   }
 
+  // SBI's Intra Bank file (Same Bank export) must only ever contain
+  // SBI accounts — SBI's own upload instructions say non-SBI accounts
+  // must not be included in this file. Catches a mis-tagged employee
+  // (transferType says "Same Bank" but their IFSC isn't actually SBI)
+  // before it goes into a file meant only for SBI-to-SBI transfers.
+  if (isSbi && tft === 'Same Bank') {
+    const notSbi = lines.filter(l => !String(l.ifsc || '').toUpperCase().startsWith('SBIN'));
+    if (notSbi.length) {
+      warnings.push(`${notSbi.length} row(s) are marked "Same Bank" but their IFSC isn't an SBI (SBIN) IFSC — SBI's Intra Bank file must only contain SBI accounts: ${notSbi.slice(0, 5).map(l => l.name).join(', ')}${notSbi.length > 5 ? ', ...' : ''}.`);
+    }
+  }
+
   // Flags amounts far outside the batch's normal range — a common
   // symptom of a misplaced decimal or a pasted-in wrong figure.
   if (lines.length >= 3) {
@@ -3499,7 +3547,8 @@ async function openExportPreview() {
               + `<p><strong>Split:</strong> ${breakdown}</p>`
               + `<p style="font-size:12px; color:var(--muted, #888);">SBI requires NEFT and RTGS in separate files — this will download as ${fileCount} file${fileCount === 1 ? '' : 's'}.</p>`;
           })()
-        : `<p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>`)
+        : `<p><strong>Transfer Type:</strong> ${escapeHtml(tft)}</p>`
+          + `<p style="font-size:12px; color:var(--muted, #888);">This is SBI's separate Intra Bank format — upload it via File Upload → Transactions → "Intra Bank Transfer" on SBI Net Banking, not the regular Beneficiary/NEFT-RTGS upload. Make sure each beneficiary is already added as a "Same Bank" third party there first.</p>`)
     : (() => {
         const counts = {};
         lines.forEach(l => { counts[l.mode] = (counts[l.mode] || 0) + 1; });
@@ -3653,11 +3702,9 @@ function getBatchPrefix(isSbi, tft, lines) {
 // mode for exactly this purpose. An empty sub-batch (e.g. every line
 // this run happens to be NEFT) is simply omitted rather than
 // downloading an empty RTGS file.
-// "Same Bank" is deliberately NOT split here — SBI's intra-bank
-// transfers go through a separate "Bulk Intra Bank" upload with its
-// own file format, which we don't have a spec for yet, so it still
-// exports as a single file under the existing (possibly incomplete)
-// format, same as before this change.
+// "Same Bank" isn't split (it's one file, same as before) but is
+// labeled 'INTRA' so its filename/audit entry clearly marks it as the
+// separate Bulk Intra Bank upload — see BankFormatters.SBI_INTRA.
 function splitIntoSubBatches(isSbi, tft, lines) {
   if (isSbi && tft === 'Other Bank') {
     const rtgsLines = lines.filter(l => l.mode === 'RTGS');
@@ -3667,7 +3714,8 @@ function splitIntoSubBatches(isSbi, tft, lines) {
     if (neftLines.length) subBatches.push({ prefix: 'OBNE', label: 'NEFT', lines: neftLines });
     return subBatches;
   }
-  return [{ prefix: getBatchPrefix(isSbi, tft, lines), label: null, lines }];
+  const label = (isSbi && tft === 'Same Bank') ? 'INTRA' : null;
+  return [{ prefix: getBatchPrefix(isSbi, tft, lines), label, lines }];
 }
 
 async function executeExport() {
@@ -3675,7 +3723,13 @@ async function executeExport() {
   const bankKey = companyProfile.bankName || 'SBI';
   const isSbi = bankKey === 'SBI';
   const bank = BANK_BY_KEY[bankKey] || BANK_BY_KEY.SBI;
-  const formatter = BankFormatters[bankKey] || BankFormatters.SBI;
+  // SBI has two distinct bulk-file formats depending on transfer type —
+  // "Same Bank" uses the separate Intra Bank format (own beneficiary
+  // branch codes, trailing '#'), everything else uses the normal
+  // Inter-Bank format. See both formatters' comments above for why.
+  const formatter = (isSbi && tft === 'Same Bank')
+    ? BankFormatters.SBI_INTRA
+    : (BankFormatters[bankKey] || BankFormatters.SBI);
 
   const { monthRaw, monthName, year } = getPayrollCycle();
   const shortYear = year.slice(2);

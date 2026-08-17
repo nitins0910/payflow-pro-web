@@ -952,6 +952,11 @@ function toast(message, kind, options) {
     el.addEventListener('click', remove);
   }
 
+  // Keyboard dismiss (previously click-only) — pressing Escape closes
+  // whatever toasts are currently visible. See the document-level
+  // listener at the bottom of this file.
+  el._toastRemove = remove;
+
   host.appendChild(el);
   requestAnimationFrame(() => el.classList.add('toast-show'));
   setTimeout(remove, opts.duration || (kind === 'error' ? 6000 : 4000));
@@ -1406,6 +1411,15 @@ function wirePasswordToggles() {
     btn.addEventListener('click', () => {
       const input = document.getElementById(btn.dataset.target);
       if (!input) return;
+      if (input.classList.contains('mask-value')) {
+        // Account number etc: plain type="text" input, masked via CSS
+        // (-webkit-text-security) rather than type="password", so
+        // toggle the mask class instead of the input type.
+        const showing = input.classList.toggle('pw-visible');
+        btn.classList.toggle('is-visible', showing);
+        btn.setAttribute('aria-label', showing ? 'Hide account number' : 'Show account number');
+        return;
+      }
       const showing = input.type === 'text';
       input.type = showing ? 'password' : 'text';
       btn.classList.toggle('is-visible', !showing);
@@ -2568,14 +2582,14 @@ function renderEmployeeTable() {
     const tr = document.createElement('tr');
     const checked = selectedEmployeeIds.has(emp.id) ? 'checked' : '';
     tr.innerHTML = `
-      <td class="row-select-cell card-cell-plain"><input type="checkbox" data-select="${escapeHtml(emp.id)}" ${checked} aria-label="Select ${escapeHtml(emp.name)}"></td>
-      <td data-label="Name">${escapeHtml(emp.name)}</td>
+      <td class="row-select-cell card-cell-plain"><label class="checkbox-hit"><input type="checkbox" data-select="${escapeHtml(emp.id)}" ${checked} aria-label="Select ${escapeHtml(emp.name)}"></label></td>
+      <td data-label="Name"><span class="cell-truncate" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span></td>
       <td data-label="Account No."><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
       <td data-label="IFSC">${escapeHtml(emp.ifsc)}</td>
       <td data-label="Transfer Type">${badgeForMode(emp.transferType)}</td>
       <td data-label="Emp Code">${escapeHtml(emp.empCode)}</td>
       <td data-label="Mobile">${escapeHtml(emp.mobile || '—')}</td>
-      <td data-label="Email">${escapeHtml(emp.email || '—')}</td>
+      <td data-label="Email"><span class="cell-truncate" title="${escapeHtml(emp.email || '—')}">${escapeHtml(emp.email || '—')}</span></td>
       <td class="row-actions">
         <button data-edit="${escapeHtml(emp.id)}">Edit</button>
         <button data-delete="${escapeHtml(emp.id)}" class="danger">Delete</button>
@@ -4434,6 +4448,15 @@ const PAGE_SEARCH_INPUT_ID = {
   disbursement: 'disbSearch',
   exports: 'exportsSearch'
 };
+
+// Escape dismisses any visible toast(s) — toast() had click-only
+// dismiss before, with no keyboard equivalent.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.toast-host .toast').forEach((t) => {
+    if (typeof t._toastRemove === 'function') t._toastRemove();
+  });
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== '/') return;

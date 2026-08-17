@@ -515,7 +515,7 @@
           <table>
             <thead>
               <tr>
-                <th class="row-select-cell"><input type="checkbox" id="employeeSelectAll" aria-label="Select all"></th>
+                <th class="row-select-cell"><label class="checkbox-hit"><input type="checkbox" id="employeeSelectAll" aria-label="Select all"></label></th>
                 <th class="sortable" data-sort="name">Employee Name<span class="sort-arrow">▲</span></th>
                 <th class="sortable" data-sort="accountNumber">Account Number<span class="sort-arrow">▲</span></th>
                 <th class="sortable" data-sort="ifsc">IFSC / Branch Code<span class="sort-arrow">▲</span></th>
@@ -1071,7 +1071,7 @@
         <div class="field-row-2">
           <div class="field password-field">
             <label>Account Number</label>
-            <input type="password" id="empAccount" inputmode="numeric" required autocomplete="off">
+            <input type="text" class="mask-value" id="empAccount" inputmode="numeric" required autocomplete="off">
             <button type="button" class="pw-toggle" data-target="empAccount" aria-label="Show account number">
               <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -1079,7 +1079,7 @@
           </div>
           <div class="field password-field">
             <label>Confirm Account Number</label>
-            <input type="password" id="empAccountConfirm" inputmode="numeric" required autocomplete="off">
+            <input type="text" class="mask-value" id="empAccountConfirm" inputmode="numeric" required autocomplete="off">
             <button type="button" class="pw-toggle" data-target="empAccountConfirm" aria-label="Show account number">
               <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -1243,7 +1243,7 @@
         <h3>About PayFlow Pro</h3>
         <button type="button" class="modal-close" data-modal="aboutModal" aria-label="Close">×</button>
       </div>
-      <div style="font-size:13.5px; color:var(--text2); line-height:1.7; max-height:60vh; overflow-y:auto;">
+      <div style="font-size:13.5px; color:var(--text2); line-height:1.7;">
         <p>
           PayFlow Pro is a payroll management and salary-disbursement tool built for small
           and mid-sized businesses. It replaces spreadsheet-based payroll with a single

@@ -23,7 +23,8 @@
   --blue-glow: rgba(59,130,246,0.35);
   --text:      #E3E8F0;
   --text2:     rgb(208,208,208);
-  --text3:     rgba(208,208,208,0.55);
+  --text3:     rgba(208,208,208,0.68);
+  --muted:     var(--text3);
   --success:   #22C55E;
   --success-bg:rgba(34,197,94,0.1);
   --danger:    #F43F5E;
@@ -92,7 +93,7 @@ html[data-theme="light"]{
   --grey-line: #D3D3D3;
   --text:      #14181F;
   --text2:     #454A52;
-  --text3:     rgba(20,24,31,0.6);
+  --text3:     rgba(20,24,31,0.68);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
   --shadow-md: 0 6px 16px rgba(0,0,0,0.10);
   --shadow-lg: 0 16px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
@@ -282,6 +283,19 @@ a{color:var(--blue-bright); text-decoration:none;}
   transition:color .15s var(--ease), background .15s var(--ease);
 }
 .pw-toggle:hover{ color:var(--blue-bright); background:rgba(59,130,246,0.08); }
+/* Edge/IE draw their own reveal/clear icon inside password inputs,
+   which sits on top of our custom eye-toggle button — suppress it. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear{ display:none; }
+
+/* Account Number fields look like a password field (masked + eye
+   toggle) but aren't credentials — type="password" made Chrome's
+   password manager treat them as one (autofill highlighting, "save
+   password?" prompts). Mask visually instead via -webkit-text-security
+   on a plain type="text" input; wirePasswordToggles() toggles the
+   .pw-visible class below instead of switching input.type for these. */
+.mask-value{ -webkit-text-security:disc; }
+.mask-value.pw-visible{ -webkit-text-security:none; }
 .pw-toggle svg{ width:18px; height:18px; }
 .pw-toggle .eye-off{ display:none; }
 .pw-toggle.is-visible .eye{ display:none; }
@@ -763,6 +777,12 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
 .table-wrap table{ margin:0; }
 
 table{ width:100%; border-collapse:collapse; }
+@media (min-width: 801px){
+  .cell-truncate{
+    max-width:220px; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; display:block;
+  }
+}
 th{
   text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;
   color:var(--text2); font-weight:700; padding:12px 14px; border-bottom:1px solid var(--border-soft);
@@ -773,7 +793,11 @@ tbody tr:last-child td{ border-bottom:none; }
 tbody tr:nth-child(even) td{ background:rgba(99,102,241,0.02); }
 tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 
-.row-actions{ display:flex; gap:8px; }
+.row-actions{ display:flex; gap:8px; white-space:nowrap; }
+th:last-child, td.row-actions{ white-space:nowrap; }
+@media (min-width: 801px){
+  th:last-child, td.row-actions{ min-width:112px; }
+}
 .row-actions button{
   background:var(--surface2); border:1px solid var(--border); color:var(--text2);
   border-radius:var(--radius-sm);
@@ -819,6 +843,7 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
   backdrop-filter:blur(4px);
   display:flex; align-items:center; justify-content:center; z-index:50;
   padding:20px;
+  overflow-y:auto;
   animation:modal-fade .15s var(--ease);
 }
 @keyframes modal-fade{ from{ opacity:0; } to{ opacity:1; } }
@@ -826,6 +851,8 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
   background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg);
   box-shadow:var(--shadow-lg);
   width:100%; max-width:440px; padding:24px;
+  max-height:min(88vh, 720px);
+  overflow-y:auto;
   animation:modal-in .2s var(--ease);
 }
 @keyframes modal-in{
@@ -836,7 +863,10 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 .modal-head h3{ margin-bottom:0; }
 .modal-close{
   background:none; border:none; color:var(--text3); font-size:20px; line-height:1;
-  cursor:pointer; padding:4px; border-radius:var(--radius-sm);
+  cursor:pointer; border-radius:var(--radius-sm);
+  width:44px; height:44px;
+  display:flex; align-items:center; justify-content:center;
+  margin:-10px -10px -10px 0;
   transition:color .15s var(--ease), background .15s var(--ease);
 }
 .modal-close:hover{ color:var(--text); background:var(--surface2); }
@@ -1032,8 +1062,13 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 }
 .toast-undo-btn:hover{ background:rgba(59,130,246,0.15); }
 
-@media (max-width: 560px){
-  .toast-host{ left:16px; right:16px; bottom:40px; max-width:none; }
+@media (max-width: 800px){
+  /* The fixed bottom tab bar (see MOBILE RESPONSIVE OVERRIDES below)
+     appears at this same 800px breakpoint and occupies roughly the
+     bottom 80px of the viewport (22px offset + 58px height) — the
+     old 560px breakpoint here left a 561-800px gap where toasts sat
+     right underneath the tab bar. bottom:92px clears it with margin. */
+  .toast-host{ left:16px; right:16px; bottom:92px; max-width:none; }
 }
 
 /* ---------------------------------------------------------
@@ -1053,6 +1088,10 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
    ROW SELECTION (bulk actions)
 --------------------------------------------------------- */
 .row-select-cell{ width:34px; }
+.checkbox-hit{ display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+@media (max-width: 800px){
+  .checkbox-hit{ min-width:44px; min-height:44px; }
+}
 .bulk-actions-bar{
   display:flex; align-items:center; gap:12px; margin-bottom:12px;
   background:var(--surface2); border:1px solid var(--border-soft); border-radius:var(--radius-sm);
@@ -1241,7 +1280,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
      ------------------------------------------------------- */
   .mobile-menu-btn{
     display:flex; align-items:center; justify-content:center;
-    width:34px; height:34px; margin-right:2px; flex-shrink:0;
+    width:44px; height:44px; margin-right:2px; margin-left:-6px; flex-shrink:0;
     background:none; border:none; color:rgba(255,255,255,0.85);
     cursor:pointer; border-radius:var(--radius-sm); padding:0;
   }
@@ -1252,8 +1291,14 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
     display:flex; align-items:center; gap:5px; flex-shrink:0;
     background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14);
     color:#fff; border-radius:var(--radius-sm);
+    min-height:44px;
     padding:6px 9px; font-size:12px; cursor:pointer;
   }
+
+  /* "?" guided-tour button needs a real 44x44 tap target on touch
+     screens (desktop keeps the compact size defined earlier, since
+     that's mouse-driven). */
+  .tour-help-btn{ width:44px; height:44px; }
   .wallet-chip-mobile .wallet-chip__icon{ font-size:13px; }
   .wallet-chip-mobile strong{ font-family:var(--font-mono); }
 
@@ -1336,6 +1381,13 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
      the buttons instead of squeezing both onto one cramped line. */
   #disbFooterPanel{ flex-direction:column; align-items:stretch !important; gap:14px; }
   .disb-footer-actions .btn-inline{ flex:1; }
+
+  /* Employees page toolbar (Download sample CSV / Export Ledger CSV /
+     Bulk Import CSV / + Add Employee): flex:1 + flex-wrap left these
+     4 items squeezed into cramped equal-width columns, wrapping their
+     labels onto 2-3 lines each. Stack them full-width instead. */
+  .toolbar-actions{ width:100%; flex-direction:column; align-items:stretch !important; }
+  .toolbar-actions .btn-inline, .toolbar-actions a{ flex:none; width:100%; text-align:center; padding:10px; }
 }
 
 @media (max-width: 480px){
@@ -1344,8 +1396,6 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
   .modal{ padding:18px; }
   .modal-actions{ flex-wrap:wrap; }
   .modal-actions > *{ flex:1 1 100%; }
-  .toolbar-actions{ width:100%; }
-  .toolbar-actions .btn-inline, .toolbar-actions a{ flex:1; text-align:center; }
 }
 
 /* ------------------------------------------------------------

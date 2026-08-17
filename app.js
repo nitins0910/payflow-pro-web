@@ -249,8 +249,12 @@ function setWalletBalance(credits) {
   walletBalance = Number(credits) || 0;
   const chip = document.getElementById('walletBalanceValue');
   if (chip) chip.textContent = walletBalance;
+  const chipBtn = document.getElementById('walletChip');
+  if (chipBtn) chipBtn.title = `Wallet — ${walletBalance} credit${walletBalance === 1 ? '' : 's'}`;
   const mobileChip = document.getElementById('walletBalanceValueMobile');
   if (mobileChip) mobileChip.textContent = walletBalance;
+  const mobileChipBtn = document.getElementById('walletChipMobile');
+  if (mobileChipBtn) mobileChipBtn.title = `Wallet — ${walletBalance} credit${walletBalance === 1 ? '' : 's'}`;
   const pageBalance = document.getElementById('walletPageBalance');
   if (pageBalance) pageBalance.textContent = walletBalance;
 }
@@ -611,10 +615,10 @@ async function renderWalletTransactions() {
     const amount = r.type === 'credit_purchase' && r.amountRupees ? `₹${Number(r.amountRupees).toFixed(2)}` : '—';
     return `
       <tr>
-        <td>${formatTxnTimestamp(r.createdAt)}</td>
-        <td><span class="txn-type ${meta.cls}">${meta.icon} ${escapeHtml(meta.label)}</span></td>
-        <td class="${isCredit ? 'txn-amount-positive' : 'txn-amount-negative'}">${creditsLabel}</td>
-        <td>${amount}</td>
+        <td data-label="Date">${formatTxnTimestamp(r.createdAt)}</td>
+        <td data-label="Type"><span class="txn-type ${meta.cls}">${meta.icon} ${escapeHtml(meta.label)}</span></td>
+        <td data-label="Credits" class="${isCredit ? 'txn-amount-positive' : 'txn-amount-negative'}">${creditsLabel}</td>
+        <td data-label="Amount">${amount}</td>
       </tr>
     `;
   }).join('');
@@ -669,12 +673,12 @@ async function renderPaymentHistory() {
     const paymentId = r.paymentId ? `<span style="font-family:var(--font-mono); font-size:12px;">${escapeHtml(r.paymentId)}</span>` : '—';
     return `
       <tr>
-        <td>${formatTxnTimestamp(r.createdAt)}</td>
-        <td><span class="txn-type">${purposeMeta.icon} ${escapeHtml(purposeMeta.label)}</span></td>
-        <td>${amount}</td>
-        <td class="txn-amount-positive">+${r.credits} credits</td>
-        <td>${paymentId}</td>
-        <td><span class="txn-type txn-credit">✓ Paid</span></td>
+        <td data-label="Date">${formatTxnTimestamp(r.createdAt)}</td>
+        <td data-label="Paid for"><span class="txn-type">${purposeMeta.icon} ${escapeHtml(purposeMeta.label)}</span></td>
+        <td data-label="Amount">${amount}</td>
+        <td data-label="Credits" class="txn-amount-positive">+${r.credits} credits</td>
+        <td data-label="Payment ID">${paymentId}</td>
+        <td data-label="Status"><span class="txn-type txn-credit">✓ Paid</span></td>
       </tr>
     `;
   }).join('');
@@ -2374,14 +2378,14 @@ function renderEmployeeTable() {
     const tr = document.createElement('tr');
     const checked = selectedEmployeeIds.has(emp.id) ? 'checked' : '';
     tr.innerHTML = `
-      <td class="row-select-cell"><input type="checkbox" data-select="${escapeHtml(emp.id)}" ${checked} aria-label="Select ${escapeHtml(emp.name)}"></td>
-      <td>${escapeHtml(emp.name)}</td>
-      <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
-      <td>${escapeHtml(emp.ifsc)}</td>
-      <td>${badgeForMode(emp.transferType)}</td>
-      <td>${escapeHtml(emp.empCode)}</td>
-      <td>${escapeHtml(emp.mobile || '—')}</td>
-      <td>${escapeHtml(emp.email || '—')}</td>
+      <td class="row-select-cell card-cell-plain"><input type="checkbox" data-select="${escapeHtml(emp.id)}" ${checked} aria-label="Select ${escapeHtml(emp.name)}"></td>
+      <td data-label="Name">${escapeHtml(emp.name)}</td>
+      <td data-label="Account No."><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
+      <td data-label="IFSC">${escapeHtml(emp.ifsc)}</td>
+      <td data-label="Transfer Type">${badgeForMode(emp.transferType)}</td>
+      <td data-label="Emp Code">${escapeHtml(emp.empCode)}</td>
+      <td data-label="Mobile">${escapeHtml(emp.mobile || '—')}</td>
+      <td data-label="Email">${escapeHtml(emp.email || '—')}</td>
       <td class="row-actions">
         <button data-edit="${escapeHtml(emp.id)}">Edit</button>
         <button data-delete="${escapeHtml(emp.id)}" class="danger">Delete</button>
@@ -2848,13 +2852,13 @@ function showImportPreviewModal(rows, errors) {
     shown++;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${i + 1}</td>
-      <td>${escapeHtml(r.empCode)}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td style="font-family:var(--font-mono);">${escapeHtml(maskAccount(r.accountNumber))}</td>
-      <td style="font-family:var(--font-mono);">${escapeHtml(r.ifsc)}</td>
-      <td>${escapeHtml(r.transferType)}</td>
-      <td><span class="badge badge-green">✓ Will import</span></td>`;
+      <td data-label="#">${i + 1}</td>
+      <td data-label="Emp Code">${escapeHtml(r.empCode)}</td>
+      <td data-label="Name">${escapeHtml(r.name)}</td>
+      <td data-label="Account Number" style="font-family:var(--font-mono);">${escapeHtml(maskAccount(r.accountNumber))}</td>
+      <td data-label="IFSC" style="font-family:var(--font-mono);">${escapeHtml(r.ifsc)}</td>
+      <td data-label="Transfer Type">${escapeHtml(r.transferType)}</td>
+      <td data-label="Status"><span class="badge badge-green">✓ Will import</span></td>`;
     tbody.appendChild(tr);
   });
   errors.forEach(e => {
@@ -2862,10 +2866,10 @@ function showImportPreviewModal(rows, errors) {
     shown++;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>Line ${e.line}</td>
-      <td colspan="4" style="color:var(--text2);">${escapeHtml(e.reason)}</td>
-      <td>—</td>
-      <td><span class="badge" style="color:var(--danger); border-color:var(--danger);">✗ Skipped</span></td>`;
+      <td data-label="#">Line ${e.line}</td>
+      <td data-label="Reason" colspan="4" style="color:var(--text2);">${escapeHtml(e.reason)}</td>
+      <td data-label="Account Number">—</td>
+      <td data-label="Status"><span class="badge" style="color:var(--danger); border-color:var(--danger);">✗ Skipped</span></td>`;
     tbody.appendChild(tr);
   });
 
@@ -3092,11 +3096,11 @@ function renderDisbursementList() {
     const tr = document.createElement('tr');
     const prefill = (emp.lastAmount !== undefined && emp.lastAmount !== null) ? Number(emp.lastAmount).toFixed(2) : '';
     tr.innerHTML = `
-      <td>${escapeHtml(emp.empCode)}</td>
-      <td>${escapeHtml(emp.name)}</td>
-      <td><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
-      <td><span data-mode>${isSbi ? badgeForMode(tft) : badgeForMode('—')}</span></td>
-      <td style="text-align:right;">
+      <td data-label="Emp Code">${escapeHtml(emp.empCode)}</td>
+      <td data-label="Employee">${escapeHtml(emp.name)}</td>
+      <td data-label="Account"><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
+      <td data-label="Mode"><span data-mode>${isSbi ? badgeForMode(tft) : badgeForMode('—')}</span></td>
+      <td data-label="Amount (₹)" style="text-align:right;">
         <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
           <span style="font-size:10px; color:var(--danger); font-weight:700;" data-warn></span>
           <input type="text" data-acc="${escapeHtml(emp.accountNumber)}" placeholder="0.00" value="${escapeHtml(prefill)}"
@@ -3586,7 +3590,7 @@ function renderAuditTable() {
   filtered.forEach(r => {
     const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toLocaleString() : '';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(ts)}</td><td>${escapeHtml(r.userName || r.userEmail)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.details || '')}</td>`;
+    tr.innerHTML = `<td data-label="Timestamp">${escapeHtml(ts)}</td><td data-label="User">${escapeHtml(r.userName || r.userEmail)}</td><td data-label="Action">${escapeHtml(r.action)}</td><td data-label="Details">${escapeHtml(r.details || '')}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -3648,11 +3652,11 @@ function renderExportHistory() {
     const tr = document.createElement('tr');
     tr.className = 'export-batch-row';
     tr.innerHTML = `
-      <td style="font-family:var(--font-mono);"><button type="button" class="row-expand-toggle" data-expand="${escapeHtml(batch.batchId)}" aria-label="Show employee-wise breakdown"><span class="row-expand-arrow">›</span> ${escapeHtml(batch.batchId)}</button></td>
-      <td>${escapeHtml(bank.label)}</td>
-      <td>${escapeHtml(batch.transferDate || '—')}</td>
-      <td>${batch.rows.length}</td>
-      <td style="text-align:right;">₹${total.toFixed(2)}</td>
+      <td data-label="Batch ID" style="font-family:var(--font-mono);"><button type="button" class="row-expand-toggle" data-expand="${escapeHtml(batch.batchId)}" aria-label="Show employee-wise breakdown"><span class="row-expand-arrow">›</span> ${escapeHtml(batch.batchId)}</button></td>
+      <td data-label="Bank">${escapeHtml(bank.label)}</td>
+      <td data-label="Transfer Date">${escapeHtml(batch.transferDate || '—')}</td>
+      <td data-label="Employees">${batch.rows.length}</td>
+      <td data-label="Total (₹)" style="text-align:right;">₹${total.toFixed(2)}</td>
       <td class="row-actions"><button data-redownload="${escapeHtml(batch.batchId)}">Re-download</button></td>`;
     tbody.appendChild(tr);
 
@@ -3666,14 +3670,14 @@ function renderExportHistory() {
       (a.employeeName || '').localeCompare(b.employeeName || ''));
     const detailRows = rowsSorted.map(r => `
       <tr>
-        <td style="color:var(--text2); font-family:var(--font-mono); font-size:12px;">${escapeHtml(r.empCode || '—')}</td>
-        <td>${escapeHtml(r.employeeName || '—')}</td>
-        <td style="font-family:var(--font-mono); font-size:12.5px; color:var(--text2);">${escapeHtml(maskAccount(r.accountNumber))}</td>
-        <td>${badgeForMode(r.transferType)}</td>
-        <td style="text-align:right; font-weight:600;">₹${(parseFloat(r.amount) || 0).toFixed(2)}</td>
+        <td data-label="Emp Code" style="color:var(--text2); font-family:var(--font-mono); font-size:12px;">${escapeHtml(r.empCode || '—')}</td>
+        <td data-label="Employee">${escapeHtml(r.employeeName || '—')}</td>
+        <td data-label="Account" style="font-family:var(--font-mono); font-size:12.5px; color:var(--text2);">${escapeHtml(maskAccount(r.accountNumber))}</td>
+        <td data-label="Mode">${badgeForMode(r.transferType)}</td>
+        <td data-label="Amount (₹)" style="text-align:right; font-weight:600;">₹${(parseFloat(r.amount) || 0).toFixed(2)}</td>
       </tr>`).join('');
     detailTr.innerHTML = `
-      <td colspan="6" style="padding:0;">
+      <td colspan="6" class="card-cell-plain export-detail-cell" style="padding:0;">
         <div class="export-batch-breakdown">
           <div class="export-batch-breakdown__head">Employee-wise breakdown — ${batch.rows.length} employee(s), ₹${total.toFixed(2)} total</div>
           <table class="export-batch-breakdown__table">

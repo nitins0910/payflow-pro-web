@@ -603,8 +603,12 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
     width:44px; height:44px; padding:0; margin:0 auto; justify-content:center;
   }
   .sidebar.is-collapsed .nav-item-label{ display:none; }
-  .sidebar.is-collapsed .wallet-chip{ justify-content:center; padding:9px; }
-  .sidebar.is-collapsed .wallet-chip__text{ display:none; }
+  .sidebar.is-collapsed .wallet-chip{
+    flex-direction:column; justify-content:center; gap:2px; padding:8px 4px;
+  }
+  .sidebar.is-collapsed .wallet-chip__text{ display:block; }
+  .sidebar.is-collapsed .wallet-chip__text strong{ display:block; font-size:12px; text-align:center; }
+  .sidebar.is-collapsed .wallet-chip__unit{ display:none; }
   .sidebar.is-collapsed .user-chip{ justify-content:center; }
   .sidebar.is-collapsed .user-chip__text{ display:none; }
   /* The hover tooltip is redundant once labels are already visible
@@ -847,12 +851,100 @@ tr:hover td{ background:rgba(59,130,246,0.05) !important; }
 }
 
 /* ---------------------------------------------------------
-   TABLE HORIZONTAL SCROLL (mobile / narrow viewports)
-   Previously .table-wrap used overflow:hidden, which just clipped
-   wide tables on small screens instead of letting them scroll.
+   TABLE HORIZONTAL SCROLL (desktop/tablet fallback only — see the
+   RESPONSIVE DATA TABLES block below for the <=800px behaviour,
+   which replaces sideways scrolling with stacked cards instead).
 --------------------------------------------------------- */
 .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .table-wrap table{ min-width:640px; }
+
+/* ---------------------------------------------------------
+   RESPONSIVE DATA TABLES (mobile, <=800px)
+   Industry-standard "table -> card list" conversion (the same
+   pattern used by Gmail, most banking apps, etc): instead of making
+   the user scroll sideways to read a wide table with many columns
+   (Employees, Payroll Run, Exports, Activity Log, Wallet/Payment
+   History), each row becomes its own card and each cell stacks as a
+   "label: value" line, reading top-to-bottom like a normal phone
+   screen instead of sideways. The header row itself is visually
+   hidden (but kept for screen readers) since its job — naming each
+   column — is now done inline by data-label on every cell.
+
+   Every <td> in the tables this applies to carries a matching
+   data-label="<column name>" attribute (set in app.js wherever the
+   row is built), which ::before uses to print the label. Cells with
+   no meaningful label (row checkboxes, action buttons) instead carry
+   class="card-cell-plain" and render full-width with no label.
+--------------------------------------------------------- */
+@media (max-width: 800px){
+  .table-wrap{ overflow-x:visible; border:none; background:none; }
+  .table-wrap table{ min-width:0; width:100%; }
+
+  /* Visually hidden, not display:none — keeps column names
+     available to screen readers even though sighted users now see
+     the label inline on each cell instead. */
+  .table-wrap thead{
+    position:absolute; width:1px; height:1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0; padding:0; margin:-1px;
+  }
+
+  .table-wrap tbody{ display:block; }
+  .table-wrap tr{
+    display:block;
+    background:var(--surface);
+    border:1px solid var(--border-soft);
+    border-radius:var(--radius-md);
+    box-shadow:var(--shadow-sm);
+    padding:2px 14px;
+    margin-bottom:12px;
+  }
+  .table-wrap tbody tr:nth-child(even) td{ background:transparent; }
+  tr.skeleton-row{ padding:10px 14px; }
+  tr.skeleton-row td{ display:block; padding:6px 0; }
+  tr.skeleton-row .skeleton-bar{ width:100%; }
+
+  .table-wrap td{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:11px 0;
+    border-bottom:1px solid var(--grey-line);
+    font-size:13.5px;
+    text-align:right;
+  }
+  .table-wrap tr td:last-child{ border-bottom:none; }
+  .table-wrap td[data-label]::before{
+    content:attr(data-label);
+    flex-shrink:0;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    font-weight:700;
+    color:var(--text2);
+    text-align:left;
+  }
+
+  /* Cells with no meaningful column label (checkboxes, row-action
+     buttons, the export-batch expand/detail rows): full width,
+     centered, no label line. */
+  .table-wrap td.card-cell-plain{ justify-content:center; padding:10px 0; }
+  .table-wrap td.export-detail-cell{ display:block; padding:0; }
+  .table-wrap td.row-select-cell{
+    justify-content:flex-start; padding:8px 0 0; border-bottom:none;
+  }
+
+  /* Row-actions (Edit/Delete, Re-download) read better as a
+     full-width button row at the bottom of the card. */
+  .table-wrap td.row-actions{ justify-content:center; gap:10px; padding-top:12px; }
+  .table-wrap td.row-actions button{ flex:1; }
+
+  /* Nested per-batch breakdown table (Exports page) inherits the
+     same card treatment since it lives inside .table-wrap too. */
+  .export-batch-breakdown{ padding:12px 4px 16px; }
+  .export-batch-breakdown__table{ border:none; background:none; }
+  .export-batch-breakdown__table tr{ box-shadow:none; }
+}
 
 /* ---------------------------------------------------------
    STICKY TABLE HEADER — Employee Ledger

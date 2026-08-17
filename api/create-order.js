@@ -1,5 +1,5 @@
 // POST /api/create-order   (was /.netlify/functions/create-order)
-// body: { packId, purpose }
+// body: { packId, purpose, customCredits }
 //
 // Same logic as before. Vercel auto-parses a JSON body into req.body,
 // so no more manual JSON.parse(event.body).
@@ -11,9 +11,16 @@
 // order's notes purely so verify-payment.js can carry it onto the
 // transaction record for the Payment History page. Client input, so
 // it's whitelisted rather than trusted as-is.
+//
+// `packId: 'custom'` + `customCredits` is the "load any amount" path
+// from the Wallet page — the browser only ever sends how many credits
+// it wants, and priceForCustomCredits() (server-side, same file as the
+// fixed-pack prices) is what actually decides the ₹ amount, using the
+// same volume-discount tiers as the fixed packs. Nothing about price
+// is ever trusted from the client here either.
 const Razorpay = require('razorpay');
 const { requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
-const { getPack } = require('../lib/creditPacks');
+const { getPack, priceForCustomCredits, CUSTOM_CREDIT_MIN, CUSTOM_CREDIT_MAX } = require('../lib/creditPacks');
 
 module.exports = async (req, res) => {
   if (handleOptions(req, res)) return;
@@ -27,7 +34,17 @@ module.exports = async (req, res) => {
   }
 
   const body = req.body || {};
-  const pack = getPack(body.packId);
+  let pack;
+  if (body.packId === 'custom') {
+    const requested = parseInt(body.customCredits, 10);
+    const priced = priceForCustomCredits(requested);
+    if (!priced) {
+      return json(res, 400, { error: `Enter a whole number of credits between ${CUSTOM_CREDIT_MIN} and ${CUSTOM_CREDIT_MAX}.` });
+    }
+    pack = { id: 'custom', credits: priced.credits, priceRupees: priced.priceRupees };
+  } else {
+    pack = getPack(body.packId);
+  }
   if (!pack) {
     return json(res, 400, { error: 'Unknown credit pack.' });
   }

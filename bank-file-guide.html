@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to Generate Bank Payment Files — PayFlow Pro</title>
+<meta name="description" content="Step-by-step guide to generating NEFT/RTGS/IMPS bulk payment files for SBI, HDFC, ICICI and PNB with PayFlow Pro.">
+<link rel="canonical" href="https://nitins0910.github.io/payflow-pro-web/bank-file-guide.html">
+
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="icon-16.png?v=2">
+<link rel="shortcut icon" href="favicon.ico?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png?v=2">
+
+<meta name="theme-color" content="#0A0F1E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+
+<style>
+  /* Same wrapper pattern as privacy.html / terms.html, plus a few
+     guide-specific bits (bank capability cards, numbered steps,
+     mode-badge legend). Colors/fonts/tables all come from style.css
+     variables so this stays visually identical to the rest of the site. */
+  .legal-wrap{ max-width:820px; margin:0 auto; padding:48px 24px 80px; }
+  .legal-wrap h1{ font-family:var(--font-display); font-size:28px; margin-bottom:6px; }
+  .legal-wrap .legal-meta{ color:var(--text3); font-size:13px; margin-bottom:32px; }
+  .legal-wrap h2{ font-family:var(--font-display); font-size:18px; margin:34px 0 12px; color:var(--text); }
+  .legal-wrap h3{ font-family:var(--font-display); font-size:14.5px; margin:20px 0 8px; color:var(--text); }
+  .legal-wrap p, .legal-wrap li{ font-size:14px; line-height:1.75; color:var(--text2); }
+  .legal-wrap ul, .legal-wrap ol{ padding-left:20px; margin:8px 0 14px; }
+  .legal-wrap li{ margin-bottom:6px; }
+  .legal-wrap a{ color:var(--blue-bright); }
+  .legal-back{ display:inline-block; margin-bottom:24px; font-size:13px; }
+  .legal-notice{ background:var(--surface2); border:1px solid var(--border-soft); padding:14px 16px; font-size:12.5px; color:var(--text3); margin-bottom:28px; line-height:1.7; }
+  .legal-table{ width:100%; border-collapse:collapse; margin:10px 0 18px; font-size:13.5px; }
+  .legal-table th, .legal-table td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+  .legal-table th{ color:var(--text3); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+
+  .guide-steps{ counter-reset:guide-step; list-style:none; padding-left:0; margin:14px 0 24px; }
+  .guide-steps > li{
+    counter-increment:guide-step;
+    position:relative;
+    padding:2px 0 2px 40px;
+    margin-bottom:18px;
+  }
+  .guide-steps > li::before{
+    content:counter(guide-step);
+    position:absolute; left:0; top:-1px;
+    width:26px; height:26px; border-radius:50%;
+    background:var(--surface2); border:1px solid var(--border-soft);
+    color:var(--blue-bright); font-family:var(--font-mono); font-weight:700; font-size:12.5px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .guide-steps > li strong{ color:var(--text); }
+  .guide-steps > li p{ margin:4px 0 0; }
+
+  .bank-cards{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0 22px; }
+  @media (max-width:600px){ .bank-cards{ grid-template-columns:1fr; } }
+  .bank-card{
+    border:1px solid var(--border-soft); border-radius:12px; padding:16px 18px;
+    background:var(--surface);
+  }
+  .bank-card h3{ margin:0 0 8px; font-size:15px; }
+  .bank-card .bank-card__meta{ font-family:var(--font-mono); font-size:11.5px; color:var(--text3); margin-bottom:10px; }
+  .bank-card ul{ margin:0; padding-left:18px; }
+  .bank-card li{ font-size:13px; margin-bottom:4px; }
+
+  .mode-pill{
+    display:inline-block; font-family:var(--font-mono); font-size:11px; font-weight:700;
+    padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft);
+    background:var(--surface2); color:var(--text2); margin-right:4px;
+  }
+  .mode-pill.yes{ color:var(--success); border-color:rgba(34,197,94,0.4); background:var(--success-bg); }
+  .mode-pill.no{ color:var(--text3); }
+
+  .faq-item{ margin-bottom:16px; }
+  .faq-item h3{ margin:0 0 4px; }
+</style>
+</head>
+<body>
+<div class="legal-wrap">
+  <a href="index.html" class="legal-back">← Back to PayFlow Pro</a>
+  <div class="brand" style="margin-bottom:18px;">
+    <span class="mark">PF</span>
+    <h1 style="margin:0;">PayFlow Pro</h1>
+  </div>
+
+  <h1>How to Generate Bank Payment Files</h1>
+  <p class="legal-meta">A complete walkthrough — from adding employees to uploading the file to your bank.</p>
+
+  <div class="legal-notice">
+    This guide covers the full export flow for all 4 currently supported banks —
+    <strong>SBI, HDFC, ICICI, and PNB</strong>. Each bank's file uses that bank's exact
+    corporate bulk-upload format, so the file PayFlow Pro generates can be uploaded to your
+    bank's net-banking portal as-is — no manual reformatting needed.
+  </div>
+
+  <h2>1. Before you start</h2>
+  <p>Make sure these two things are set up once (you won't need to repeat them for future payroll runs):</p>
+  <ol class="guide-steps">
+    <li>
+      <strong>Your company's bank account is set up in Settings.</strong>
+      <p>Go to <strong>Settings → Edit Company Details</strong> and enter your company name, the bank you hold your
+      account with (SBI / HDFC / ICICI / PNB), your account number, and your IFSC code. This is the account
+      salaries are debited from, and PayFlow Pro uses it to pick the correct file format automatically.</p>
+    </li>
+    <li>
+      <strong>Your employees are added with correct bank details.</strong>
+      <p>On the <strong>Employees</strong> page, each employee needs their name, employee code, bank account
+      number, and IFSC code filled in correctly. A wrong IFSC or account number will carry straight through into
+      the bank file, so it's worth double-checking these once when you add someone.</p>
+    </li>
+  </ol>
+
+  <h2>2. Run payroll and export the file</h2>
+  <ol class="guide-steps">
+    <li>
+      <strong>Open Payroll Run from the top navigation.</strong>
+      <p>You'll see every employee listed with an editable amount field.</p>
+    </li>
+    <li>
+      <strong>Choose Transfer Type — Same Bank or Other Bank.</strong>
+      <p><strong>Same Bank Transfer</strong> shows only employees whose account is with your own bank (matched by
+      IFSC prefix) — these move as a low-cost internal transfer. <strong>Other Bank Transfer</strong> shows
+      everyone else, who get paid via NEFT, RTGS, or IMPS depending on the amount and your bank's format.</p>
+    </li>
+    <li>
+      <strong>Optionally toggle "Prefer IMPS"</strong> <em>(only shown for banks that support it — currently SBI)</em>.
+      <p>When this is on, eligible cross-bank payments are marked IMPS instead of NEFT/RTGS — useful for
+      same-day/instant credit for smaller amounts.</p>
+    </li>
+    <li>
+      <strong>Set the Payroll Cycle and Transfer Date.</strong>
+      <p>These are stamped into the file header/records so the bank knows which salary month and value date the
+      batch is for.</p>
+    </li>
+    <li>
+      <strong>Review the amounts and the auto-assigned Mode column</strong>, then click <strong>Export File</strong>.
+      <p>This consumes <strong>5 credits</strong> from your wallet. New accounts start with 5 free credits (one
+      export's worth); once your balance runs low, a "Buy Credits" prompt lets you top up via Razorpay — pricing
+      gets progressively cheaper per credit on larger packs.</p>
+    </li>
+    <li>
+      <strong>Download and upload the file.</strong>
+      <p>The file downloads in the exact format your bank's corporate portal expects. Log in to your bank's
+      net-banking / CMS portal, find the bulk salary/NEFT-RTGS upload section, and upload the file directly.</p>
+    </li>
+  </ol>
+
+  <div class="legal-notice">
+    Every export is saved on the <strong>Exports</strong> page, where you can search by batch ID or bank and
+    re-download any past file. Re-downloaded files reflect your company profile and IFSC exactly as they were at
+    the time of that export, not your current settings — so historical batches always stay accurate even if you
+    later change banks.
+  </div>
+
+  <h2>3. How the transfer mode is decided automatically</h2>
+  <p>You don't have to pick NEFT vs RTGS vs IMPS per employee — PayFlow Pro works it out for you, per the rules below:</p>
+  <ul>
+    <li><strong>Same Bank / Internal</strong> — whenever the employee's IFSC starts with your own bank's code (e.g. both accounts are SBI).</li>
+    <li><strong>RTGS</strong> — for cross-bank amounts of <strong>₹2,00,000 or more</strong>, on banks whose file format supports RTGS.</li>
+    <li><strong>NEFT</strong> — the default for smaller cross-bank amounts, and the fallback wherever RTGS isn't supported by that bank's format.</li>
+    <li><strong>IMPS</strong> — only if you've turned on "Prefer IMPS" and your bank's format supports it.</li>
+  </ul>
+
+  <h2>4. What each bank's file supports</h2>
+  <p>Not every bank's bulk-upload format has the same capabilities — this is set by each bank's own file
+  specification, not a PayFlow Pro limitation. Here's exactly what's available for each:</p>
+
+  <div class="bank-cards">
+    <div class="bank-card">
+      <h3>State Bank of India (SBI)</h3>
+      <div class="bank-card__meta">IFSC prefix: SBIN</div>
+      <ul>
+        <li><span class="mode-pill yes">Same Bank</span></li>
+        <li><span class="mode-pill yes">NEFT</span></li>
+        <li><span class="mode-pill yes">RTGS</span> (₹2L+)</li>
+        <li><span class="mode-pill yes">IMPS</span> (optional toggle)</li>
+      </ul>
+    </div>
+    <div class="bank-card">
+      <h3>HDFC Bank</h3>
+      <div class="bank-card__meta">IFSC prefix: HDFC</div>
+      <ul>
+        <li><span class="mode-pill yes">Same Bank</span></li>
+        <li><span class="mode-pill yes">NEFT</span></li>
+        <li><span class="mode-pill yes">RTGS</span> (₹2L+)</li>
+        <li><span class="mode-pill no">IMPS not supported</span></li>
+      </ul>
+    </div>
+    <div class="bank-card">
+      <h3>ICICI Bank</h3>
+      <div class="bank-card__meta">IFSC prefix: ICIC</div>
+      <ul>
+        <li><span class="mode-pill yes">Same Bank</span></li>
+        <li><span class="mode-pill yes">NEFT</span> (used for all cross-bank credits, regardless of amount)</li>
+        <li><span class="mode-pill no">RTGS not supported</span></li>
+        <li><span class="mode-pill no">IMPS not supported</span></li>
+      </ul>
+    </div>
+    <div class="bank-card">
+      <h3>Punjab National Bank (PNB)</h3>
+      <div class="bank-card__meta">IFSC prefix: PUNB</div>
+      <ul>
+        <li><span class="mode-pill yes">Same Bank</span></li>
+        <li><span class="mode-pill yes">NEFT</span></li>
+        <li><span class="mode-pill yes">RTGS</span> (₹2L+)</li>
+        <li><span class="mode-pill no">IMPS not supported</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <p style="font-size:12.5px; color:var(--text3);">
+    Note: ICICI's bulk file format has no RTGS line at all, so every cross-bank payment goes as NEFT even above
+    ₹2L. If you need RTGS for a large ICICI transfer, you'll need to do that one manually through net-banking.
+  </p>
+
+  <h2>5. Frequently asked questions</h2>
+
+  <div class="faq-item">
+    <h3>Can I switch banks later?</h3>
+    <p>Yes — update it any time in Settings → Edit Company Details. Your next export will use the new bank's
+    file format automatically. Past exports already downloaded are unaffected.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>My bank isn't in the list — what do I do?</h3>
+    <p>Only SBI, HDFC, ICICI, and PNB have file formats built in today. Message us via
+    <strong>Help &amp; Support</strong> in the sidebar with your bank's name — if you can share your bank's bulk
+    upload format spec, we can look at adding it.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Why did an employee not show up when I chose "Same Bank Transfer"?</h3>
+    <p>That view only lists employees whose IFSC prefix matches your own company bank. If their account is with a
+    different bank, they'll appear under "Other Bank Transfer" instead.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>What happens if I run out of credits mid-export?</h3>
+    <p>Nothing is deducted or generated until you have enough credits for that export (5 credits). If your balance
+    is short, a "Buy Credits" prompt opens so you can top up via Razorpay, then export normally.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Does PayFlow Pro actually transfer the money?</h3>
+    <p>No — PayFlow Pro only generates the file. You upload it to your own bank's corporate net-banking portal,
+    and your bank executes the actual transfers from there.</p>
+  </div>
+
+  <div class="legal-notice">
+    Still stuck on something specific? Use the <strong>Help &amp; Support</strong> (❓) icon in the sidebar —
+    your message goes straight to our team and replies land in your own inbox.
+  </div>
+
+</div>
+</body>
+</html>

@@ -535,10 +535,13 @@ a.settings-list-item{ text-decoration:none; color:inherit; }
   color:rgba(255,255,255,0.66);
   font-size:13px; font-weight:600; letter-spacing:0.1px;
   white-space:nowrap;
+  cursor:pointer;
   transition:color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
 }
 .topbar__tabs .nav-item svg{ width:15px; height:15px; opacity:.8; transition:opacity .15s var(--ease); }
-.topbar__tabs .nav-item:hover{ color:#fff; background:rgba(255,255,255,0.06); }
+.topbar__tabs .nav-item:hover{ color:#fff; background:rgba(255,255,255,0.1); border-bottom-color:rgba(255,255,255,0.35); }
+.topbar__tabs .nav-item:hover svg{ opacity:1; }
+.topbar__tabs .nav-item.active:hover{ border-bottom-color:var(--blue-bright); }
 .topbar__tabs .nav-item.active{
   color:#fff;
   background:rgba(255,255,255,0.08);

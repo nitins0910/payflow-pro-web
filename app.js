@@ -2537,13 +2537,23 @@ function wireMaskedAccountToggles(container) {
 
 // Renders a transfer-mode/type value (Same Bank, RTGS, NEFT, IMPS,
 // Other Bank) as a small colored pill instead of plain text.
+//
+// Display-only relabel: "Same Bank" -> "Intrabank Transfer" and
+// "Other Bank" -> "Interbank Transfer" (the old wording read as the
+// cheaper/lesser option next to "Other Bank"). The underlying `mode`
+// value itself is untouched everywhere else (CSV import/export,
+// VALID_TRANSFER_TYPES, employee.transferType, bank-format logic) —
+// only the text shown in this pill changes.
 function badgeForMode(mode) {
   const cls = mode === 'Same Bank' ? 'badge-green'
     : mode === 'RTGS' ? 'badge-blue'
     : mode === 'NEFT' ? 'badge-blue'
     : mode === 'IMPS' ? 'badge-amber'
     : 'badge-grey';
-  return `<span class="badge ${cls}">${escapeHtml(mode || '—')}</span>`;
+  const label = mode === 'Same Bank' ? 'Intrabank Transfer'
+    : mode === 'Other Bank' ? 'Interbank Transfer'
+    : mode;
+  return `<span class="badge ${cls}">${escapeHtml(label || '—')}</span>`;
 }
 
 // Sort state persists across re-renders (search, add/edit/delete) so the
@@ -3369,7 +3379,7 @@ function updateDisbursementModeUI() {
 
   const subtitle = document.getElementById('disbSubtitle');
   if (subtitle) {
-    const modeList = ['Same Bank', ...(bank.supportsRtgs ? ['RTGS'] : []), 'NEFT', ...(bank.supportsImps ? ['IMPS'] : [])].join(' / ');
+    const modeList = ['Intrabank Transfer', ...(bank.supportsRtgs ? ['RTGS'] : []), 'NEFT', ...(bank.supportsImps ? ['IMPS'] : [])].join(' / ');
     subtitle.textContent = isSbi
       ? 'Enter amounts and export the SBI bulk payment file.'
       : `Enter amounts and export the ${bank.label} bulk payment file. Mode (${modeList}) is auto-detected per beneficiary.`;

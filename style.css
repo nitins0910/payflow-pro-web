@@ -1327,7 +1327,7 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 @media (max-width: 640px){
   /* These search/filter boxes were sized in px for a desktop
      panel and overflowed narrow phone screens. */
-  #employeeSearch, #disbSearch, #auditSearch{ width:100% !important; }
+  #employeeSearch, #disbSearch, #auditSearch, #exportsSearch{ width:100% !important; }
 
   .disb-filters{ gap:12px !important; }
   .disb-filters > div{ flex:1 1 140px; }

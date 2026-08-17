@@ -1819,7 +1819,7 @@ async function bootDashboard(user) {
     safeInit('wireGuidedTour', wireGuidedTour);
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
     const walletChip = document.getElementById('walletChip');
-    if (walletChip) walletChip.addEventListener('click', () => showAppPage('wallet'));
+    if (walletChip) walletChip.addEventListener('click', () => { closeMobileDrawer(); showAppPage('wallet'); });
     document.getElementById('employeeSearch').addEventListener('input', renderEmployeeTable);
 
     // First-ever dashboard visit for this browser: auto-start the tour.

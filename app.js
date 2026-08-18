@@ -2213,6 +2213,11 @@ const TOUR_STEPS = [
     body: 'Need to add the whole list in one go? Download the sample CSV, fill it in, and bulk import it here. You\'ll see a preview before importing, with any invalid rows highlighted.'
   },
   {
+    target: '#genBeneficiaryFileBtn',
+    title: 'Register employees with your bank (free)',
+    body: 'Before your bank will actually credit an employee, it usually needs them added as a Beneficiary/Payee first. This free tool generates that registration file in your bank\'s exact format — a one-time step per employee, separate from the paid payroll export.'
+  },
+  {
     target: '.topbar__tabs .nav-item[data-page="salarycalc"]',
     title: 'Salary Calculation',
     body: 'Enter each employee\'s Basic, HRA and allowances — PF, ESI, Professional Tax and Net Pay are calculated automatically and sent straight to Generate Transaction File.'
@@ -2228,10 +2233,22 @@ const TOUR_STEPS = [
     body: 'Every batch you\'ve exported before shows up here — you can re-download them anytime.'
   },
   {
+    target: '#walletChipDesktop',
+    mobileTarget: '#walletChipMobile',
+    title: 'Your Wallet',
+    body: 'Every export uses 5 credits from here. New accounts start with 50 free credits — once you run low, top up any time with a credit pack or a custom amount.'
+  },
+  {
     target: '.topbar-icons .nav-item[data-page="audit"]',
     mobileTarget: '.sidebar-icons .nav-item[data-page="audit"]',
     title: 'Activity Log',
     body: 'Every add, edit, delete, and export is tracked here automatically — who did what, and when.'
+  },
+  {
+    target: '#helpSupportBtnDesktop',
+    mobileTarget: '#helpSupportBtn',
+    title: 'Help & Support',
+    body: 'Stuck on something? Send us a message here — it goes straight to our team and replies land in your own inbox.'
   },
   {
     target: '#accountMenuBtn',
@@ -3888,6 +3905,18 @@ function computeSalaryRow(raw, opts) {
   const other = round2((Number(raw.other) || 0) * factor);
   const gross = round2(basic + hra + special + other);
 
+  // Full (non-LOP-prorated) gross — used ONLY to decide ESI eligibility,
+  // never to compute the actual ESI amount. Per ESI rules, coverage is
+  // based on an employee's declared/contracted monthly gross, not on
+  // what happened to be paid in a particular month. Without this, a
+  // heavy-LOP month could temporarily drop someone's PAID gross below
+  // the wage limit and wrongly bring them into ESI for that month even
+  // though their real gross is above the threshold.
+  const fullGross = round2(
+    (Number(raw.basic) || 0) + (Number(raw.hra) || 0) +
+    (Number(raw.special) || 0) + (Number(raw.other) || 0)
+  );
+
   const pfRate = (Number(opts.pfRate) || 0) / 100;
   const pfCeilingAmt = Number(opts.pfCeilingAmt) || 0;
   const pfWage = opts.pfCeiling ? Math.min(basic, pfCeilingAmt) : basic;
@@ -3895,16 +3924,22 @@ function computeSalaryRow(raw, opts) {
 
   const esiRate = (Number(opts.esiRate) || 0) / 100;
   const esiLimit = Number(opts.esiLimit) || 0;
-  const esi = (opts.esiApplicable && gross <= esiLimit) ? round2(gross * esiRate) : 0;
+  // Eligibility check uses fullGross (see above); the ESI amount
+  // actually deducted still uses the real, LOP-prorated gross paid
+  // this month, same as before.
+  const esi = (opts.esiApplicable && fullGross <= esiLimit) ? round2(gross * esiRate) : 0;
 
-  const pt = round2(Number(raw.pt) || 0);
-  const tds = round2(Number(raw.tds) || 0);
-  const otherDed = round2(Number(raw.otherDed) || 0);
+  // PT / TDS / Other Deductions can never be negative — a negative
+  // value here would silently inflate Net Pay instead of reducing it,
+  // which is never a valid payroll entry.
+  const pt = Math.max(0, round2(Number(raw.pt) || 0));
+  const tds = Math.max(0, round2(Number(raw.tds) || 0));
+  const otherDed = Math.max(0, round2(Number(raw.otherDed) || 0));
 
   const totalDeductions = round2(pf + esi + pt + tds + otherDed);
   const netPay = Math.max(0, round2(gross - totalDeductions));
 
-  return { basic, hra, special, other, gross, pf, esi, pt, tds, otherDed, totalDeductions, netPay, lop };
+  return { basic, hra, special, other, gross, fullGross, pf, esi, pt, tds, otherDed, totalDeductions, netPay, lop };
 }
 
 function scGlobalOpts() {

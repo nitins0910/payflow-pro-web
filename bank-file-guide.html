@@ -115,16 +115,50 @@
     </li>
   </ol>
 
-  <h2>2. Run payroll and export the file</h2>
+  <h2>2. Register employees as beneficiaries (one-time, per bank)</h2>
+  <p>Before an employee can actually <strong>receive</strong> a payroll transfer through your bank's bulk upload,
+  most banks first require them to be registered as a <strong>Beneficiary / 3rd Party / Payee</strong> on your
+  bank's own net-banking or CMS portal. This is a separate, one-time step from generating the payroll payment file
+  in Section 3 below — skip it and your bank may bounce or reject the transfer even though PayFlow Pro shows the
+  export as successful.</p>
   <ol class="guide-steps">
     <li>
-      <strong>Open Payroll Run from the top navigation.</strong>
+      <strong>Go to Employees → "📄 Beneficiary Upload File" (marked FREE).</strong>
+      <p>This is a free companion tool — it never touches your wallet/credits, since it's unrelated to the paid
+      payroll export. It builds the beneficiary registration file straight from your saved employee list.</p>
+    </li>
+    <li>
+      <strong>Download the file for your bank's format.</strong>
+      <p>SBI gives you two separate files — one for Same Bank (Intra) beneficiaries and one for Other Bank (Inter)
+      beneficiaries. PNB, ICICI, and HDFC each give a single combined file in their own bulk-beneficiary template.</p>
+    </li>
+    <li>
+      <strong>Upload it to your bank's "Add Beneficiary / 3rd Party Payee" section.</strong>
+      <p>Look for this under your bank's Net Banking / CMS Corporate portal — usually filed under "Payee
+      Management" or "Manage Beneficiary".</p>
+    </li>
+    <li>
+      <strong>Wait for your bank's activation/cooling period before the first payout.</strong>
+      <p>Most banks hold a newly added beneficiary for a few hours (sometimes up to 24–30 hours) before allowing
+      payments to them, as an anti-fraud measure. Plan a new joiner's first payroll run with this in mind.</p>
+    </li>
+  </ol>
+  <div class="legal-notice">
+    You only need to re-generate and re-upload this file when you add a <strong>new</strong> employee, or when an
+    existing employee's bank account or IFSC changes. Employees already registered as beneficiaries don't need to
+    be re-added for every payroll cycle.
+  </div>
+
+  <h2>3. Run payroll and export the file</h2>
+  <ol class="guide-steps">
+    <li>
+      <strong>Open Generate Transaction File from the top navigation.</strong>
       <p>You'll see every employee listed with an editable amount field.</p>
     </li>
     <li>
-      <strong>Choose Transfer Type — Same Bank or Other Bank.</strong>
-      <p><strong>Same Bank Transfer</strong> shows only employees whose account is with your own bank (matched by
-      IFSC prefix) — these move as a low-cost internal transfer. <strong>Other Bank Transfer</strong> shows
+      <strong>Choose Transfer Type — Intrabank Transfer or Interbank Transfer.</strong>
+      <p><strong>Intrabank Transfer</strong> shows only employees whose account is with your own bank (matched by
+      IFSC prefix) — these move as a low-cost internal transfer. <strong>Interbank Transfer</strong> shows
       everyone else, who get paid via NEFT, RTGS, or IMPS depending on the amount and your bank's format.</p>
     </li>
     <li>
@@ -139,8 +173,8 @@
     </li>
     <li>
       <strong>Review the amounts and the auto-assigned Mode column</strong>, then click <strong>Export File</strong>.
-      <p>This consumes <strong>5 credits</strong> from your wallet. New accounts start with 5 free credits (one
-      export's worth); once your balance runs low, a "Buy Credits" prompt lets you top up via Razorpay — pricing
+      <p>This consumes <strong>5 credits</strong> from your wallet. New accounts start with 50 free credits (ten
+      exports' worth); once your balance runs low, a "Buy Credits" prompt lets you top up via Razorpay — pricing
       gets progressively cheaper per credit on larger packs.</p>
     </li>
     <li>
@@ -157,7 +191,7 @@
     later change banks.
   </div>
 
-  <h2>3. How the transfer mode is decided automatically</h2>
+  <h2>4. How the transfer mode is decided automatically</h2>
   <p>You don't have to pick NEFT vs RTGS vs IMPS per employee — PayFlow Pro works it out for you, per the rules below:</p>
   <ul>
     <li><strong>Same Bank / Internal</strong> — whenever the employee's IFSC starts with your own bank's code (e.g. both accounts are SBI).</li>
@@ -166,7 +200,7 @@
     <li><strong>IMPS</strong> — only if you've turned on "Prefer IMPS" and your bank's format supports it.</li>
   </ul>
 
-  <h2>4. What each bank's file supports</h2>
+  <h2>5. What each bank's file supports</h2>
   <p>Not every bank's bulk-upload format has the same capabilities — this is set by each bank's own file
   specification, not a PayFlow Pro limitation. Here's exactly what's available for each:</p>
 
@@ -218,7 +252,7 @@
     ₹2L. If you need RTGS for a large ICICI transfer, you'll need to do that one manually through net-banking.
   </p>
 
-  <h2>5. Frequently asked questions</h2>
+  <h2>6. Frequently asked questions</h2>
 
   <div class="faq-item">
     <h3>Can I switch banks later?</h3>
@@ -234,9 +268,17 @@
   </div>
 
   <div class="faq-item">
-    <h3>Why did an employee not show up when I chose "Same Bank Transfer"?</h3>
+    <h3>Why did an employee not show up when I chose "Intrabank Transfer"?</h3>
     <p>That view only lists employees whose IFSC prefix matches your own company bank. If their account is with a
-    different bank, they'll appear under "Other Bank Transfer" instead.</p>
+    different bank, they'll appear under "Interbank Transfer" instead.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Do I need to register employees with my bank before I can pay them?</h3>
+    <p>Yes — this is a one-time step per employee, separate from the payroll export above. Use the
+    <strong>Beneficiary Upload File</strong> button on the Employees page to generate your bank's beneficiary
+    registration file, then upload it via your bank's own net-banking portal. See Section 2 above for the full
+    walkthrough.</p>
   </div>
 
   <div class="faq-item">

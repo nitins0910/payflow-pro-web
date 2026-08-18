@@ -2204,16 +2204,19 @@ const TOUR_STEPS = [
   },
   {
     target: '#addEmployeeBtn',
+    page: 'employees',
     title: 'Add an employee',
     body: 'Click here to add each employee\'s name, account number, IFSC, mobile, and email one at a time.'
   },
   {
     target: '#bulkImportBtn',
+    page: 'employees',
     title: 'Add many employees at once',
     body: 'Need to add the whole list in one go? Download the sample CSV, fill it in, and bulk import it here. You\'ll see a preview before importing, with any invalid rows highlighted.'
   },
   {
     target: '#genBeneficiaryFileBtn',
+    page: 'employees',
     title: 'Register employees with your bank (free)',
     body: 'Before your bank will actually credit an employee, it usually needs them added as a Beneficiary/Payee first. This free tool generates that registration file in your bank\'s exact format — a one-time step per employee, separate from the paid payroll export.'
   },
@@ -2324,6 +2327,16 @@ function stepNeedsDrawer(step) {
 function renderTourStep() {
   if (!tourEls) return;
   const step = TOUR_STEPS[tourStepIndex];
+
+  // Some steps (Add employee, Bulk import, Beneficiary file) point at
+  // buttons that only exist inside a specific app page's section and
+  // are display:none (via .hidden on #page-<name>) whenever another
+  // page is active — so the spotlight would land on a zero-size,
+  // invisible target unless we're already on that page. Auto-switch
+  // to the step's page first so every step works no matter where the
+  // user was when they opened the tour.
+  if (step.page) showAppPage(step.page);
+
   const target = document.querySelector(resolveTourTarget(step));
 
   // If a target isn't in the DOM for some reason, skip straight past

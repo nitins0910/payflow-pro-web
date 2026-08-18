@@ -527,6 +527,7 @@
             <button class="btn-inline secondary" id="exportLedgerCsvBtn">Export Ledger CSV</button>
             <button class="btn-inline secondary" id="bulkImportBtn">Bulk Import CSV</button>
             <input type="file" id="bulkImportInput" accept=".csv" class="hidden">
+            <button class="btn-inline secondary" id="genBeneficiaryFileBtn">📄 Beneficiary Upload File <span class="free-badge">FREE</span></button>
             <button class="btn-inline" id="addEmployeeBtn">+ Add Employee</button>
           </div>
         </div>
@@ -716,6 +717,7 @@
                 <option value="BULK DELETE EMPLOYEES">Bulk Delete Employees</option>
                 <option value="BULK IMPORT">Bulk Import</option>
                 <option value="EXPORT FILE">Export File</option>
+                <option value="GENERATE BENEFICIARY FILE">Generate Beneficiary File</option>
                 <option value="UPDATE COMPANY">Update Company</option>
                 <option value="CHANGE PASSWORD">Change Password</option>
                 <option value="REQUEST EMAIL CHANGE">Request Email Change</option>
@@ -1171,6 +1173,85 @@
           <button type="submit" class="btn-inline" id="saveEmployeeBtn" style="flex:1;">Save</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Bulk Beneficiary (3rd Party) Upload File — SBI + PNB Net/Internet
+       Banking. Generates the note-pad/CSV file used to register
+       employees as beneficiaries/payees BEFORE they can ever receive
+       a payroll transfer — a one-time/as-needed setup step, separate
+       from the paid payroll export file. Built entirely client-side
+       from employees already in the ledger, so it never touches the
+       wallet/credits system — this is, and always will be, free.
+       Body shown depends on companyProfile.bankName (SBI/PNB have a
+       dedicated body each; other banks get the "not supported" note).
+       Wired in wireBeneficiaryFileModal() in app.js. -->
+  <div id="beneficiaryFileModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-head">
+        <h3>Beneficiary Upload File <span class="free-badge">FREE</span></h3>
+        <button type="button" class="modal-close" data-modal="beneficiaryFileModal" aria-label="Close">×</button>
+      </div>
+      <p class="field-hint" style="margin-top:-6px;">
+        Before you can pay an employee via your bank's bulk upload, the bank first needs them added as a
+        <strong>Beneficiary / Payee</strong> on your Internet Banking profile — a one-time setup step, separate
+        from your payroll export file. This generates that upload file for you, straight from your employee
+        list. This tool never uses credits — it's completely free, every time.
+      </p>
+
+      <div id="beneficiaryBankNotSupportedNote" class="empty-state hidden" style="padding:20px;">
+        <div class="empty-state__icon">🏦</div>
+        This tool currently supports SBI and PNB accounts only. Your company's payout bank is set to something
+        else — change it under Settings → Company Details to generate this file.
+      </div>
+
+      <!-- SBI body: separate Intra (Same-Bank) / Inter (Other-Bank)
+           files, since SBI's Net Banking treats them as two distinct
+           uploads. -->
+      <div id="beneficiarySbiBody">
+        <div class="company-summary-row">
+          <span class="company-summary-row__label">Same-Bank employees (Intra)</span>
+          <span class="company-summary-row__value" id="intraBeneficiaryCount">0</span>
+        </div>
+        <div class="company-summary-row">
+          <span class="company-summary-row__label">Other-Bank employees (Inter)</span>
+          <span class="company-summary-row__value" id="interBeneficiaryCount">0</span>
+        </div>
+        <p style="font-size:11.5px; color:var(--text3); margin:12px 0 0;">
+          Downloads a <code>.txt</code> file, ready to upload: File Upload → Beneficiaries → choose Same Bank /
+          Other Bank → browse this file → Upload. It'll then sit in your batch inbox for authorization, same as
+          any other SBI bulk file.
+        </p>
+        <div class="modal-actions" style="flex-wrap:wrap; gap:8px; margin-top:16px;">
+          <button type="button" class="btn-inline secondary" id="downloadIntraBeneficiaryBtn" style="flex:1; min-width:200px;">⬇ Same-Bank File</button>
+          <button type="button" class="btn-inline secondary" id="downloadInterBeneficiaryBtn" style="flex:1; min-width:200px;">⬇ Other-Bank File</button>
+        </div>
+      </div>
+
+      <!-- PNB body: PNB's own bulk-beneficiary format carries the
+           Same-Bank/Other-Bank split INSIDE each row (the "Network"
+           column: PMT / NFT), so — unlike SBI — this is a single
+           combined file covering every employee. -->
+      <div id="beneficiaryPnbBody" class="hidden">
+        <div class="company-summary-row">
+          <span class="company-summary-row__label">Employees in this file</span>
+          <span class="company-summary-row__value" id="pnbBeneficiaryCount">0</span>
+        </div>
+        <p style="font-size:11.5px; color:var(--text3); margin:12px 0 0;">
+          PNB's format also needs a per-beneficiary daily amount cap and a nickname — fields PayFlow Pro doesn't
+          collect from you, so it fills them in automatically: a nickname from each employee's name, and a daily
+          cap set generously above their last paid amount (editable anytime from PNB's Corp Admin panel). The
+          Address column is left blank — PNB may prompt you to fill that in manually on upload.
+        </p>
+        <p style="font-size:11.5px; color:var(--text3); margin:8px 0 0;">
+          Downloads a <code>.txt</code> file, ready to upload: Bulk FileUploads → Upload a File → "Create Bulk
+          NEFT/RTGS/Within Bank Payee" → browse this file → Continue. It'll then sit with your Approver for
+          authorization, same as any other PNB bulk file.
+        </p>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button type="button" class="btn-inline secondary" id="downloadPnbBeneficiaryBtn" style="flex:1;">⬇ Beneficiary File</button>
+        </div>
+      </div>
     </div>
   </div>
 

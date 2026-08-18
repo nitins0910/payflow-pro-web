@@ -2114,6 +2114,7 @@ async function bootDashboard(user) {
     safeInit('wirePasswordToggles', wirePasswordToggles);
     safeInit('wireModalCloseButtons', wireModalCloseButtons);
     safeInit('wireHelpSupport', wireHelpSupport);
+    safeInit('wireBeneficiaryFileModal', wireBeneficiaryFileModal);
     safeInit('wireFreeCreditsModal', wireFreeCreditsModal);
     safeInit('wireGuidedTour', wireGuidedTour);
     safeInit('wireCustomCreditPurchase', wireCustomCreditPurchase);
@@ -4039,6 +4040,158 @@ async function executeExport() {
   }
 
   renderEmployeeKpis();
+}
+
+// ---------------------------------------------------------
+// BULK BENEFICIARY (3rd PARTY / PAYEE) UPLOAD FILE — SBI + PNB
+// ---------------------------------------------------------
+// A free companion tool, separate from the paid payroll export files
+// above. Before an employee can ever RECEIVE a payroll transfer via
+// a bank's bulk upload, the bank first requires them to be registered
+// as a "Beneficiary" / "3rd Party" / "Payee" — a one-time (or
+// as-needed) setup step, not a recurring payroll action. Built
+// entirely client-side from the employees already in the ledger — no
+// server call, so it never touches the wallet/credits system and
+// never will.
+
+// --- SBI: two formats, taken directly from SBI's own bulk-upload
+// templates (separate files — SBI's Net Banking treats Same-Bank and
+// Other-Bank beneficiary uploads as two distinct screens):
+//   Same-Bank ("Intra"):  Name # AccountNo # BranchCode
+//   Other-Bank ("Inter"): Name # AccountNo # IFSC # Address1 #
+//                          Address2 # Address3 # Mobile # Email #
+//                          BeneficiaryCode
+// Only the first 3 fields of the Other-Bank format are ever mandatory
+// (per SBI's own instructions). Address1-3 and Beneficiary Code
+// aren't fields PayFlow Pro collects, so they're always left blank;
+// Mobile/Email are filled in whenever the employee record has them.
+// Same branchCodeFromIfsc()/sanitizeForDelimitedFile() helpers as the
+// payroll bank-file generators above, so the branch-code derivation
+// stays identical between the two.
+function buildSbiBeneficiaryLines(type) {
+  if ((companyProfile.bankName || 'SBI') !== 'SBI') return [];
+  const wanted = type === 'intra' ? 'Same Bank' : 'Other Bank';
+  const eligible = employees.filter(e => e.transferType === wanted && isValidIfscFormat(e.ifsc));
+  const d = v => sanitizeForDelimitedFile(v, '#');
+  if (type === 'intra') {
+    return eligible.map(e => `${d(e.name)}#${d(e.accountNumber)}#${d(branchCodeFromIfsc(e.ifsc))}`);
+  }
+  return eligible.map(e => `${d(e.name)}#${d(e.accountNumber)}#${d(e.ifsc)}###${d(e.mobile || '')}#${d(e.email || '')}#`);
+}
+
+// --- PNB: a single comma-delimited format covering BOTH Same-Bank and
+// Other-Bank beneficiaries in one file — the split lives inside each
+// row's own "Network" column instead of being two separate uploads:
+//   Name, NickName, AccessType(G/L), AccountNo, Network(NFT/RTG/PMT),
+//   IFSC, Address, MaxAmountPerDay, MaxTransactionsPerDay
+// PayFlow Pro doesn't collect a nickname, per-beneficiary daily cap,
+// or address, so those are filled in automatically:
+//   - NickName: derived from the employee's own name + emp code, to
+//     keep it short and avoid collisions between similarly-named staff.
+//   - AccessType: always 'G' (Global) — every admin user should be
+//     able to see every beneficiary; PayFlow Pro has no concept of
+//     restricted per-user access to mirror PNB's 'L' (Local).
+//   - Network: 'PMT' (Within PNB) for Same-Bank employees, 'NFT'
+//     (NEFT) for Other-Bank — RTGS-specific beneficiary registration
+//     isn't needed separately since the same NEFT-registered payee
+//     can also receive RTGS credits.
+//   - MaxAmountPerDay: a conservative daily cap — 2x the employee's
+//     last paid amount (see lastAmount, set after every export),
+//     rounded up to the nearest ₹1,000, with a ₹25,000 floor for
+//     employees with no export history yet. This is PNB's own
+//     per-beneficiary fraud-control limit, editable anytime from
+//     Corp Admin → Manage Beneficiaries — not a payroll limit.
+//   - MaxTransactionsPerDay: a flat 5, comfortably covering a normal
+//     salary run plus a reissue or bonus payment in the same day.
+//   - Address: always left blank — not a field PayFlow Pro collects.
+function pnbBeneficiaryDailyCap(emp) {
+  const last = Number(emp.lastAmount || 0);
+  const base = last > 0 ? last * 2 : 50000;
+  return Math.max(25000, Math.ceil(base / 1000) * 1000);
+}
+function buildPnbBeneficiaryLines() {
+  if ((companyProfile.bankName || 'SBI') !== 'PNB') return [];
+  const eligible = employees.filter(e => isValidIfscFormat(e.ifsc));
+  const d = v => sanitizeForDelimitedFile(v, ',');
+  return eligible.map(e => {
+    const nick = d(`${String(e.name || '').trim().split(/\s+/)[0] || 'Emp'}${e.empCode || ''}`).slice(0, 20);
+    const network = e.transferType === 'Same Bank' ? 'PMT' : 'NFT';
+    const maxAmount = pnbBeneficiaryDailyCap(e);
+    return [d(e.name), nick, 'G', d(e.accountNumber), network, d(e.ifsc), '', maxAmount, 5].join(',');
+  });
+}
+
+function wireBeneficiaryFileModal() {
+  const openBtn = document.getElementById('genBeneficiaryFileBtn');
+  const modal = document.getElementById('beneficiaryFileModal');
+  if (!openBtn || !modal) return;
+
+  const notSupportedNote = document.getElementById('beneficiaryBankNotSupportedNote');
+  const sbiBody = document.getElementById('beneficiarySbiBody');
+  const pnbBody = document.getElementById('beneficiaryPnbBody');
+  const intraBtn = document.getElementById('downloadIntraBeneficiaryBtn');
+  const interBtn = document.getElementById('downloadInterBeneficiaryBtn');
+  const pnbBtn = document.getElementById('downloadPnbBeneficiaryBtn');
+  const intraCountEl = document.getElementById('intraBeneficiaryCount');
+  const interCountEl = document.getElementById('interBeneficiaryCount');
+  const pnbCountEl = document.getElementById('pnbBeneficiaryCount');
+
+  function refreshCounts() {
+    const bank = companyProfile.bankName || 'SBI';
+    const isSbi = bank === 'SBI';
+    const isPnb = bank === 'PNB';
+    notSupportedNote.classList.toggle('hidden', isSbi || isPnb);
+    sbiBody.classList.toggle('hidden', !isSbi);
+    pnbBody.classList.toggle('hidden', !isPnb);
+
+    if (isSbi) {
+      const intraLines = buildSbiBeneficiaryLines('intra');
+      const interLines = buildSbiBeneficiaryLines('inter');
+      intraCountEl.textContent = intraLines.length;
+      interCountEl.textContent = interLines.length;
+      intraBtn.disabled = intraLines.length === 0;
+      interBtn.disabled = interLines.length === 0;
+    } else if (isPnb) {
+      const lines = buildPnbBeneficiaryLines();
+      pnbCountEl.textContent = lines.length;
+      pnbBtn.disabled = lines.length === 0;
+    }
+  }
+
+  openBtn.addEventListener('click', () => {
+    refreshCounts();
+    modal.classList.remove('hidden');
+  });
+
+  function downloadSbi(type, label) {
+    const lines = buildSbiBeneficiaryLines(type);
+    if (!lines.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename = `SBI_Beneficiary_${type === 'intra' ? 'SameBank' : 'OtherBank'}_${stamp}.txt`;
+    downloadTextFile(filename, lines.join('\n') + '\n', 'text/plain;charset=utf-8');
+    toast(`Beneficiary file downloaded — ${lines.length} ${label} beneficiar${lines.length === 1 ? 'y' : 'ies'}.`, 'success');
+    if (currentUser) {
+      Api.logAudit(currentUser.email, currentUser.displayName, 'GENERATE BENEFICIARY FILE',
+        `SBI ${label} — ${lines.length} employees`);
+    }
+  }
+
+  function downloadPnb() {
+    const lines = buildPnbBeneficiaryLines();
+    if (!lines.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename = `PNB_Beneficiary_${stamp}.txt`;
+    downloadTextFile(filename, lines.join('\n') + '\n', 'text/plain;charset=utf-8');
+    toast(`Beneficiary file downloaded — ${lines.length} beneficiar${lines.length === 1 ? 'y' : 'ies'}.`, 'success');
+    if (currentUser) {
+      Api.logAudit(currentUser.email, currentUser.displayName, 'GENERATE BENEFICIARY FILE',
+        `PNB — ${lines.length} employees`);
+    }
+  }
+
+  intraBtn.addEventListener('click', () => downloadSbi('intra', 'Same-Bank'));
+  interBtn.addEventListener('click', () => downloadSbi('inter', 'Other-Bank'));
+  pnbBtn.addEventListener('click', downloadPnb);
 }
 
 function downloadTextFile(filename, content, mime) {

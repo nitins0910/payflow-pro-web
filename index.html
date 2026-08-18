@@ -392,9 +392,13 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Employees
       </div>
+      <div class="nav-item" data-page="salarycalc">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h16v20H4z"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="14" y1="18" x2="16" y2="18"/></svg>
+        Salary Calculation
+      </div>
       <div class="nav-item" data-page="disbursement">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-        Payroll Run
+        Generate Transaction File
       </div>
       <div class="nav-item" data-page="exports">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -603,11 +607,142 @@
         </div>
       </section>
 
+      <!-- ============================================================
+           SALARY CALCULATION — sits between Employees and Generate
+           Transaction File. Every employee's CTC breakup (Basic, HRA,
+           allowances), statutory deductions (PF, ESI, Professional
+           Tax) and any manual deductions (TDS, other) are entered
+           here; Net Pay is computed live per row. "Send to Generate
+           Transaction File" writes each employee's Net Pay into
+           emp.lastAmount (via Api.updateEmployeeLastAmounts — the
+           same field the Generate Transaction File page already
+           pre-fills its Amount column from), so calculated figures
+           autofeed straight into that page. See renderSalaryCalcTable()
+           / wireSalaryCalc() in app.js.
+           ============================================================ -->
+      <section id="page-salarycalc" class="hidden">
+        <div class="page-head">
+          <div>
+            <h2>Salary Calculation</h2>
+            <p>Fill in every employee's salary structure and deductions — Net Pay is calculated automatically and can be sent straight to Generate Transaction File.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="disb-filters" style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end;">
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">PAYROLL MONTH</label>
+              <input type="month" id="scPayrollMonth" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm); font-family:var(--font-body);">
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">DAYS-IN-MONTH METHOD</label>
+              <select id="scDaysMethod" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
+                <option value="fixed30">Fixed 30-Day Month</option>
+                <option value="actual">Actual Calendar Days</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">STATE (PROFESSIONAL TAX)</label>
+              <select id="scPtState" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
+                <option value="NA">Not Applicable / Other</option>
+                <option value="KA">Karnataka</option>
+                <option value="MH">Maharashtra</option>
+                <option value="WB">West Bengal</option>
+                <option value="TS">Telangana / Andhra Pradesh</option>
+                <option value="TN">Tamil Nadu</option>
+                <option value="GJ">Gujarat</option>
+                <option value="MP">Madhya Pradesh</option>
+                <option value="OD">Odisha</option>
+              </select>
+            </div>
+            <button type="button" class="btn-inline secondary" id="scRecalcPtBtn" style="padding:8px 14px; font-size:12.5px;">Re-apply PT to all rows</button>
+          </div>
+
+          <div class="disb-filters" style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-soft);">
+            <div>
+              <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="scPfCeiling" checked> Apply PF wage ceiling
+              </label>
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">PF CEILING (₹)</label>
+              <input type="text" inputmode="decimal" id="scPfCeilingAmt" value="15000" style="width:90px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">PF RATE (%)</label>
+              <input type="text" inputmode="decimal" id="scPfRate" value="12" style="width:70px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
+            </div>
+            <div>
+              <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="scEsiApplicable" checked> Company covered under ESI Act
+              </label>
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">ESI GROSS LIMIT (₹)</label>
+              <input type="text" inputmode="decimal" id="scEsiLimit" value="21000" style="width:90px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
+            </div>
+            <div>
+              <label style="display:block; font-size:11px; color:var(--text2); margin-bottom:6px;">ESI RATE (%)</label>
+              <input type="text" inputmode="decimal" id="scEsiRate" value="0.75" style="width:70px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:var(--radius-sm);">
+            </div>
+            <button type="button" class="btn-inline secondary" id="scRecalcAllBtn" style="padding:8px 14px; font-size:12.5px;">Recalculate All Rows</button>
+          </div>
+
+          <div class="field-hint" style="margin-top:14px;">
+            All the figures above are defaults, not fixed rules — PF rate, PF ceiling, ESI rate, ESI gross limit, and the days-in-month method all vary by company policy and by statutory revisions, so every field here is editable. Basic pay is prorated against LOP (Loss of Pay) days using whichever days-in-month method you pick above. Professional Tax slabs vary by state and change periodically — the value shown per employee is only an indicative default; please verify against your state's current notification and edit any row as needed. TDS and Other Deductions are always entered manually per employee.
+          </div>
+        </div>
+
+        <div class="panel">
+          <input type="text" id="scSearch" placeholder="Search by name or emp code..."
+            style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
+            color:var(--text); padding:9px 12px; font-size:13px; border-radius:var(--radius-sm);">
+          <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Emp Code</th>
+                <th>Employee</th>
+                <th style="text-align:right;">Basic (₹)</th>
+                <th style="text-align:right;">HRA (₹)</th>
+                <th style="text-align:right;">Special Allow. (₹)</th>
+                <th style="text-align:right;">Other Allow. (₹)</th>
+                <th style="text-align:right;">LOP Days</th>
+                <th style="text-align:right;">Gross (₹)</th>
+                <th style="text-align:right;">PF (₹)</th>
+                <th style="text-align:right;">ESI (₹)</th>
+                <th style="text-align:right;">PT (₹)</th>
+                <th style="text-align:right;">TDS (₹)</th>
+                <th style="text-align:right;">Other Ded. (₹)</th>
+                <th style="text-align:right;">Net Pay (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="scTableBody"></tbody>
+          </table>
+          </div>
+          <div id="scEmptyState" class="empty-state hidden">
+            <div class="empty-state__icon">🧮</div>
+            No employees yet — add employees first, then come back here to calculate salary.
+          </div>
+        </div>
+
+        <div class="panel" id="scFooterPanel" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+          <div class="disb-total-wrap">
+            <div style="font-size:22px; font-weight:700; color:var(--success);" id="scNetTotal">Total Net Pay: ₹ 0.00</div>
+            <div style="font-size:12px; color:var(--text2);" id="scDeductionTotal">Total Deductions: ₹ 0.00</div>
+          </div>
+          <div class="disb-footer-actions" style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn-inline secondary" id="scSaveDraftBtn">Save Draft</button>
+            <button class="btn-inline" id="scPushBtn">Calculate &amp; Send to Generate Transaction File →</button>
+          </div>
+        </div>
+      </section>
+
       <section id="page-disbursement" class="hidden">
         <div class="page-head">
           <div>
-            <h2>Payroll Run</h2>
-            <p id="disbSubtitle">Enter amounts and export the bulk payment file.</p>
+            <h2>Generate Transaction File</h2>
+            <p id="disbSubtitle">Amounts calculated in Salary Calculation are pre-filled below — review and export the bulk payment file.</p>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <a href="bank-file-guide.html" target="_blank" rel="noopener" class="security-badge" style="text-decoration:none; cursor:pointer;">📖 How to Export</a>
@@ -729,6 +864,7 @@
                 <option value="DELETE EMPLOYEE">Delete Employee</option>
                 <option value="BULK DELETE EMPLOYEES">Bulk Delete Employees</option>
                 <option value="BULK IMPORT">Bulk Import</option>
+                <option value="CALCULATE SALARY">Calculate Salary</option>
                 <option value="EXPORT FILE">Export File</option>
                 <option value="GENERATE BENEFICIARY FILE">Generate Beneficiary File</option>
                 <option value="UPDATE COMPANY">Update Company</option>
@@ -806,7 +942,7 @@
               <button type="button" class="bank-select-btn" data-bank="ICICI">ICICI</button>
               <button type="button" class="bank-select-btn" data-bank="PNB">PNB</button>
             </div>
-            <div class="field-hint">Select this first — it determines the bulk payment file format in Payroll Run, and which IFSC prefix is expected below.</div>
+            <div class="field-hint">Select this first — it determines the bulk payment file format in Generate Transaction File, and which IFSC prefix is expected below.</div>
           </div>
           <div class="field">
             <label>Company Name</label>
@@ -1512,8 +1648,12 @@
             numbers, and IFSC codes — either one by one or via bulk CSV import, with
             validation that catches duplicate or malformed account details before they're
             saved.</li>
-          <li>Run a <strong>Payroll Run</strong> for any month: pick employees, confirm
-            amounts, and disburse — every run is recorded with a batch ID so it can be
+          <li>Use <strong>Salary Calculation</strong> to enter each employee's Basic, HRA
+            and allowances for the month and get PF, ESI, Professional Tax, TDS and Net
+            Pay worked out automatically — the calculated Net Pay figures feed straight
+            into Generate Transaction File.</li>
+          <li>Use <strong>Generate Transaction File</strong> for any month: pick employees, confirm
+            amounts (pre-filled from Salary Calculation), and disburse — every run is recorded with a batch ID so it can be
             traced later.</li>
           <li>Generate <strong>bank-ready export files</strong> formatted for direct bulk
             upload to your bank's salary/NEFT portal, instead of manually entering each

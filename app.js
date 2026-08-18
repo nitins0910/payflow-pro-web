@@ -955,6 +955,20 @@ const Api = {
     }
     if (count > 0) await batch.commit();
   },
+  // Persists each employee's Salary Calculation inputs (Basic, HRA,
+  // allowances, LOP, PT/TDS/other deductions) so the page can be
+  // re-opened later with everything still filled in, exactly like
+  // updateEmployeeLastAmounts() above does for the Amount column.
+  async saveSalaryStructures(items) {
+    let batch = db.batch();
+    let count = 0;
+    for (const { id, salaryStructure } of items) {
+      batch.set(userRef().collection('employees').doc(id), { salaryStructure }, { merge: true });
+      count++;
+      if (count === 450) { await batch.commit(); batch = db.batch(); count = 0; }
+    }
+    if (count > 0) await batch.commit();
+  },
   async logAudit(userEmail, userName, action, details) {
     await userRef().collection('auditTrail').add({
       timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1168,7 +1182,7 @@ function determineTransactionMode(bankKey, ifsc, amount, preferImps) {
 }
 
 // "Same Bank" / "NEFT" / "RTGS" / "IMPS" are UI-only labels (used for
-// the mode badge on the Payroll Run screen). Each bank's real bulk
+// the mode badge on the Generate Transaction File screen). Each bank's real bulk
 // file has its OWN literal code for the same concept — e.g. PNB wants
 // "PMT" for an intra-bank transfer while HDFC wants "I" for the exact
 // same thing — so a single shared code was never going to be correct
@@ -2032,6 +2046,7 @@ safeInit('wirePasswordStrengthMeter', wirePasswordStrengthMeter);
 let employees = [];
 let editingEmployeeId = null;
 let salaryInputs = {};
+let salaryCalcInputs = {}; // Salary Calculation tab — rowData keyed by employee id
 let companyProfile = { name: '', accountNumber: '', ifsc: '', sysId: '', bankName: 'SBI', hdfcClientCode: '', iciciCorporateId: '' };
 let dashboardBooted = false;
 let currentUser = null;
@@ -2127,6 +2142,7 @@ async function bootDashboard(user) {
     safeInit('wireEmployeeForm', wireEmployeeForm);
     safeInit('wireEmployeeTableControls', wireEmployeeTableControls);
     safeInit('wireBulkImport', wireBulkImport);
+    safeInit('wireSalaryCalc', wireSalaryCalc);
     safeInit('wireDisbursement', wireDisbursement);
     safeInit('wireAudit', wireAudit);
     safeInit('wireExportHistory', wireExportHistory);
@@ -2197,9 +2213,14 @@ const TOUR_STEPS = [
     body: 'Need to add the whole list in one go? Download the sample CSV, fill it in, and bulk import it here. You\'ll see a preview before importing, with any invalid rows highlighted.'
   },
   {
+    target: '.topbar__tabs .nav-item[data-page="salarycalc"]',
+    title: 'Salary Calculation',
+    body: 'Enter each employee\'s Basic, HRA and allowances — PF, ESI, Professional Tax and Net Pay are calculated automatically and sent straight to Generate Transaction File.'
+  },
+  {
     target: '.topbar__tabs .nav-item[data-page="disbursement"]',
-    title: 'Payroll Run',
-    body: 'Enter this month\'s amount next to each employee, choose the transfer type, and export a bank-ready file.'
+    title: 'Generate Transaction File',
+    body: 'Amounts calculated in Salary Calculation are pre-filled here — review them, choose the transfer type, and export a bank-ready file.'
   },
   {
     target: '.topbar__tabs .nav-item[data-page="exports"]',
@@ -2515,6 +2536,7 @@ function showAppPage(page) {
   if (section) section.classList.remove('hidden');
   if (page === 'audit') loadAuditTrail();
   if (page === 'exports') loadExportHistory();
+  if (page === 'salarycalc') renderSalaryCalcTable();
   if (page === 'wallet') renderWalletPage();
   if (page === 'payments') renderPaymentHistory();
 }
@@ -3639,7 +3661,7 @@ function getTransferDateDDMMYYYY() {
   return `${d}/${m}/${y}`;
 }
 
-// Validates a Payroll Run amount field using the same clean
+// Validates a Generate Transaction File amount field using the same clean
 // validation-style UI as the Account Number / IFSC confirmation
 // fields elsewhere in the app (input-match / input-mismatch classes)
 // instead of a separate red/green status dot.
@@ -3801,6 +3823,326 @@ function updateBatchTotal() {
     if (!isNaN(v)) total += v;
   });
   document.getElementById('disbTotal').textContent = `Batch Total: ₹ ${total.toFixed(2)}`;
+}
+
+// ---------------------------------------------------------
+// SALARY CALCULATION — computes each employee's Net Pay from their
+// salary structure (Basic/HRA/allowances) and standard Indian payroll
+// deductions (PF, ESI, Professional Tax, TDS, other), then can push
+// the results straight into Generate Transaction File by writing them
+// to emp.lastAmount via Api.updateEmployeeLastAmounts — the exact
+// field renderDisbursementList() already pre-fills its Amount column
+// from, so nothing else needs to change on that page for the autofeed
+// to work.
+// ---------------------------------------------------------
+
+// Indicative monthly Professional Tax slabs by state. These change by
+// state notification from time to time — shown as an editable default,
+// never a locked value; see field-hint on the Salary Calculation page.
+const PT_SLABS = {
+  NA: [{ max: Infinity, amt: 0 }],
+  KA: [{ max: 24999, amt: 0 }, { max: Infinity, amt: 200 }],
+  MH: [{ max: 7500, amt: 0 }, { max: 10000, amt: 175 }, { max: Infinity, amt: 200 }],
+  WB: [{ max: 10000, amt: 0 }, { max: 15000, amt: 110 }, { max: 25000, amt: 130 }, { max: 40000, amt: 150 }, { max: Infinity, amt: 200 }],
+  TS: [{ max: 15000, amt: 0 }, { max: 20000, amt: 150 }, { max: Infinity, amt: 200 }],
+  TN: [{ max: 21000, amt: 0 }, { max: 30000, amt: 100 }, { max: 45000, amt: 235 }, { max: 60000, amt: 510 }, { max: 75000, amt: 760 }, { max: Infinity, amt: 1095 }],
+  GJ: [{ max: 12000, amt: 0 }, { max: Infinity, amt: 200 }],
+  MP: [{ max: 18750, amt: 0 }, { max: 25000, amt: 125 }, { max: 33333, amt: 167 }, { max: Infinity, amt: 208 }],
+  OD: [{ max: 13304, amt: 0 }, { max: 25000, amt: 125 }, { max: Infinity, amt: 200 }]
+};
+function calcProfessionalTax(stateCode, gross) {
+  const slabs = PT_SLABS[stateCode] || PT_SLABS.NA;
+  const g = Number(gross) || 0;
+  for (const slab of slabs) { if (g <= slab.max) return slab.amt; }
+  return 0;
+}
+const PF_WAGE_CEILING_DEFAULT = 15000;
+const ESI_GROSS_LIMIT_DEFAULT = 21000;
+const ESI_EMPLOYEE_RATE_DEFAULT = 0.75; // %
+const PF_EMPLOYEE_RATE_DEFAULT = 12; // %
+const PAYROLL_DAYS_IN_MONTH_DEFAULT = 30; // used for the "Fixed 30-Day Month" method
+
+function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+// Actual calendar-day count for the selected Payroll Month (input type
+// month, "YYYY-MM"). Falls back to the current month, then to 30, if
+// nothing's selected yet — used only when the "Actual Calendar Days"
+// method is chosen.
+function daysInSelectedPayrollMonth() {
+  const val = document.getElementById('scPayrollMonth')?.value;
+  const [y, m] = (val || '').split('-').map(Number);
+  if (y && m) return new Date(y, m, 0).getDate();
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+}
+
+// Computes the full breakup for one row from its raw (unprorated)
+// inputs. Returns everything the row needs to redraw itself.
+function computeSalaryRow(raw, opts) {
+  const daysInMonth = opts.daysInMonth || PAYROLL_DAYS_IN_MONTH_DEFAULT;
+  const lop = Math.min(Math.max(Number(raw.lop) || 0, 0), daysInMonth);
+  const factor = (daysInMonth - lop) / daysInMonth;
+  const basic = round2((Number(raw.basic) || 0) * factor);
+  const hra = round2((Number(raw.hra) || 0) * factor);
+  const special = round2((Number(raw.special) || 0) * factor);
+  const other = round2((Number(raw.other) || 0) * factor);
+  const gross = round2(basic + hra + special + other);
+
+  const pfRate = (Number(opts.pfRate) || 0) / 100;
+  const pfCeilingAmt = Number(opts.pfCeilingAmt) || 0;
+  const pfWage = opts.pfCeiling ? Math.min(basic, pfCeilingAmt) : basic;
+  const pf = round2(pfWage * pfRate);
+
+  const esiRate = (Number(opts.esiRate) || 0) / 100;
+  const esiLimit = Number(opts.esiLimit) || 0;
+  const esi = (opts.esiApplicable && gross <= esiLimit) ? round2(gross * esiRate) : 0;
+
+  const pt = round2(Number(raw.pt) || 0);
+  const tds = round2(Number(raw.tds) || 0);
+  const otherDed = round2(Number(raw.otherDed) || 0);
+
+  const totalDeductions = round2(pf + esi + pt + tds + otherDed);
+  const netPay = Math.max(0, round2(gross - totalDeductions));
+
+  return { basic, hra, special, other, gross, pf, esi, pt, tds, otherDed, totalDeductions, netPay, lop };
+}
+
+function scGlobalOpts() {
+  const daysMethod = document.getElementById('scDaysMethod')?.value || 'fixed30';
+  return {
+    pfCeiling: !!document.getElementById('scPfCeiling')?.checked,
+    pfCeilingAmt: parseFloat(document.getElementById('scPfCeilingAmt')?.value) || PF_WAGE_CEILING_DEFAULT,
+    pfRate: parseFloat(document.getElementById('scPfRate')?.value) || PF_EMPLOYEE_RATE_DEFAULT,
+    esiApplicable: !!document.getElementById('scEsiApplicable')?.checked,
+    esiLimit: parseFloat(document.getElementById('scEsiLimit')?.value) || ESI_GROSS_LIMIT_DEFAULT,
+    esiRate: parseFloat(document.getElementById('scEsiRate')?.value) || ESI_EMPLOYEE_RATE_DEFAULT,
+    ptState: document.getElementById('scPtState')?.value || 'NA',
+    daysMethod,
+    daysInMonth: daysMethod === 'actual' ? daysInSelectedPayrollMonth() : PAYROLL_DAYS_IN_MONTH_DEFAULT
+  };
+}
+
+function renderSalaryCalcTable() {
+  const tbody = document.getElementById('scTableBody');
+  const emptyState = document.getElementById('scEmptyState');
+  if (!tbody) return;
+  const query = (document.getElementById('scSearch').value || '').trim().toLowerCase();
+  const opts = scGlobalOpts();
+
+  salaryCalcInputs = {};
+  tbody.innerHTML = '';
+
+  const filtered = employees.filter(e =>
+    !query || e.name.toLowerCase().includes(query) || String(e.empCode).includes(query));
+
+  if (!filtered.length) { emptyState.classList.remove('hidden'); updateSalaryCalcTotals(); return; }
+  emptyState.classList.add('hidden');
+
+  filtered.forEach(emp => {
+    const saved = emp.salaryStructure || {};
+    const raw = {
+      basic: saved.basic ?? '', hra: saved.hra ?? '', special: saved.special ?? '',
+      other: saved.other ?? '', lop: saved.lop ?? 0,
+      pt: saved.pt ?? calcProfessionalTax(opts.ptState, computeSalaryRow({ ...saved }, opts).gross),
+      tds: saved.tds ?? 0, otherDed: saved.otherDed ?? 0
+    };
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td data-label="Emp Code">${escapeHtml(emp.empCode)}</td>
+      <td data-label="Employee"><span class="cell-truncate" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span></td>
+      <td data-label="Basic (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="basic" placeholder="0.00" value="${raw.basic}" style="width:100px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="HRA (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="hra" placeholder="0.00" value="${raw.hra}" style="width:100px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="Special Allow. (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="special" placeholder="0.00" value="${raw.special}" style="width:100px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="Other Allow. (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="other" placeholder="0.00" value="${raw.other}" style="width:100px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="LOP Days" style="text-align:right;"><input type="text" inputmode="numeric" data-f="lop" placeholder="0" value="${raw.lop}" style="width:60px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="Gross (₹)" style="text-align:right;"><span data-out="gross">0.00</span></td>
+      <td data-label="PF (₹)" style="text-align:right;"><span data-out="pf">0.00</span></td>
+      <td data-label="ESI (₹)" style="text-align:right;"><span data-out="esi">0.00</span></td>
+      <td data-label="PT (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="pt" placeholder="0.00" value="${raw.pt}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="TDS (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="tds" placeholder="0.00" value="${raw.tds}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="Other Ded. (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="otherDed" placeholder="0.00" value="${raw.otherDed}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="Net Pay (₹)" style="text-align:right; font-weight:700; color:var(--success);"><span data-out="netPay">0.00</span></td>`;
+    tbody.appendChild(tr);
+
+    const fields = {};
+    tr.querySelectorAll('input[data-f]').forEach(inp => { fields[inp.dataset.f] = inp; });
+    const outs = {};
+    tr.querySelectorAll('[data-out]').forEach(sp => { outs[sp.dataset.out] = sp; });
+
+    function recalcRow() {
+      const rowRaw = {
+        basic: fields.basic.value, hra: fields.hra.value, special: fields.special.value,
+        other: fields.other.value, lop: fields.lop.value,
+        pt: fields.pt.value, tds: fields.tds.value, otherDed: fields.otherDed.value
+      };
+      const result = computeSalaryRow(rowRaw, scGlobalOpts());
+      outs.gross.textContent = result.gross.toFixed(2);
+      outs.pf.textContent = result.pf.toFixed(2);
+      outs.esi.textContent = result.esi.toFixed(2);
+      outs.netPay.textContent = result.netPay.toFixed(2);
+      salaryCalcInputs[emp.id] = { emp, fields, result, recalc: recalcRow };
+      updateSalaryCalcTotals();
+      return result;
+    }
+    Object.values(fields).forEach(inp => inp.addEventListener('input', recalcRow));
+    recalcRow();
+  });
+}
+
+// Re-runs every visible row's calculation using its CURRENT (possibly
+// unsaved) field values plus the latest global settings — used when a
+// rate/ceiling/days-method control changes, so mid-entry Basic/HRA
+// figures a clerk is still typing are never wiped out by a settings
+// tweak (unlike a full renderSalaryCalcTable(), which reloads from
+// last-saved data).
+function recalcAllSalaryCalcRows() {
+  Object.values(salaryCalcInputs).forEach(row => row.recalc());
+}
+
+// Overwrites just the PT field in every row with the default for the
+// selected state, computed from each row's current Gross — an
+// explicit, opt-in action (button), not something that happens as a
+// side effect of other setting changes.
+function reapplyPtDefaultsToAllRows() {
+  const state = document.getElementById('scPtState')?.value || 'NA';
+  Object.values(salaryCalcInputs).forEach(row => {
+    const result = row.recalc();
+    row.fields.pt.value = calcProfessionalTax(state, result.gross);
+    row.recalc();
+  });
+}
+
+function updateSalaryCalcTotals() {
+  let netTotal = 0, dedTotal = 0;
+  Object.values(salaryCalcInputs).forEach(row => {
+    netTotal += row.result.netPay;
+    dedTotal += row.result.totalDeductions;
+  });
+  const netEl = document.getElementById('scNetTotal');
+  const dedEl = document.getElementById('scDeductionTotal');
+  if (netEl) netEl.textContent = `Total Net Pay: ₹ ${netTotal.toFixed(2)}`;
+  if (dedEl) dedEl.textContent = `Total Deductions: ₹ ${dedTotal.toFixed(2)}`;
+}
+
+// Collects every row's raw inputs, validating that Basic and HRA — the
+// two components every real salary structure has — were actually
+// filled in for every single employee before anything is saved or
+// pushed. Returns { ok, rows, firstInvalidEmpName }.
+function collectSalaryCalcRows() {
+  const rows = [];
+  let firstInvalidEmpName = null;
+  for (const { emp, fields } of Object.values(salaryCalcInputs)) {
+    const basicRaw = fields.basic.value.trim();
+    const hraRaw = fields.hra.value.trim();
+    if (!basicRaw || isNaN(parseFloat(basicRaw)) || parseFloat(basicRaw) <= 0 ||
+        hraRaw === '' || isNaN(parseFloat(hraRaw))) {
+      if (!firstInvalidEmpName) firstInvalidEmpName = emp.name;
+      continue;
+    }
+    const rawStructure = {
+      basic: parseFloat(basicRaw), hra: parseFloat(hraRaw) || 0,
+      special: parseFloat(fields.special.value) || 0, other: parseFloat(fields.other.value) || 0,
+      lop: parseFloat(fields.lop.value) || 0, pt: parseFloat(fields.pt.value) || 0,
+      tds: parseFloat(fields.tds.value) || 0, otherDed: parseFloat(fields.otherDed.value) || 0
+    };
+    const result = computeSalaryRow(rawStructure, scGlobalOpts());
+    rows.push({ emp, rawStructure, result });
+  }
+  return { ok: !firstInvalidEmpName && rows.length === Object.keys(salaryCalcInputs).length, rows, firstInvalidEmpName };
+}
+
+async function saveSalaryStructuresOnly(rows) {
+  const items = rows.map(r => ({ id: r.emp.id, salaryStructure: r.rawStructure }));
+  await Api.saveSalaryStructures(items);
+  items.forEach(({ id, salaryStructure }) => {
+    const e = employees.find(e => e.id === id);
+    if (e) e.salaryStructure = salaryStructure;
+  });
+}
+
+function wireSalaryCalc() {
+  document.getElementById('scSearch').addEventListener('input', () => renderSalaryCalcTable());
+  document.getElementById('scPfCeiling').addEventListener('change', recalcAllSalaryCalcRows);
+  document.getElementById('scPfCeilingAmt').addEventListener('input', recalcAllSalaryCalcRows);
+  document.getElementById('scPfRate').addEventListener('input', recalcAllSalaryCalcRows);
+  document.getElementById('scEsiApplicable').addEventListener('change', recalcAllSalaryCalcRows);
+  document.getElementById('scEsiLimit').addEventListener('input', recalcAllSalaryCalcRows);
+  document.getElementById('scEsiRate').addEventListener('input', recalcAllSalaryCalcRows);
+  document.getElementById('scDaysMethod').addEventListener('change', recalcAllSalaryCalcRows);
+  document.getElementById('scPayrollMonth').addEventListener('change', recalcAllSalaryCalcRows);
+  document.getElementById('scRecalcAllBtn').addEventListener('click', () => {
+    recalcAllSalaryCalcRows();
+    toast('All rows recalculated with the current rates and settings.', 'success');
+  });
+  document.getElementById('scRecalcPtBtn').addEventListener('click', () => {
+    reapplyPtDefaultsToAllRows();
+    toast('Professional Tax re-applied to all rows for the selected state.', 'success');
+  });
+
+  document.getElementById('scSaveDraftBtn').addEventListener('click', async () => {
+    const rows = Object.values(salaryCalcInputs).map(({ emp, fields }) => ({
+      emp,
+      rawStructure: {
+        basic: parseFloat(fields.basic.value) || 0, hra: parseFloat(fields.hra.value) || 0,
+        special: parseFloat(fields.special.value) || 0, other: parseFloat(fields.other.value) || 0,
+        lop: parseFloat(fields.lop.value) || 0, pt: parseFloat(fields.pt.value) || 0,
+        tds: parseFloat(fields.tds.value) || 0, otherDed: parseFloat(fields.otherDed.value) || 0
+      }
+    }));
+    if (!rows.length) { toast('Nothing to save yet.', 'error'); return; }
+    const btn = document.getElementById('scSaveDraftBtn');
+    btn.disabled = true;
+    try {
+      await saveSalaryStructuresOnly(rows);
+      toast('Draft saved for ' + rows.length + ' employee(s).', 'success');
+    } catch (err) {
+      toast('Could not save draft: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('scPushBtn').addEventListener('click', async () => {
+    const { ok, rows, firstInvalidEmpName } = collectSalaryCalcRows();
+    if (!ok) {
+      toast(
+        firstInvalidEmpName
+          ? `Please fill in Basic and HRA for every employee — starting with "${firstInvalidEmpName}".`
+          : 'Please fill in Basic and HRA for every employee before calculating.',
+        'error'
+      );
+      return;
+    }
+    if (!rows.length) { toast('No employees to calculate salary for.', 'error'); return; }
+
+    const btn = document.getElementById('scPushBtn');
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Calculating…';
+    try {
+      await saveSalaryStructuresOnly(rows);
+      const items = rows.map(r => ({ accountNumber: r.emp.accountNumber, amount: r.result.netPay }));
+      await Api.updateEmployeeLastAmounts(items);
+      items.forEach(({ accountNumber, amount }) => {
+        const e = employees.find(e => String(e.accountNumber) === String(accountNumber));
+        if (e) e.lastAmount = amount;
+      });
+      const totalNet = rows.reduce((s, r) => s + r.result.netPay, 0);
+      await Api.logAudit(currentUser.email, currentUser.displayName, 'CALCULATE SALARY',
+        `${rows.length} employee(s) — Total Net Pay ₹${totalNet.toFixed(2)}`);
+      toast(`Salary calculated for ${rows.length} employee(s) — sent to Generate Transaction File.`, 'success');
+      showAppPage('disbursement');
+      renderDisbursementList(); // pick up the freshly-pushed amounts immediately
+    } catch (err) {
+      toast('Could not send to Generate Transaction File: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  });
+
+  renderSalaryCalcTable();
 }
 
 function wireDisbursement() {
@@ -5134,7 +5476,7 @@ window.addEventListener('focus', checkInactivity);
 // ---------------------------------------------------------
 // 12. "/" KEYBOARD SHORTCUT — jump to the current page's search box
 // Works on any dashboard page that has one (Employees, Audit Trail,
-// Payroll Run, Exports). Ignored while already typing in a field, so
+// Salary Calculation, Generate Transaction File, Exports). Ignored while already typing in a field, so
 // it never steals a literal "/" from user input.
 // ---------------------------------------------------------
 const PAGE_SEARCH_INPUT_ID = {

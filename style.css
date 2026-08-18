@@ -1527,14 +1527,14 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:72px;
+  gap:56px;
   max-width:1180px;
   margin:0 auto;
   padding:48px 56px;
 }
 .auth-marketing{
-  flex:1 1 480px;
-  max-width:520px;
+  flex:1.15 1 480px;
+  max-width:560px;
 }
 .auth-marketing .brand{ margin-bottom:2px; }
 .auth-marketing .brand .mark{ width:36px; height:36px; font-size:15px; }
@@ -1555,21 +1555,21 @@ th.sortable.sort-active .sort-arrow{ opacity:1; color:var(--blue-bright); }
 }
 .auth-marketing__headline{
   font-family:var(--font-display);
-  font-size:32px;
-  line-height:1.22;
+  font-size:30px;
+  line-height:1.24;
   font-weight:700;
   letter-spacing:-0.5px;
   color:var(--text);
-  margin-bottom:16px;
+  margin-bottom:14px;
 }
 .auth-marketing__sub{
-  font-size:14.5px;
-  line-height:1.7;
+  font-size:14px;
+  line-height:1.65;
   color:var(--text2);
-  margin-bottom:28px;
-  max-width:460px;
+  margin-bottom:24px;
+  max-width:480px;
 }
-.auth-marketing__banks{ margin-bottom:26px; }
+.auth-marketing__banks{ margin-bottom:22px; }
 .auth-marketing__banks-label{
   display:block;
   font-family:var(--font-body, 'Inter', sans-serif);
@@ -1620,7 +1620,7 @@ html[data-theme="light"] .bank-chip:hover{
   align-items:flex-start;
   gap:10px;
   padding:14px 16px;
-  margin-bottom:26px;
+  margin-bottom:22px;
   background:var(--surface);
   border:1px solid var(--border-soft);
   border-radius:var(--radius-md);
@@ -1641,7 +1641,7 @@ html[data-theme="light"] .bank-chip:hover{
   list-style:none;
   display:flex;
   flex-direction:column;
-  gap:14px;
+  gap:12px;
 }
 .auth-marketing__features li{
   display:flex;
@@ -1663,13 +1663,17 @@ html[data-theme="light"] .bank-chip:hover{
 }
 
 .auth-right{
-  flex:0 1 420px;
+  flex:0 1 380px;
   display:flex;
   flex-direction:column;
   align-items:center;
   gap:18px;
   position:relative;
 }
+/* Scoped to the login page only — narrower and slightly more compact
+   than the shared .auth-card default (used by verify-pending/forgot-
+   password screens too), so the card doesn't look oversized next to
+   the marketing panel's extra content. */
 .auth-right::before{
   content:"";
   position:absolute;
@@ -1732,6 +1736,17 @@ html[data-theme="light"] .bank-chip:hover{
   .auth-page{ padding:24px; gap:0; }
   .auth-card__mobile-brand{ display:flex; }
   p.tagline.auth-card__mobile-brand{ display:block; }
+}
+
+/* Login card is narrowed/tightened ONLY on the two-column desktop
+   layout (marketing panel visible above 980px) — the marketing
+   panel now carries more content (Salary Calculation added), so the
+   card is scaled down a bit to stay visually balanced next to it.
+   Scoped to min-width so it never fights the small-screen
+   max-width:100% / compact-padding rules further below. */
+@media (min-width: 981px){
+  .auth-right .auth-card{ max-width:380px; }
+  .auth-right .auth-card__body{ padding:36px 32px 32px; }
 }
 
 /* ------------------------------------------------------------

@@ -556,6 +556,19 @@
           </div>
         </div>
 
+        <!-- Shown only when the company's current payout bank is
+             PNB/ICICI/HDFC and one or more employees are missing that
+             bank's beneficiary-upload fields — e.g. right after
+             switching payout bank in Company Details, since employees
+             added under a different bank never had those fields asked
+             of them. Purely informational: nothing is auto-written to
+             any employee record from here — see
+             updateBeneficiaryDetailsBanner() in app.js. Each affected
+             row also gets its own ⚠ marker in the table below. -->
+        <div id="beneficiaryDetailsBanner" class="hidden" style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.4); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:14px; font-size:12.5px; color:var(--text2);">
+          ⚠ <span id="beneficiaryDetailsBannerText"></span>
+        </div>
+
         <div class="panel">
           <input type="text" id="employeeSearch" placeholder="Search by name or account no..."
             style="width:280px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border);
@@ -1168,6 +1181,61 @@
           </div>
         </div>
 
+        <!-- Beneficiary Nickname — shown whenever the company's payout
+             bank is PNB, ICICI, or HDFC, since all three need a
+             nickname in their own bulk beneficiary-upload format that
+             SBI doesn't ask for at all. Required whenever visible.
+             See refreshBankSpecificFieldsVisibility() in app.js. -->
+        <div id="empBeneNicknameSection" class="hidden">
+          <div class="field">
+            <label>Beneficiary Nickname</label>
+            <input type="text" id="empBeneNickname" maxlength="32" placeholder="e.g. RaviK01">
+          </div>
+        </div>
+
+        <!-- PNB-only beneficiary details — PNB's format additionally
+             needs an address and a per-beneficiary daily amount/
+             transaction cap that no other supported bank asks for.
+             Required whenever visible. Max Amount/Transactions per day
+             are PNB's own per-beneficiary daily fraud-safety cap —
+             editable anytime from PNB's Corp Admin panel later, not a
+             payroll limit. -->
+        <div id="empPnbFieldsSection" class="hidden">
+          <p class="field-hint" style="margin:4px 0 10px;">PNB Beneficiary Details (used when generating the PNB beneficiary upload file)</p>
+          <div class="field-row-2">
+            <div class="field">
+              <label>Address</label>
+              <input type="text" id="empPnbAddress" placeholder="City / branch area">
+            </div>
+            <div class="field">
+              <label>Max Amount / Day (₹)</label>
+              <input type="text" id="empPnbMaxAmount" inputmode="numeric">
+            </div>
+          </div>
+          <div class="field-row-2">
+            <div class="field">
+              <label>Max Transactions / Day</label>
+              <input type="text" id="empPnbMaxTxns" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+
+        <!-- HDFC-only beneficiary detail — HDFC's format additionally
+             needs the account type; the "Beneficiary Bank Name"
+             column HDFC also asks for is derived automatically from
+             the employee's own IFSC, so it never needs a form field. -->
+        <div id="empHdfcFieldsSection" class="hidden">
+          <div class="field">
+            <label>Beneficiary Account Type</label>
+            <select id="empHdfcAccountType" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+              <option value="Savings">Savings</option>
+              <option value="Current">Current</option>
+              <option value="CC">CC (Cash Credit)</option>
+              <option value="OD">OD (Overdraft)</option>
+            </select>
+          </div>
+        </div>
+
         <div class="modal-actions">
           <button type="button" class="btn-inline secondary" id="cancelModalBtn">Cancel</button>
           <button type="submit" class="btn-inline" id="saveEmployeeBtn" style="flex:1;">Save</button>
@@ -1201,14 +1269,14 @@
 
       <div id="beneficiaryBankNotSupportedNote" class="empty-state hidden" style="padding:20px;">
         <div class="empty-state__icon">🏦</div>
-        This tool currently supports SBI and PNB accounts only. Your company's payout bank is set to something
-        else — change it under Settings → Company Details to generate this file.
+        Your company's payout bank doesn't match a supported format — change it under Settings → Company
+        Details to generate this file.
       </div>
 
       <!-- SBI body: separate Intra (Same-Bank) / Inter (Other-Bank)
            files, since SBI's Net Banking treats them as two distinct
            uploads. -->
-      <div id="beneficiarySbiBody">
+      <div id="beneficiarySbiBody" class="hidden">
         <div class="company-summary-row">
           <span class="company-summary-row__label">Same-Bank employees (Intra)</span>
           <span class="company-summary-row__value" id="intraBeneficiaryCount">0</span>
@@ -1238,10 +1306,9 @@
           <span class="company-summary-row__value" id="pnbBeneficiaryCount">0</span>
         </div>
         <p style="font-size:11.5px; color:var(--text3); margin:12px 0 0;">
-          PNB's format also needs a per-beneficiary daily amount cap and a nickname — fields PayFlow Pro doesn't
-          collect from you, so it fills them in automatically: a nickname from each employee's name, and a daily
-          cap set generously above their last paid amount (editable anytime from PNB's Corp Admin panel). The
-          Address column is left blank — PNB may prompt you to fill that in manually on upload.
+          Uses each employee's own Nickname/Address/Daily Cap when you've filled them in (Employees → Edit).
+          For anyone missing those, a nickname is derived from their name and a daily cap set generously above
+          their last paid amount — both editable anytime from PNB's Corp Admin panel.
         </p>
         <p style="font-size:11.5px; color:var(--text3); margin:8px 0 0;">
           Downloads a <code>.txt</code> file, ready to upload: Bulk FileUploads → Upload a File → "Create Bulk
@@ -1250,6 +1317,48 @@
         </p>
         <div class="modal-actions" style="margin-top:16px;">
           <button type="button" class="btn-inline secondary" id="downloadPnbBeneficiaryBtn" style="flex:1;">⬇ Beneficiary File</button>
+        </div>
+      </div>
+
+      <!-- ICICI body: a single combined CSV matching ICICI's own
+           "BENE Upload" template column-for-column. -->
+      <div id="beneficiaryIciciBody" class="hidden">
+        <div class="company-summary-row">
+          <span class="company-summary-row__label">Employees in this file</span>
+          <span class="company-summary-row__value" id="iciciBeneficiaryCount">0</span>
+        </div>
+        <p style="font-size:11.5px; color:var(--text3); margin:12px 0 0;">
+          Uses each employee's own Nickname when you've filled it in (Employees → Edit). For anyone missing it,
+          a nickname is derived from their name instead.
+        </p>
+        <p style="font-size:11.5px; color:var(--text3); margin:8px 0 0;">
+          Downloads a <code>.csv</code> file matching ICICI's own "BENE Upload" template — ready to upload as-is,
+          or paste into that template if your portal insists on the exact file.
+        </p>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button type="button" class="btn-inline secondary" id="downloadIciciBeneficiaryBtn" style="flex:1;">⬇ Beneficiary File</button>
+        </div>
+      </div>
+
+      <!-- HDFC body: a single combined CSV matching HDFC's own "Bulk
+           Beneficiary" template column-for-column. Beneficiary Bank
+           Name is derived automatically from each employee's IFSC. -->
+      <div id="beneficiaryHdfcBody" class="hidden">
+        <div class="company-summary-row">
+          <span class="company-summary-row__label">Employees in this file</span>
+          <span class="company-summary-row__value" id="hdfcBeneficiaryCount">0</span>
+        </div>
+        <p style="font-size:11.5px; color:var(--text3); margin:12px 0 0;">
+          Uses each employee's own Nickname/Account Type when you've filled them in (Employees → Edit) —
+          otherwise a nickname is derived from their name and Account Type defaults to Savings. Beneficiary Bank
+          Name is worked out automatically from each employee's IFSC.
+        </p>
+        <p style="font-size:11.5px; color:var(--text3); margin:8px 0 0;">
+          Downloads a <code>.csv</code> file matching HDFC's own "Bulk Beneficiary" template — ready to upload
+          as-is, or paste into that template if your portal insists on the exact file.
+        </p>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button type="button" class="btn-inline secondary" id="downloadHdfcBeneficiaryBtn" style="flex:1;">⬇ Beneficiary File</button>
         </div>
       </div>
     </div>

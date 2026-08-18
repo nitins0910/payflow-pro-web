@@ -1108,6 +1108,27 @@ const BANKS = [
 ];
 const BANK_BY_KEY = Object.fromEntries(BANKS.map(b => [b.key, b]));
 
+// Maps an IFSC's 4-letter bank code to a display bank name — used to
+// auto-fill HDFC's "Beneficiary Bank Name" column without ever asking
+// the user to type it in. Covers the major Indian banks; anything
+// outside this list falls back to the raw IFSC prefix (still useful,
+// just not the full bank name) rather than blocking the file.
+const IFSC_PREFIX_TO_BANK_NAME = {
+  SBIN: 'State Bank of India', HDFC: 'HDFC Bank', ICIC: 'ICICI Bank', PUNB: 'Punjab National Bank',
+  UTIB: 'Axis Bank', KKBK: 'Kotak Mahindra Bank', CNRB: 'Canara Bank', BARB: 'Bank of Baroda',
+  UBIN: 'Union Bank of India', IOBA: 'Indian Overseas Bank', IDIB: 'Indian Bank', CBIN: 'Central Bank of India',
+  MAHB: 'Bank of Maharashtra', UCBA: 'UCO Bank', PSIB: 'Punjab & Sind Bank', IDFB: 'IDFC First Bank',
+  YESB: 'Yes Bank', INDB: 'IndusInd Bank', RATN: 'RBL Bank', FDRL: 'Federal Bank', SIBL: 'South Indian Bank',
+  KVBL: 'Karur Vysya Bank', TMBL: 'Tamilnad Mercantile Bank', DCBL: 'DCB Bank', AUBL: 'AU Small Finance Bank',
+  BKID: 'Bank of India', KARB: 'Karnataka Bank', CIUB: 'City Union Bank', DBSS: 'DBS Bank India',
+  HSBC: 'HSBC Bank', CITI: 'Citibank'
+};
+function bankNameFromIfsc(ifsc) {
+  const prefix = String(ifsc || '').trim().toUpperCase().slice(0, 4);
+  return IFSC_PREFIX_TO_BANK_NAME[prefix] || prefix || '';
+}
+
+
 // Wraps a CSV field in quotes if it contains a comma, quote, or newline.
 function csvField(value) {
   const s = String(value ?? '').replace(/[\r\n]+/g, ' ');
@@ -2734,6 +2755,36 @@ function updateEmployeeBulkBar() {
   document.getElementById('employeeSelectedCount').textContent = count;
 }
 
+// Whether an employee is missing any of the beneficiary fields the
+// company's CURRENT payout bank needs — used for the warning banner
+// and the inline ⚠ marker below. Always false for SBI (needs none).
+function employeeMissingBeneficiaryFields(emp) {
+  const bank = companyProfile.bankName || 'SBI';
+  if (bank !== 'PNB' && bank !== 'ICICI' && bank !== 'HDFC') return false;
+  if (!emp.beneNickname) return true;
+  if (bank === 'PNB' && (!emp.pnbAddress || !emp.pnbMaxAmount || !emp.pnbMaxTxns)) return true;
+  return false;
+}
+
+// Surfaces a dismiss-free, always-current count of employees missing
+// the current bank's beneficiary fields — most commonly right after
+// switching payout bank in Company Details, since employees added
+// under a different bank never had those fields asked of them. Never
+// writes anything; purely a "review recommended" nudge toward editing
+// those employees individually.
+function updateBeneficiaryDetailsBanner() {
+  const banner = document.getElementById('beneficiaryDetailsBanner');
+  const textEl = document.getElementById('beneficiaryDetailsBannerText');
+  if (!banner || !textEl) return;
+  const bank = companyProfile.bankName || 'SBI';
+  const missingCount = (bank === 'PNB' || bank === 'ICICI' || bank === 'HDFC')
+    ? employees.filter(employeeMissingBeneficiaryFields).length : 0;
+  banner.classList.toggle('hidden', missingCount === 0);
+  if (missingCount > 0) {
+    textEl.textContent = `${missingCount} employee${missingCount === 1 ? '' : 's'} ${missingCount === 1 ? 'is' : 'are'} missing ${bank} beneficiary details (marked below) — the beneficiary file will use auto-filled defaults for them until you edit and fill these in.`;
+  }
+}
+
 function renderEmployeeTable() {
   const tbody = document.getElementById('employeeTableBody');
   const emptyState = document.getElementById('employeeEmptyState');
@@ -2760,9 +2811,11 @@ function renderEmployeeTable() {
   filtered.forEach(emp => {
     const tr = document.createElement('tr');
     const checked = selectedEmployeeIds.has(emp.id) ? 'checked' : '';
+    const missingBadge = employeeMissingBeneficiaryFields(emp)
+      ? ` <span title="Missing ${escapeHtml(companyProfile.bankName || '')} beneficiary details — click Edit to fill in" style="color:var(--warning);">⚠</span>` : '';
     tr.innerHTML = `
       <td class="row-select-cell card-cell-plain"><label class="checkbox-hit"><input type="checkbox" data-select="${escapeHtml(emp.id)}" ${checked} aria-label="Select ${escapeHtml(emp.name)}"></label></td>
-      <td data-label="Name"><span class="cell-truncate" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span></td>
+      <td data-label="Name"><span class="cell-truncate" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>${missingBadge}</td>
       <td data-label="Account No."><span class="masked-acc"><span data-full="${escapeHtml(emp.accountNumber)}" data-revealed="0">${escapeHtml(maskAccount(emp.accountNumber))}</span><button type="button">Show</button></span></td>
       <td data-label="IFSC">${escapeHtml(emp.ifsc)}</td>
       <td data-label="Transfer Type">${badgeForMode(emp.transferType)}</td>
@@ -2787,6 +2840,7 @@ function renderEmployeeTable() {
   });
   wireMaskedAccountToggles(tbody);
   updateEmployeeBulkBar();
+  updateBeneficiaryDetailsBanner();
 }
 
 function wireEmployeeTableControls() {
@@ -2895,6 +2949,33 @@ function wireEmployeeForm() {
   const ifscMismatchLbl = document.getElementById('ifscMismatchLbl');
   const mobileErrLbl = document.getElementById('empMobileError');
   const emailErrLbl  = document.getElementById('empEmailError');
+
+  // Bank-specific beneficiary-upload fields — only PNB/ICICI/HDFC need
+  // any of these (SBI needs none), and each bank needs a different
+  // subset. See refreshBankSpecificFieldsVisibility() below.
+  const beneNicknameSection = document.getElementById('empBeneNicknameSection');
+  const fBeneNickname = document.getElementById('empBeneNickname');
+  const pnbSection = document.getElementById('empPnbFieldsSection');
+  const fPnbAddress = document.getElementById('empPnbAddress');
+  const fPnbMaxAmount = document.getElementById('empPnbMaxAmount');
+  const fPnbMaxTxns = document.getElementById('empPnbMaxTxns');
+  const hdfcSection = document.getElementById('empHdfcFieldsSection');
+  const fHdfcAccountType = document.getElementById('empHdfcAccountType');
+  blockSpaceKey(fBeneNickname);
+  [fPnbMaxAmount, fPnbMaxTxns].forEach(el => { blockSpaceKey(el); digitsOnlyLive(el); });
+
+  // Shows/hides the nickname + per-bank sections based on the
+  // company's CURRENT payout bank — computed fresh every time the
+  // modal opens (Add or Edit), since the bank itself only ever
+  // changes from the separate Company Details page, never while this
+  // modal is open.
+  function refreshBankSpecificFieldsVisibility() {
+    const bank = companyProfile.bankName || 'SBI';
+    const needsNickname = bank === 'PNB' || bank === 'ICICI' || bank === 'HDFC';
+    beneNicknameSection.classList.toggle('hidden', !needsNickname);
+    pnbSection.classList.toggle('hidden', bank !== 'PNB');
+    hdfcSection.classList.toggle('hidden', bank !== 'HDFC');
+  }
 
   // Name fields: no spaces within a single box, auto-uppercase as-you-type
   [fFirst, fMiddle, fLast].forEach(el => { blockSpaceKey(el); autoUpperCaseLive(el); });
@@ -3021,12 +3102,26 @@ function wireEmployeeForm() {
     emailErrLbl.textContent = '';
     clearFieldError();
     fType.value = 'Same Bank';
+    fBeneNickname.value = '';
+    fPnbAddress.value = '';
+    fPnbMaxAmount.value = '';
+    fPnbMaxTxns.value = '';
+    fHdfcAccountType.value = 'Savings';
   }
 
   document.getElementById('addEmployeeBtn').onclick = () => {
     editingEmployeeId = null;
     document.getElementById('modalTitle').textContent = 'Add Employee';
     resetForm();
+    refreshBankSpecificFieldsVisibility();
+    // Sensible starting defaults for a brand-new employee (no export
+    // history yet to base a smarter number on) — same PNB daily-cap
+    // formula used everywhere else, just falling back to its
+    // no-history branch. Fully editable before saving.
+    if ((companyProfile.bankName || 'SBI') === 'PNB') {
+      fPnbMaxAmount.value = pnbBeneficiaryDailyCap({});
+      fPnbMaxTxns.value = 5;
+    }
     modal.classList.remove('hidden');
     fFirst.focus();
   };
@@ -3038,6 +3133,7 @@ function wireEmployeeForm() {
     editingEmployeeId = id;
     document.getElementById('modalTitle').textContent = 'Edit Employee Record';
     resetForm();
+    refreshBankSpecificFieldsVisibility();
     const [first, middle, last] = splitFullNameParts(emp.name);
     fFirst.value = first;
     fMiddle.value = middle;
@@ -3050,6 +3146,15 @@ function wireEmployeeForm() {
     fType.value = emp.transferType;
     fMobile.value = emp.mobile || '';
     fEmail.value = emp.email || '';
+    // Prefill bank-specific fields from the employee's own saved
+    // values when present; otherwise fall back to the same defaults
+    // used when generating the beneficiary file itself, so what the
+    // user sees here always matches what would end up in that file.
+    fBeneNickname.value = emp.beneNickname || autoBeneNickname(emp);
+    fPnbAddress.value = emp.pnbAddress || '';
+    fPnbMaxAmount.value = emp.pnbMaxAmount || pnbBeneficiaryDailyCap(emp);
+    fPnbMaxTxns.value = emp.pnbMaxTxns || 5;
+    fHdfcAccountType.value = emp.hdfcAccountType || 'Savings';
     modal.classList.remove('hidden');
   };
 
@@ -3099,6 +3204,32 @@ function wireEmployeeForm() {
       return;
     }
 
+    // Bank-specific beneficiary fields — required only for whichever
+    // fields are currently visible (i.e. only for the company's
+    // actual payout bank), never for the others.
+    const bank = companyProfile.bankName || 'SBI';
+    const beneNickname = fBeneNickname.value.trim();
+    const pnbAddress = fPnbAddress.value.trim();
+    const pnbMaxAmount = parseInt(fPnbMaxAmount.value, 10);
+    const pnbMaxTxns = parseInt(fPnbMaxTxns.value, 10);
+    const hdfcAccountType = fHdfcAccountType.value;
+
+    if ((bank === 'PNB' || bank === 'ICICI' || bank === 'HDFC') && !beneNickname) {
+      showFieldError('Please enter a Beneficiary Nickname.');
+      return;
+    }
+    if (bank === 'PNB') {
+      if (!pnbAddress) { showFieldError('Please enter a beneficiary Address for PNB.'); return; }
+      if (!Number.isInteger(pnbMaxAmount) || pnbMaxAmount <= 0) {
+        showFieldError('Please enter a valid Max Amount / Day (a positive whole number).');
+        return;
+      }
+      if (!Number.isInteger(pnbMaxTxns) || pnbMaxTxns <= 0) {
+        showFieldError('Please enter a valid Max Transactions / Day (a positive whole number).');
+        return;
+      }
+    }
+
     const nameParts = [fname];
     if (mname) nameParts.push(mname);
     nameParts.push(lname);
@@ -3117,6 +3248,13 @@ function wireEmployeeForm() {
     }
 
     const emp = { name: fullName, accountNumber: acc, ifsc, empCode, transferType, mobile, email };
+    // Only ever write the bank-specific fields that are actually
+    // relevant to the CURRENT bank — never touch (and so never
+    // overwrite-with-blank) the other banks' fields, so switching
+    // back to a previous bank later still has its old data intact.
+    if (bank === 'PNB' || bank === 'ICICI' || bank === 'HDFC') emp.beneNickname = beneNickname;
+    if (bank === 'PNB') { emp.pnbAddress = pnbAddress; emp.pnbMaxAmount = pnbMaxAmount; emp.pnbMaxTxns = pnbMaxTxns; }
+    if (bank === 'HDFC') emp.hdfcAccountType = hdfcAccountType;
 
     const btn = document.getElementById('saveEmployeeBtn');
     btn.disabled = true; btn.textContent = 'Saving...';
@@ -3147,24 +3285,66 @@ function wireEmployeeForm() {
   };
 }
 
+// Extra bulk-import/export CSV columns needed for whichever bank is
+// currently selected, on top of the 7 core columns every bank shares
+// (Employee Name, Account Number, IFSC_BranchCode, Transfer Type, Emp
+// Code, Mobile, Email). SBI needs none of these; PNB/ICICI/HDFC each
+// need a different subset, mirroring exactly what the Add/Edit
+// Employee form asks for under refreshBankSpecificFieldsVisibility().
+function bankExtraCsvColumns(bankName) {
+  if (bankName === 'PNB') {
+    return [
+      { header: 'Beneficiary Nickname', key: 'beneNickname' },
+      { header: 'PNB Address', key: 'pnbAddress' },
+      { header: 'PNB Max Amount Per Day', key: 'pnbMaxAmount' },
+      { header: 'PNB Max Transactions Per Day', key: 'pnbMaxTxns' }
+    ];
+  }
+  if (bankName === 'ICICI') return [{ header: 'Beneficiary Nickname', key: 'beneNickname' }];
+  if (bankName === 'HDFC') {
+    return [
+      { header: 'Beneficiary Nickname', key: 'beneNickname' },
+      { header: 'HDFC Account Type', key: 'hdfcAccountType' }
+    ];
+  }
+  return [];
+}
+const CORE_CSV_HEADER = 'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code,Mobile,Email';
+// Sample values for the bank-specific extra columns, shown in the
+// downloadable sample CSV so the format is obvious at a glance.
+const EXTRA_CSV_SAMPLE_VALUES = {
+  beneNickname: 'JOHND01', pnbAddress: 'MG ROAD, BENGALURU', pnbMaxAmount: '40000', pnbMaxTxns: '5', hdfcAccountType: 'Savings'
+};
+
 // A ready-to-fill CSV using the exact headers parseCsv() expects, with
 // one example row — closes the gap where the required column names
-// only ever existed in source code, not anywhere in the UI.
+// only ever existed in source code, not anywhere in the UI. Columns
+// adapt to the company's currently selected payout bank.
 function downloadSampleCsv() {
-  const sample = [
-    'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code,Mobile,Email',
-    'JOHN DOE,123456789012,SBIN0001234,Same Bank,01,9876543210,john.doe@example.com'
-  ].join('\r\n') + '\r\n';
+  const bankName = companyProfile.bankName || 'SBI';
+  const extraCols = bankExtraCsvColumns(bankName);
+  const header = [CORE_CSV_HEADER, ...extraCols.map(c => c.header)].join(',');
+  const exampleRow = [
+    'JOHN DOE,123456789012,SBIN0001234,Same Bank,01,9876543210,john.doe@example.com',
+    ...extraCols.map(c => EXTRA_CSV_SAMPLE_VALUES[c.key])
+  ].join(',');
+  const sample = [header, exampleRow].join('\r\n') + '\r\n';
   downloadTextFile('payflow_bulk_import_sample.csv', sample, 'text/csv;charset=utf-8');
 }
 
 // Exports the full current Employee Ledger back out as CSV, in the same
 // column layout the Bulk Import expects — so the ledger can round-trip
-// out for backup/editing and back in again.
+// out for backup/editing and back in again. Columns adapt to the
+// company's currently selected payout bank, same as the sample CSV.
 function exportLedgerCsv() {
   if (!employees.length) { toast('No employees to export yet.', 'error'); return; }
-  const header = 'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code,Mobile,Email';
-  const rows = employees.map(e => csvRow([e.name, e.accountNumber, e.ifsc, e.transferType, e.empCode, e.mobile || '', e.email || '']));
+  const bankName = companyProfile.bankName || 'SBI';
+  const extraCols = bankExtraCsvColumns(bankName);
+  const header = [CORE_CSV_HEADER, ...extraCols.map(c => c.header)].join(',');
+  const rows = employees.map(e => csvRow([
+    e.name, e.accountNumber, e.ifsc, e.transferType, e.empCode, e.mobile || '', e.email || '',
+    ...extraCols.map(c => e[c.key] ?? '')
+  ]));
   const content = [header, ...rows].join('\r\n') + '\r\n';
   downloadTextFile(`payflow_employee_ledger_${new Date().toISOString().slice(0, 10)}.csv`, content, 'text/csv;charset=utf-8');
 }
@@ -3334,6 +3514,14 @@ function parseCsv(text, existingAccounts) {
   const idxMobile = headers.indexOf('mobile');
   const idxEmail  = headers.indexOf('email');
 
+  // Bank-specific extra columns (nickname, PNB address/limits, HDFC
+  // account type) — same set the Add/Edit Employee form requires for
+  // the company's CURRENT payout bank, so a bulk-imported employee
+  // never ends up with less data than a manually-added one.
+  const bankName = companyProfile.bankName || 'SBI';
+  const extraCols = bankExtraCsvColumns(bankName);
+  const extraIdx = Object.fromEntries(extraCols.map(c => [c.key, headers.indexOf(c.header.toLowerCase())]));
+
   const rows = [];
   const errors = [];
   const seenInFile = new Set(); // catches duplicates WITHIN the same CSV
@@ -3382,9 +3570,37 @@ function parseCsv(text, existingAccounts) {
       errors.push({ line: lineNo, reason: `Duplicate Emp Code ${empCode} within this file.` });
       continue;
     }
+
+    // Bank-specific extra fields — required whenever the company's
+    // current bank needs them (mirrors the manual Add/Edit form).
+    const extra = {};
+    let extraError = null;
+    for (const col of extraCols) {
+      const idx = extraIdx[col.key];
+      const raw = (idx >= 0 ? cols[idx] : '') || '';
+      const val = raw.trim();
+      if (col.key === 'pnbMaxAmount' || col.key === 'pnbMaxTxns') {
+        const num = parseInt(val, 10);
+        if (!Number.isInteger(num) || num <= 0) {
+          extraError = `Missing or invalid "${col.header}" — must be a positive whole number.`;
+          break;
+        }
+        extra[col.key] = num;
+      } else if (!val) {
+        extraError = `Missing "${col.header}".`;
+        break;
+      } else {
+        extra[col.key] = col.key === 'hdfcAccountType' ? val : val.slice(0, 32);
+      }
+    }
+    if (extraError) {
+      errors.push({ line: lineNo, reason: extraError });
+      continue;
+    }
+
     seenInFile.add(accountNumber);
     seenCodes.add(empCode);
-    rows.push({ accountNumber, ifsc, name, transferType, empCode, mobile, email });
+    rows.push({ accountNumber, ifsc, name, transferType, empCode, mobile, email, ...extra });
   }
   return { rows, errors };
 }
@@ -4043,7 +4259,7 @@ async function executeExport() {
 }
 
 // ---------------------------------------------------------
-// BULK BENEFICIARY (3rd PARTY / PAYEE) UPLOAD FILE — SBI + PNB
+// BULK BENEFICIARY (3rd PARTY / PAYEE) UPLOAD FILE — SBI, PNB, ICICI, HDFC
 // ---------------------------------------------------------
 // A free companion tool, separate from the paid payroll export files
 // above. Before an employee can ever RECEIVE a payroll transfer via
@@ -4053,6 +4269,15 @@ async function executeExport() {
 // entirely client-side from the employees already in the ledger — no
 // server call, so it never touches the wallet/credits system and
 // never will.
+//
+// Every bank here needs a short "nickname" its own portal doesn't
+// otherwise ask PayFlow Pro to collect elsewhere. When the employee
+// record has one saved (Employees → Edit, PNB/ICICI/HDFC only), that
+// real value is always used; this is only the fallback for records
+// saved before that field existed for this bank, or imported without it.
+function autoBeneNickname(emp) {
+  return sanitizeForDelimitedFile(`${String(emp.name || '').trim().split(/\s+/)[0] || 'Emp'}${emp.empCode || ''}`, ',', '#').slice(0, 32);
+}
 
 // --- SBI: two formats, taken directly from SBI's own bulk-upload
 // templates (separate files — SBI's Net Banking treats Same-Bank and
@@ -4084,26 +4309,25 @@ function buildSbiBeneficiaryLines(type) {
 // row's own "Network" column instead of being two separate uploads:
 //   Name, NickName, AccessType(G/L), AccountNo, Network(NFT/RTG/PMT),
 //   IFSC, Address, MaxAmountPerDay, MaxTransactionsPerDay
-// PayFlow Pro doesn't collect a nickname, per-beneficiary daily cap,
-// or address, so those are filled in automatically:
-//   - NickName: derived from the employee's own name + emp code, to
-//     keep it short and avoid collisions between similarly-named staff.
-//   - AccessType: always 'G' (Global) — every admin user should be
+// Nickname/Address/MaxAmount/MaxTxns come straight from the employee's
+// own saved values (Employees → Edit → PNB Beneficiary Details) when
+// present; otherwise:
+//   - NickName falls back to autoBeneNickname() above.
+//   - AccessType is always 'G' (Global) — every admin user should be
 //     able to see every beneficiary; PayFlow Pro has no concept of
 //     restricted per-user access to mirror PNB's 'L' (Local).
 //   - Network: 'PMT' (Within PNB) for Same-Bank employees, 'NFT'
 //     (NEFT) for Other-Bank — RTGS-specific beneficiary registration
 //     isn't needed separately since the same NEFT-registered payee
 //     can also receive RTGS credits.
-//   - MaxAmountPerDay: a conservative daily cap — 2x the employee's
-//     last paid amount (see lastAmount, set after every export),
-//     rounded up to the nearest ₹1,000, with a ₹25,000 floor for
-//     employees with no export history yet. This is PNB's own
+//   - MaxAmountPerDay falls back to a conservative daily cap: 2x the
+//     employee's last paid amount (see lastAmount, set after every
+//     export), rounded up to the nearest ₹1,000, with a ₹25,000 floor
+//     for employees with no export history yet. This is PNB's own
 //     per-beneficiary fraud-control limit, editable anytime from
 //     Corp Admin → Manage Beneficiaries — not a payroll limit.
-//   - MaxTransactionsPerDay: a flat 5, comfortably covering a normal
-//     salary run plus a reissue or bonus payment in the same day.
-//   - Address: always left blank — not a field PayFlow Pro collects.
+//   - MaxTransactionsPerDay falls back to a flat 5.
+//   - Address falls back to blank if never entered.
 function pnbBeneficiaryDailyCap(emp) {
   const last = Number(emp.lastAmount || 0);
   const base = last > 0 ? last * 2 : 50000;
@@ -4114,12 +4338,53 @@ function buildPnbBeneficiaryLines() {
   const eligible = employees.filter(e => isValidIfscFormat(e.ifsc));
   const d = v => sanitizeForDelimitedFile(v, ',');
   return eligible.map(e => {
-    const nick = d(`${String(e.name || '').trim().split(/\s+/)[0] || 'Emp'}${e.empCode || ''}`).slice(0, 20);
+    const nick = d(e.beneNickname || autoBeneNickname(e));
     const network = e.transferType === 'Same Bank' ? 'PMT' : 'NFT';
-    const maxAmount = pnbBeneficiaryDailyCap(e);
-    return [d(e.name), nick, 'G', d(e.accountNumber), network, d(e.ifsc), '', maxAmount, 5].join(',');
+    const maxAmount = e.pnbMaxAmount || pnbBeneficiaryDailyCap(e);
+    const maxTxns = e.pnbMaxTxns || 5;
+    return [d(e.name), nick, 'G', d(e.accountNumber), network, d(e.ifsc), d(e.pnbAddress || ''), maxAmount, maxTxns].join(',');
   });
 }
+
+// --- ICICI: a single CSV matching ICICI's own "BENE Upload" template
+// column-for-column, with a header row (the template itself IS the
+// deliverable — filling it in and uploading it, rather than a
+// separate note-pad file like SBI):
+//   Beneficiary Name, Beneficiary Nick Name, Beneficiary Account No,
+//   IFSC Code, Network Type
+// Network Type: 'WIB' (Within ICICI) for Same-Bank employees, 'NFT'
+// (NEFT) for Other-Bank — RTGS/IMPS-specific registration isn't
+// needed separately for the same reason as PNB above.
+function buildIciciBeneficiaryLines() {
+  if ((companyProfile.bankName || 'SBI') !== 'ICICI') return [];
+  const eligible = employees.filter(e => isValidIfscFormat(e.ifsc));
+  return eligible.map(e => {
+    const nick = e.beneNickname || autoBeneNickname(e);
+    const network = e.transferType === 'Same Bank' ? 'WIB' : 'NFT';
+    return csvRow([e.name, nick, e.accountNumber, e.ifsc, network]);
+  });
+}
+
+// --- HDFC: a single CSV matching HDFC's own "Bulk Beneficiary"
+// template column-for-column, with a header row:
+//   Beneficiary Name, Nick Name, Account Number, Confirm Account
+//   Number, IFSC Code, Beneficiary Bank Name, Account Type, Email ID,
+//   Mobile Number
+// Beneficiary Bank Name is worked out automatically from the
+// employee's own IFSC (bankNameFromIfsc()) — never a field the user
+// has to type in. Account Type falls back to 'Savings' when the
+// employee record doesn't have one saved.
+function buildHdfcBeneficiaryLines() {
+  if ((companyProfile.bankName || 'SBI') !== 'HDFC') return [];
+  const eligible = employees.filter(e => isValidIfscFormat(e.ifsc));
+  return eligible.map(e => {
+    const nick = e.beneNickname || autoBeneNickname(e);
+    const accountType = e.hdfcAccountType || 'Savings';
+    return csvRow([e.name, nick, e.accountNumber, e.accountNumber, e.ifsc, bankNameFromIfsc(e.ifsc), accountType, e.email || '', e.mobile || '']);
+  });
+}
+const ICICI_BENEFICIARY_CSV_HEADER = 'Beneficiary Name,Beneficiary Nick Name,Beneficiary Account No,IFSC Code,Network Type';
+const HDFC_BENEFICIARY_CSV_HEADER = 'Beneficiary Name,Nick Name,Account Number,Confirm Account Number,IFSC Code,Beneficiary Bank Name,Account Type,Email ID,Mobile Number';
 
 function wireBeneficiaryFileModal() {
   const openBtn = document.getElementById('genBeneficiaryFileBtn');
@@ -4129,20 +4394,27 @@ function wireBeneficiaryFileModal() {
   const notSupportedNote = document.getElementById('beneficiaryBankNotSupportedNote');
   const sbiBody = document.getElementById('beneficiarySbiBody');
   const pnbBody = document.getElementById('beneficiaryPnbBody');
+  const iciciBody = document.getElementById('beneficiaryIciciBody');
+  const hdfcBody = document.getElementById('beneficiaryHdfcBody');
   const intraBtn = document.getElementById('downloadIntraBeneficiaryBtn');
   const interBtn = document.getElementById('downloadInterBeneficiaryBtn');
   const pnbBtn = document.getElementById('downloadPnbBeneficiaryBtn');
+  const iciciBtn = document.getElementById('downloadIciciBeneficiaryBtn');
+  const hdfcBtn = document.getElementById('downloadHdfcBeneficiaryBtn');
   const intraCountEl = document.getElementById('intraBeneficiaryCount');
   const interCountEl = document.getElementById('interBeneficiaryCount');
   const pnbCountEl = document.getElementById('pnbBeneficiaryCount');
+  const iciciCountEl = document.getElementById('iciciBeneficiaryCount');
+  const hdfcCountEl = document.getElementById('hdfcBeneficiaryCount');
 
   function refreshCounts() {
     const bank = companyProfile.bankName || 'SBI';
-    const isSbi = bank === 'SBI';
-    const isPnb = bank === 'PNB';
-    notSupportedNote.classList.toggle('hidden', isSbi || isPnb);
+    const isSbi = bank === 'SBI', isPnb = bank === 'PNB', isIcici = bank === 'ICICI', isHdfc = bank === 'HDFC';
+    notSupportedNote.classList.toggle('hidden', isSbi || isPnb || isIcici || isHdfc);
     sbiBody.classList.toggle('hidden', !isSbi);
     pnbBody.classList.toggle('hidden', !isPnb);
+    iciciBody.classList.toggle('hidden', !isIcici);
+    hdfcBody.classList.toggle('hidden', !isHdfc);
 
     if (isSbi) {
       const intraLines = buildSbiBeneficiaryLines('intra');
@@ -4155,6 +4427,14 @@ function wireBeneficiaryFileModal() {
       const lines = buildPnbBeneficiaryLines();
       pnbCountEl.textContent = lines.length;
       pnbBtn.disabled = lines.length === 0;
+    } else if (isIcici) {
+      const lines = buildIciciBeneficiaryLines();
+      iciciCountEl.textContent = lines.length;
+      iciciBtn.disabled = lines.length === 0;
+    } else if (isHdfc) {
+      const lines = buildHdfcBeneficiaryLines();
+      hdfcCountEl.textContent = lines.length;
+      hdfcBtn.disabled = lines.length === 0;
     }
   }
 
@@ -4163,35 +4443,53 @@ function wireBeneficiaryFileModal() {
     modal.classList.remove('hidden');
   });
 
+  function logAndToast(bankLabel, count) {
+    toast(`Beneficiary file downloaded — ${count} beneficiar${count === 1 ? 'y' : 'ies'}.`, 'success');
+    if (currentUser) {
+      Api.logAudit(currentUser.email, currentUser.displayName, 'GENERATE BENEFICIARY FILE', `${bankLabel} — ${count} employees`);
+    }
+  }
+
   function downloadSbi(type, label) {
     const lines = buildSbiBeneficiaryLines(type);
     if (!lines.length) return;
     const stamp = new Date().toISOString().slice(0, 10);
     const filename = `SBI_Beneficiary_${type === 'intra' ? 'SameBank' : 'OtherBank'}_${stamp}.txt`;
     downloadTextFile(filename, lines.join('\n') + '\n', 'text/plain;charset=utf-8');
-    toast(`Beneficiary file downloaded — ${lines.length} ${label} beneficiar${lines.length === 1 ? 'y' : 'ies'}.`, 'success');
-    if (currentUser) {
-      Api.logAudit(currentUser.email, currentUser.displayName, 'GENERATE BENEFICIARY FILE',
-        `SBI ${label} — ${lines.length} employees`);
-    }
+    logAndToast(`SBI ${label}`, lines.length);
   }
 
   function downloadPnb() {
     const lines = buildPnbBeneficiaryLines();
     if (!lines.length) return;
     const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `PNB_Beneficiary_${stamp}.txt`;
-    downloadTextFile(filename, lines.join('\n') + '\n', 'text/plain;charset=utf-8');
-    toast(`Beneficiary file downloaded — ${lines.length} beneficiar${lines.length === 1 ? 'y' : 'ies'}.`, 'success');
-    if (currentUser) {
-      Api.logAudit(currentUser.email, currentUser.displayName, 'GENERATE BENEFICIARY FILE',
-        `PNB — ${lines.length} employees`);
-    }
+    downloadTextFile(`PNB_Beneficiary_${stamp}.txt`, lines.join('\n') + '\n', 'text/plain;charset=utf-8');
+    logAndToast('PNB', lines.length);
+  }
+
+  function downloadIcici() {
+    const lines = buildIciciBeneficiaryLines();
+    if (!lines.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const content = [ICICI_BENEFICIARY_CSV_HEADER, ...lines].join('\r\n') + '\r\n';
+    downloadTextFile(`ICICI_Beneficiary_${stamp}.csv`, content, 'text/csv;charset=utf-8');
+    logAndToast('ICICI', lines.length);
+  }
+
+  function downloadHdfc() {
+    const lines = buildHdfcBeneficiaryLines();
+    if (!lines.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const content = [HDFC_BENEFICIARY_CSV_HEADER, ...lines].join('\r\n') + '\r\n';
+    downloadTextFile(`HDFC_Beneficiary_${stamp}.csv`, content, 'text/csv;charset=utf-8');
+    logAndToast('HDFC', lines.length);
   }
 
   intraBtn.addEventListener('click', () => downloadSbi('intra', 'Same-Bank'));
   interBtn.addEventListener('click', () => downloadSbi('inter', 'Other-Bank'));
   pnbBtn.addEventListener('click', downloadPnb);
+  iciciBtn.addEventListener('click', downloadIcici);
+  hdfcBtn.addEventListener('click', downloadHdfc);
 }
 
 function downloadTextFile(filename, content, mime) {
@@ -4654,6 +4952,10 @@ function wireCompanyForm() {
       updateDisbursementModeUI();
       renderDisbursementList();
       renderEmployeeKpis();
+      // Refreshes the beneficiary-details banner/⚠ markers on the
+      // Employees page immediately on a bank switch, instead of only
+      // updating the next time that page happens to re-render.
+      renderEmployeeTable();
       setCompanyEditMode(false);
       toast('Company profile updated.', 'success');
     } catch (err) {

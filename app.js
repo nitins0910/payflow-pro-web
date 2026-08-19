@@ -3048,16 +3048,21 @@ function wireEmployeeForm() {
 
   // Name fields: no spaces within a single box, auto-uppercase as-you-type
   [fFirst, fMiddle, fLast].forEach(el => { blockSpaceKey(el); autoUpperCaseLive(el); });
-  // Emp code: numeric only, no spaces
+  // Emp code: no spaces (locked/read-only while adding — see refreshAutoEmpCode)
   blockSpaceKey(fCode);
-  digitsOnlyLive(fCode);
   // Mobile: digits only, max 10, no spaces
   blockSpaceKey(fMobile);
   fMobile.addEventListener('input', () => {
     fMobile.value = fMobile.value.replace(/[^0-9]/g, '').slice(0, 10);
     validateMobileEmailLive();
+    refreshAutoEmpCode();
   });
   fEmail.addEventListener('input', validateMobileEmailLive);
+  // Emp Code auto-derives from First Name + Last Name + Mobile + Account
+  // Number (see refreshAutoEmpCode above) — recompute it live as any of
+  // these change, but only while adding a new employee (it's a no-op
+  // during Edit).
+  [fFirst, fLast].forEach(el => el.addEventListener('input', refreshAutoEmpCode));
 
   // UAN: digits only, max 12, no spaces. PAN: auto-uppercase, no spaces.
   // Both are optional — the live check only shows an error once
@@ -3134,6 +3139,71 @@ function wireEmployeeForm() {
       .map(e => String(e.empCode));
   }
 
+  // Fallback code — only used before enough Name/Mobile has been typed
+  // for deriveEmpCodeFromIdentity() below to work with (e.g. the instant
+  // the Add Employee form opens). Format EMP-0001, EMP-0002, ... based on
+  // the highest trailing number already in the ledger.
+  function generateNextEmpCode() {
+    const codes = employees.map(e => String(e.empCode || ''));
+    let maxNum = 0;
+    codes.forEach(c => {
+      const m = c.match(/(\d+)(?!.*\d)/); // last run of digits in the code
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    });
+    let next = maxNum + 1;
+    let code;
+    do {
+      code = `EMP-${String(next).padStart(4, '0')}`;
+      next++;
+    } while (codes.includes(code));
+    return code;
+  }
+
+  // Builds an Employee Code straight from that employee's own details —
+  // "EMP" + First Name's initial + Last Name's initial + last 4 digits
+  // of Mobile Number + last digit of Bank Account Number, e.g. "Ravi
+  // Sharma", mobile ...9821, account ...456 -> "EMPRS98216". This ties
+  // the code to something recognizable about the employee instead of a
+  // plain running number, and is very unlikely to collide since it
+  // needs the SAME first+last initials, SAME last-4 mobile digits, AND
+  // SAME last account digit all at once. Returns null when there isn't
+  // yet enough typed to build one (fewer than 4 mobile digits, or no
+  // account digits so far) — the caller falls back to
+  // generateNextEmpCode() in that case.
+  function deriveEmpCodeFromIdentity(firstName, lastName, mobile, accountNumber) {
+    const mobileDigits = String(mobile || '').replace(/[^0-9]/g, '');
+    const accDigits = String(accountNumber || '').replace(/[^0-9]/g, '');
+    if (mobileDigits.length < 4 || !accDigits) return null;
+    const firstInitial = (String(firstName || '').toUpperCase().match(/[A-Z]/) || ['X'])[0];
+    const lastInitial = (String(lastName || '').toUpperCase().match(/[A-Z]/) || ['X'])[0];
+    const mobilePart = mobileDigits.slice(-4);
+    const accPart = accDigits.slice(-1);
+    return `EMP${firstInitial}${lastInitial}${mobilePart}${accPart}`;
+  }
+
+  // Recomputes and fills in the (locked) Emp Code field from whatever
+  // First Name / Last Name / Mobile Number / Account Number have been
+  // typed so far. Called on every keystroke in any of those fields
+  // while adding a new employee (never during Edit — see the input
+  // listeners and openEditModal below). If the derived code already
+  // exists elsewhere in the ledger (or matches one just generated
+  // earlier in this same session), a "-2", "-3", ... suffix is
+  // appended until it's unique, so a duplicate is never possible even
+  // for two employees who somehow share every one of those inputs.
+  function refreshAutoEmpCode() {
+    if (editingEmployeeId) return;
+    const base = deriveEmpCodeFromIdentity(fFirst.value, fLast.value, fMobile.value, fAcc.value) || generateNextEmpCode();
+    const codes = existingEmpCodes();
+    let code = base;
+    let suffix = 2;
+    while (codes.includes(code)) {
+      code = `${base}-${suffix}`;
+      suffix++;
+    }
+    fCode.value = code;
+  }
+
+
   function validateLive() {
     const accVal = fAcc.value.trim();
     const isDuplicate = accVal && existingAccountNumbers().includes(accVal);
@@ -3168,6 +3238,10 @@ function wireEmployeeForm() {
     autoDetectTransferType();
   }
   [fAcc, fAccC, fIfsc, fIfscC].forEach(el => el.addEventListener('input', validateLive));
+  // Account Number also feeds the auto-derived Emp Code (its last
+  // digit) — recompute live as it's typed, same as the other Emp
+  // Code inputs above.
+  fAcc.addEventListener('input', refreshAutoEmpCode);
 
   // Auto-detects Same Bank vs Other Bank from the employee's own IFSC,
   // compared against the company's own bank (Company Details page),
@@ -3213,6 +3287,12 @@ function wireEmployeeForm() {
     document.getElementById('modalTitle').textContent = 'Add Employee';
     resetForm();
     refreshBankSpecificFieldsVisibility();
+    // Fill in the Emp Code from whatever Name/Mobile exist so far (both
+    // are blank right after resetForm(), so this shows the sequential
+    // fallback until the user starts typing — see refreshAutoEmpCode)
+    // and lock the field so it can't be typed over directly.
+    refreshAutoEmpCode();
+    fCode.readOnly = true;
     // Sensible starting defaults for a brand-new employee (no export
     // history yet to base a smarter number on) — same PNB daily-cap
     // formula used everywhere else, just falling back to its
@@ -3233,6 +3313,10 @@ function wireEmployeeForm() {
     document.getElementById('modalTitle').textContent = 'Edit Employee Record';
     resetForm();
     refreshBankSpecificFieldsVisibility();
+    // Existing employees keep their already-assigned code, and it stays
+    // editable here (unlike Add Employee) only so a genuinely wrong
+    // historical code can still be corrected by hand.
+    fCode.readOnly = false;
     const [first, middle, last] = splitFullNameParts(emp.name);
     fFirst.value = first;
     fMiddle.value = middle;
@@ -3273,7 +3357,7 @@ function wireEmployeeForm() {
     const accC   = fAccC.value.trim().replace(/\s+/g, '');
     const ifsc   = fIfsc.value.trim().replace(/\s+/g, '').toUpperCase();
     const ifscC  = fIfscC.value.trim().replace(/\s+/g, '').toUpperCase();
-    const empCode = fCode.value.trim().padStart(2, '0');
+    const empCode = fCode.value.trim().toUpperCase();
     const transferType = fType.value;
     const mobile = fMobile.value.trim();
     const email  = fEmail.value.trim().toLowerCase();
@@ -3307,13 +3391,18 @@ function wireEmployeeForm() {
       showFieldError('Please enter a valid PAN (e.g. ABCDE1234F), or leave it blank.');
       return;
     }
-    // Employee Code and Account Number must be numeric only — the fields
-    // already filter this live, but this catches anything that slips
-    // through (e.g. a value set programmatically) before it gets saved.
-    if (!/^[0-9]+$/.test(empCode)) {
-      showFieldError('Employee Code must contain numbers only.');
+    // Employee Code is auto-generated (EMP-0001 style) and normally
+    // locked while adding, but Edit mode allows manual correction — so
+    // it still needs a format check here: letters, numbers, and
+    // hyphens only, nothing that could break the '#'-delimited bank
+    // export reference strings this code gets embedded into.
+    if (!/^[A-Z0-9-]+$/.test(empCode)) {
+      showFieldError('Employee Code can only contain letters, numbers, and hyphens.');
       return;
     }
+    // Account Number must be numeric only — the field already filters
+    // this live, but this catches anything that slips through (e.g. a
+    // value set programmatically) before it gets saved.
     if (!/^[0-9]+$/.test(acc) || !/^[0-9]+$/.test(accC)) {
       showFieldError('Account Number must contain numbers only.');
       return;
@@ -3476,7 +3565,7 @@ function downloadSampleCsv() {
   // comma themselves, which would otherwise silently split into an
   // extra column and make the sample file itself invalid.
   const exampleRow = csvRow([
-    'JOHN DOE', '123456789012', 'SBIN0001234', 'Same Bank', '01', '9876543210', 'john.doe@example.com',
+    'JOHN DOE', '123456789012', 'SBIN0001234', 'Same Bank', 'EMPJD32102', '9876543210', 'john.doe@example.com',
     ...PAYROLL_CSV_COLUMNS.map(c => PAYROLL_CSV_SAMPLE_VALUES[c.key]),
     ...extraCols.map(c => EXTRA_CSV_SAMPLE_VALUES[c.key])
   ]);
@@ -3748,18 +3837,66 @@ function parseCsv(text, existingAccounts, existingEmpCodes) {
   const seenInFile = new Set(); // catches duplicates WITHIN the same CSV
   const seenCodes = new Set();
 
+  // Fallback sequence for rows where neither the CSV nor
+  // deriveEmpCodeForRow() below can produce a code (e.g. Name has no
+  // letters at all) — continues the same EMP-0001, EMP-0002... numbering
+  // the manual Add Employee form falls back to, based on the highest
+  // trailing number already in the ledger.
+  let autoCodeSeq = 1;
+  (existingEmpCodes || []).forEach(c => {
+    const m = String(c).match(/(\d+)(?!.*\d)/);
+    if (m) autoCodeSeq = Math.max(autoCodeSeq, parseInt(m[1], 10) + 1);
+  });
+  function nextFallbackCode() {
+    const code = `EMP-${String(autoCodeSeq).padStart(4, '0')}`;
+    autoCodeSeq++;
+    return code;
+  }
+  // Same identity-based code as the manual Add Employee form: "EMP" +
+  // first word's initial + last word's initial (of the Employee Name
+  // column) + last 4 digits of Mobile + last digit of Account Number,
+  // e.g. "RAVI SHARMA", ...9821, ...456 -> "EMPRS98216" — so a
+  // bulk-imported employee gets the same style of code as a
+  // manually-added one.
+  function deriveEmpCodeForRow(name, mobile, accountNumber) {
+    const mobileDigits = String(mobile || '').replace(/[^0-9]/g, '');
+    const accDigits = String(accountNumber || '').replace(/[^0-9]/g, '');
+    if (mobileDigits.length < 4 || !accDigits) return null;
+    const words = String(name || '').toUpperCase().split(/\s+/).filter(Boolean);
+    const firstInitial = (words[0] && words[0].match(/[A-Z]/) || ['X'])[0];
+    const lastInitial = ((words[words.length - 1] || '').match(/[A-Z]/) || ['X'])[0];
+    return `EMP${firstInitial}${lastInitial}${mobileDigits.slice(-4)}${accDigits.slice(-1)}`;
+  }
+
   for (let i = 1; i < allRows.length; i++) {
     const lineNo = i + 1; // 1-based, matches what a spreadsheet app would show
     const cols = allRows[i];
-    // Account Number and Emp Code are numeric-only fields — strip any
-    // stray letters/symbols from the CSV the same way the manual Add
+    // Account Number is a numeric-only field — strip any stray
+    // letters/symbols from the CSV the same way the manual Add
     // Employee form does, so bulk import can't bypass that rule.
     const accountNumber = (cols[idxAcc >= 0 ? idxAcc : 0] || '').replace(/[^0-9]/g, '');
     const ifsc = (cols[idxIfsc >= 0 ? idxIfsc : 1] || '').toUpperCase();
     const name = (cols[idxName >= 0 ? idxName : 2] || '').toUpperCase();
     const rawType = (cols[idxType >= 0 ? idxType : 3] || 'Same Bank').trim();
-    const empCode = ((cols[idxCode >= 0 ? idxCode : 4] || '01').replace(/[^0-9]/g, '') || '01').padStart(2, '0');
     const mobile = (cols[idxMobile >= 0 ? idxMobile : 5] || '').replace(/[^0-9]/g, '');
+    // Emp Code: use whatever the CSV provides (letters/numbers/hyphens
+    // only), or auto-derive one from this row's Name + Mobile + Account
+    // Number (falling back to a plain sequential code only if there's
+    // not enough of those to derive from) when the column is blank —
+    // instead of the old fixed '01' default, which produced an
+    // unusable "Duplicate Emp Code" error for every row after the
+    // first blank one.
+    let empCode = (cols[idxCode >= 0 ? idxCode : 4] || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    if (!empCode) {
+      const base = deriveEmpCodeForRow(name, mobile, accountNumber) || nextFallbackCode();
+      let code = base;
+      let suffix = 2;
+      while (seenCodes.has(code) || existingCodes.has(code)) {
+        code = `${base}-${suffix}`;
+        suffix++;
+      }
+      empCode = code;
+    }
     const email = (cols[idxEmail >= 0 ? idxEmail : 6] || '').trim().toLowerCase();
 
     // Optional payroll fields — read if the column exists, otherwise

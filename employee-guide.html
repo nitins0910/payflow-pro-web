@@ -177,9 +177,13 @@
   <ul>
     <li><strong>First / Middle / Last Name</strong> — Middle Name is optional; all three auto-uppercase as you
       type and can't contain spaces within a single box (use separate boxes instead).</li>
-    <li><strong>Emp Code</strong> — a short numeric code unique across your whole ledger. It's padded to at
-      least 2 digits automatically and is used to build each bank's own batch/transaction reference, so a
-      duplicate code is rejected outright.</li>
+    <li><strong>Emp Code</strong> — auto-generated for you from the employee's own details the moment you type
+      them: <code>EMP</code> + First Name's initial + Last Name's initial + last 4 digits of Mobile Number +
+      last digit of Account Number (e.g. "Ravi Sharma", mobile ending 9821, account ending 456 →
+      <code>EMPRS98216</code>), and locked so it can't be typed over or duplicated by accident. If two
+      employees would otherwise land on the exact same code, a <code>-2</code>, <code>-3</code>... is
+      appended automatically. If you ever need to correct a code by hand, open that employee in
+      <strong>Edit</strong> instead — the field unlocks there.</li>
     <li><strong>Transfer Type</strong> — <strong>Intrabank Transfer</strong> if the employee's account is with
       your own company bank, or <strong>Interbank Transfer</strong> otherwise. This decides which list they show
       up in on the Generate Transaction File page.</li>
@@ -310,7 +314,7 @@
       <tr><td class="mono">Account Number</td><td>Required</td><td>Digits only; must be unique.</td></tr>
       <tr><td class="mono">IFSC_BranchCode</td><td>Required</td><td>Auto-uppercased.</td></tr>
       <tr><td class="mono">Transfer Type</td><td>Required</td><td>Exactly "Same Bank" or "Other Bank".</td></tr>
-      <tr><td class="mono">Emp Code</td><td>Required</td><td>Digits only; must be unique.</td></tr>
+      <tr><td class="mono">Emp Code</td><td>Optional</td><td>Leave blank and PayFlow Pro auto-derives a code from that row's Name + Mobile + Account Number (e.g. EMPRS98216). If you do provide one, it must be unique (letters, numbers, and hyphens only).</td></tr>
       <tr><td class="mono">Mobile</td><td>Required</td><td>10-digit number starting 6–9.</td></tr>
       <tr><td class="mono">Email</td><td>Required</td><td>Standard email format.</td></tr>
       <tr><td class="mono">Designation, Department, Date of Joining, UAN, PAN</td><td>Optional</td><td>Left blank on the record if the column is missing or empty; UAN/PAN are still format-checked if a value <em>is</em> given.</td></tr>

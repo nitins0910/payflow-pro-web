@@ -239,6 +239,15 @@ a{color:var(--blue-bright); text-decoration:none;}
   background:var(--surface3);
 }
 .field input::placeholder{ color:var(--text3); }
+/* Auto-generated/locked fields (e.g. Emp Code while adding a new
+   employee) — visually distinct from a normal editable field so it
+   reads as "filled in for you", not as broken or greyed-out-by-accident. */
+.field input[readonly]{
+  background:var(--surface);
+  color:var(--text2);
+  cursor:not-allowed;
+}
+.field input[readonly]:hover{ border-color:var(--border); }
 .field textarea{
   width:100%;
   background:var(--surface2);

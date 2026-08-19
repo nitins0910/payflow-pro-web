@@ -97,7 +97,7 @@
 <div class="static-page-wrap">
 
   <div class="static-page-back">
-    <a href="index.html">← Back to PayFlow Pro</a>
+    <a href="index.html" onclick="return closeOrGoBack(event)">← Back to PayFlow Pro</a>
   </div>
 
   <div class="static-card">
@@ -146,6 +146,25 @@
   </div>
 
 </div>
+
+<script>
+  // This page can be opened either from the login screen (a fresh tab,
+  // via target="_blank") or from within the logged-in app's Settings →
+  // "Add to Home Screen" item (also a fresh tab). Either way, navigating
+  // that same tab back to index.html would leave two tabs open showing
+  // the app — the original one plus this one — so close this tab
+  // instead whenever it has an opener; only fall back to a normal
+  // navigation if it doesn't (e.g. opened directly / bookmarked / typed URL).
+  function closeOrGoBack(e) {
+    if (window.opener && !window.opener.closed) {
+      e.preventDefault();
+      window.close();
+      setTimeout(() => { window.location.href = 'index.html'; }, 300);
+      return false;
+    }
+    return true;
+  }
+</script>
 
 <script>
   // Tab toggle only — this page is intentionally standalone and does

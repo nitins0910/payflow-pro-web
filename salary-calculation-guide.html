@@ -147,7 +147,7 @@
 </head>
 <body>
 <div class="legal-wrap">
-  <a href="index.html" class="legal-back">← Back to PayFlow Pro</a>
+  <a href="index.html" class="legal-back" onclick="return closeOrGoBack(event)">← Back to PayFlow Pro</a>
   <div class="brand" style="margin-bottom:18px;">
     <span class="mark">PF</span>
     <h1 style="margin:0;">PayFlow Pro</h1>
@@ -361,5 +361,21 @@ PF Wage = <span class="fx-op">Min</span>( Prorated Basic , Prorated Ceiling )</c
   </div>
 
 </div>
+<script>
+  // Same fix as bank-file-guide.html / employee-guide.html — this page
+  // is normally opened in a fresh tab from index.html. Navigating that
+  // same tab back to index.html would leave two tabs open showing the
+  // app, so close this tab instead whenever it has an opener; only fall
+  // back to a normal navigation if it doesn't (e.g. opened directly).
+  function closeOrGoBack(e) {
+    if (window.opener && !window.opener.closed) {
+      e.preventDefault();
+      window.close();
+      setTimeout(() => { window.location.href = 'index.html'; }, 300);
+      return false;
+    }
+    return true;
+  }
+</script>
 </body>
 </html>

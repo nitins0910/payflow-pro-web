@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="legal-wrap">
-  <a href="index.html" class="legal-back">← Back to PayFlow Pro</a>
+  <a href="index.html" class="legal-back" onclick="return closeOrGoBack(event)">← Back to PayFlow Pro</a>
   <div class="brand" style="margin-bottom:18px;">
     <span class="mark">PF</span>
     <h1 style="margin:0;">PayFlow Pro</h1>
@@ -299,5 +299,26 @@
   </div>
 
 </div>
+<script>
+  // This page is normally opened in a fresh tab (target="_blank" from
+  // index.html). If the "Back" link just navigated that same tab to
+  // index.html, it would leave TWO tabs open showing the app — the
+  // original one plus this one. Instead, when this tab has an opener
+  // (i.e. it really was opened from another PayFlow Pro tab), close
+  // this tab outright so the user lands back on the original tab. If
+  // there's no opener (page opened directly / bookmarked / typed URL),
+  // fall back to a normal navigation.
+  function closeOrGoBack(e) {
+    if (window.opener && !window.opener.closed) {
+      e.preventDefault();
+      window.close();
+      // Some browsers refuse to script-close a tab even when it has an
+      // opener — if that happens, just navigate normally after a beat.
+      setTimeout(() => { window.location.href = 'index.html'; }, 300);
+      return false;
+    }
+    return true;
+  }
+</script>
 </body>
 </html>

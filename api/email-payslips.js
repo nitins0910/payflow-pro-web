@@ -110,6 +110,14 @@ function payslipEmailHtml(company, emp) {
       <div style="font-size:12px;color:#333;margin-top:6px;font-style:italic;">${escapeHtml(emp.netPayWords || '')}</div>
     </div>
 
+    <div style="margin-top:28px;text-align:right;">
+      <div style="font-size:10.5px;color:#888;margin-bottom:36px;">For ${escapeHtml(company.companyName || 'PayFlow Pro Technologies')}</div>
+      <div style="font-size:12.5px;font-weight:700;color:#111;">${escapeHtml(company.signatoryName) || 'Authorized Signatory'}</div>
+      ${company.signatoryName
+        ? `<div style="font-size:10.5px;color:#888;margin-top:2px;">${company.signatoryDesignation ? `${escapeHtml(company.signatoryDesignation)} — ` : ''}Authorized Signatory</div>`
+        : ''}
+    </div>
+
     <div style="margin-top:26px;padding-top:14px;border-top:1px dashed #999;font-size:10.5px;color:#888;text-align:center;">
       This is a computer-generated payslip and does not require a physical signature.
     </div>
@@ -142,7 +150,9 @@ module.exports = async (req, res) => {
   const company = {
     companyName: String(body.companyName || '').trim().slice(0, 120),
     companyAddress: String(body.companyAddress || '').trim().slice(0, 300),
-    payrollMonth: String(body.payrollMonth || '').trim().slice(0, 40)
+    payrollMonth: String(body.payrollMonth || '').trim().slice(0, 40),
+    signatoryName: String(body.signatoryName || '').trim().slice(0, 80),
+    signatoryDesignation: String(body.signatoryDesignation || '').trim().slice(0, 80)
   };
 
   const transporter = nodemailer.createTransport({

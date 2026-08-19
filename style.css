@@ -946,6 +946,46 @@ th:last-child, td.row-actions{ white-space:nowrap; }
 .empty-state{ text-align:center; padding:44px 20px; color:var(--text3); font-size:13px; }
 .empty-state__icon{ font-size:26px; margin-bottom:10px; opacity:.6; }
 
+/* Salary Calculation page-head "How Net Pay Is Calculated" guide link —
+   sits top-right next to the heading (.page-head is already
+   justify-content:space-between, so this just needs to look good as
+   the second flex child). Two-line label + icon in a soft pill, with
+   a subtle blue-accent hover lift to match the rest of the app's
+   interactive-card language. */
+.sc-guide-btn{
+  display:flex; align-items:center; gap:11px;
+  padding:10px 16px 10px 14px;
+  background:var(--surface2);
+  border:1px solid var(--border-soft);
+  border-radius:var(--radius-md);
+  text-decoration:none;
+  transition:border-color .15s var(--ease), background .15s var(--ease), transform .12s var(--ease), box-shadow .15s var(--ease);
+  flex:0 0 auto;
+}
+.sc-guide-btn:hover{
+  border-color:var(--blue-dim);
+  background:var(--surface3);
+  transform:translateY(-1px);
+  box-shadow:0 8px 20px rgba(59,130,246,0.18);
+}
+.sc-guide-btn:active{ transform:translateY(0); }
+.sc-guide-btn__icon{
+  display:flex; align-items:center; justify-content:center;
+  width:34px; height:34px; flex:0 0 auto;
+  background:var(--surface3);
+  border:1px solid var(--border-soft);
+  border-radius:9px;
+  font-size:16px;
+}
+.sc-guide-btn:hover .sc-guide-btn__icon{ background:var(--blue-glow); border-color:var(--blue-dim); }
+.sc-guide-btn__text{ display:flex; flex-direction:column; gap:1px; }
+.sc-guide-btn__title{ font-family:var(--font-display); font-size:12.5px; font-weight:700; color:var(--text); letter-spacing:0.1px; }
+.sc-guide-btn__sub{ font-size:10.5px; color:var(--text3); }
+@media (max-width:640px){
+  .sc-guide-btn__sub{ display:none; }
+  .sc-guide-btn{ padding:9px 12px; }
+}
+
 .hidden{ display:none !important; }
 
 .modal-backdrop{

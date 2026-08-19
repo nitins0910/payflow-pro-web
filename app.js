@@ -3938,7 +3938,14 @@ function computeSalaryRow(raw, opts) {
 
   const pfRate = (Number(opts.pfRate) || 0) / 100;
   const pfCeilingAmt = Number(opts.pfCeilingAmt) || 0;
-  const pfWage = opts.pfCeiling ? Math.min(basic, pfCeilingAmt) : basic;
+  // The ₹15,000 PF wage ceiling is itself prorated for a partial period
+  // (LOP days), same as Basic — otherwise an employee with heavy LOP
+  // would get PF calculated on their full unprorated ceiling, over-
+  // deducting relative to what they actually earned that month. This
+  // mirrors how mid-month joiner/leaver PF wages are prorated in
+  // standard Indian payroll practice.
+  const proratedPfCeiling = round2(pfCeilingAmt * factor);
+  const pfWage = opts.pfCeiling ? Math.min(basic, proratedPfCeiling) : basic;
   // PF, like ESI below, is fully opt-out at the company level — a
   // company not covered under the PF Act (or below the statutory
   // employee-count threshold) can uncheck "Company covered under PF
@@ -3949,8 +3956,11 @@ function computeSalaryRow(raw, opts) {
   const esiLimit = Number(opts.esiLimit) || 0;
   // Eligibility check uses fullGross (see above); the ESI amount
   // actually deducted still uses the real, LOP-prorated gross paid
-  // this month, same as before.
-  const esi = (opts.esiApplicable && fullGross <= esiLimit) ? round2(gross * esiRate) : 0;
+  // this month, same as before. Per ESI (Central) Rule 51 — amended
+  // effective 1-10-2004 — the contribution is always rounded UP to
+  // the next higher rupee (never standard/nearest rounding), so this
+  // uses Math.ceil, not round2.
+  const esi = (opts.esiApplicable && fullGross <= esiLimit) ? Math.ceil(gross * esiRate) : 0;
 
   // PT / TDS / Other Deductions can never be negative — a negative
   // value here would silently inflate Net Pay instead of reducing it,
@@ -4021,7 +4031,7 @@ function renderSalaryCalcTable() {
       <td data-label="Gross (₹)" style="text-align:right;"><span data-out="gross">0.00</span></td>
       <td data-label="PF (₹)" style="text-align:right;"><span data-out="pf">0.00</span></td>
       <td data-label="ESI (₹)" style="text-align:right;"><span data-out="esi">0.00</span></td>
-      <td data-label="PT (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="pt" placeholder="0.00" value="${raw.pt}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
+      <td data-label="PT (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="pt" placeholder="0.00" value="${raw.pt}" title="Recalculates automatically only when you click &quot;Re-apply PT to all rows&quot; — a highlighted border means the current Gross no longer matches this PT amount." style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
       <td data-label="TDS (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="tds" placeholder="0.00" value="${raw.tds}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
       <td data-label="Other Ded. (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="otherDed" placeholder="0.00" value="${raw.otherDed}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
       <td data-label="Net Pay (₹)" style="text-align:right; font-weight:700; color:var(--success);"><span data-out="netPay">0.00</span></td>`;
@@ -4043,6 +4053,23 @@ function renderSalaryCalcTable() {
       outs.pf.textContent = result.pf.toFixed(2);
       outs.esi.textContent = result.esi.toFixed(2);
       outs.netPay.textContent = result.netPay.toFixed(2);
+
+      // PT is never auto-recalculated as Gross changes — it's a manual/
+      // overridable field, same as TDS and Other Deductions, and only
+      // updates on the explicit "Re-apply PT to all rows" action (see
+      // reapplyPtDefaultsToAllRows). That's deliberate: silently
+      // rewriting a value the user (or a previous save) already set
+      // would be worse than leaving it stale. Instead, just flag it —
+      // a warning border on the PT box when the state-default PT for
+      // the CURRENT Gross no longer matches what's typed there, so a
+      // Basic/HRA/LOP edit that pushes Gross into a different PT slab
+      // doesn't go unnoticed.
+      const currentPtState = document.getElementById('scPtState')?.value || 'NA';
+      const expectedPt = calcProfessionalTax(currentPtState, result.gross);
+      const enteredPt = Number(fields.pt.value) || 0;
+      const ptStale = expectedPt !== enteredPt;
+      fields.pt.style.borderColor = ptStale ? 'var(--warning)' : 'var(--border)';
+
       salaryCalcInputs[emp.id] = { emp, fields, result, recalc: recalcRow, rowEl: tr };
       updateSalaryCalcTotals();
       return result;
@@ -4119,12 +4146,17 @@ function updateSalaryCalcTotals() {
 
 // Collects every row's raw inputs, validating that Basic and HRA — the
 // two components every real salary structure has — were actually
-// Collects every row's raw inputs, validating that Basic and HRA — the
-// two components every real salary structure has — were actually
 // filled in for every single employee before anything is saved or
 // pushed, and that no allowance/LOP field has a negative value (a
 // negative Basic/HRA/Special/Other would silently shrink Gross and
 // Net Pay instead of erroring, and negative LOP days are meaningless).
+// Uses Number(), not parseFloat(), for every field — matching exactly
+// what recalcRow()/computeSalaryRow() use for the LIVE on-screen
+// preview. parseFloat("5000abc") silently returns 5000 (garbage after
+// the number gets dropped), while Number("5000abc") correctly returns
+// NaN — using parseFloat here would let a typo like that pass
+// validation and get saved/pushed as 5000, even though the screen was
+// showing 0 (computed via Number()) the whole time the user was typing.
 // Returns { ok, rows, firstInvalidEmpName }.
 function collectSalaryCalcRows() {
   const rows = [];
@@ -4135,21 +4167,26 @@ function collectSalaryCalcRows() {
     const specialRaw = fields.special.value.trim();
     const otherRaw = fields.other.value.trim();
     const lopRaw = fields.lop.value.trim();
+    const basicVal = Number(basicRaw);
+    const hraVal = Number(hraRaw);
+    const specialVal = Number(specialRaw);
+    const otherVal = Number(otherRaw);
+    const lopVal = Number(lopRaw);
     const invalid =
-      !basicRaw || isNaN(parseFloat(basicRaw)) || parseFloat(basicRaw) <= 0 ||
-      hraRaw === '' || isNaN(parseFloat(hraRaw)) || parseFloat(hraRaw) < 0 ||
-      (specialRaw !== '' && (isNaN(parseFloat(specialRaw)) || parseFloat(specialRaw) < 0)) ||
-      (otherRaw !== '' && (isNaN(parseFloat(otherRaw)) || parseFloat(otherRaw) < 0)) ||
-      (lopRaw !== '' && (isNaN(parseFloat(lopRaw)) || parseFloat(lopRaw) < 0));
+      !basicRaw || isNaN(basicVal) || basicVal <= 0 ||
+      hraRaw === '' || isNaN(hraVal) || hraVal < 0 ||
+      (specialRaw !== '' && (isNaN(specialVal) || specialVal < 0)) ||
+      (otherRaw !== '' && (isNaN(otherVal) || otherVal < 0)) ||
+      (lopRaw !== '' && (isNaN(lopVal) || lopVal < 0));
     if (invalid) {
       if (!firstInvalidEmpName) firstInvalidEmpName = emp.name;
       continue;
     }
     const rawStructure = {
-      basic: parseFloat(basicRaw), hra: parseFloat(hraRaw) || 0,
-      special: parseFloat(fields.special.value) || 0, other: parseFloat(fields.other.value) || 0,
-      lop: parseFloat(fields.lop.value) || 0, pt: parseFloat(fields.pt.value) || 0,
-      tds: parseFloat(fields.tds.value) || 0, otherDed: parseFloat(fields.otherDed.value) || 0
+      basic: basicVal, hra: hraVal || 0,
+      special: specialVal || 0, other: otherVal || 0,
+      lop: lopVal || 0, pt: Number(fields.pt.value) || 0,
+      tds: Number(fields.tds.value) || 0, otherDed: Number(fields.otherDed.value) || 0
     };
     const result = computeSalaryRow(rawStructure, scGlobalOpts());
     rows.push({ emp, rawStructure, result });
@@ -4187,13 +4224,17 @@ function wireSalaryCalc() {
   });
 
   document.getElementById('scSaveDraftBtn').addEventListener('click', async () => {
+    // Number(), not parseFloat() — same reasoning as collectSalaryCalcRows:
+    // a draft should save exactly what the live preview is showing, and
+    // parseFloat would silently accept trailing garbage ("5000abc" -> 5000)
+    // that the on-screen Gross/Net Pay (computed via Number()) reads as 0.
     const rows = Object.values(salaryCalcInputs).map(({ emp, fields }) => ({
       emp,
       rawStructure: {
-        basic: parseFloat(fields.basic.value) || 0, hra: parseFloat(fields.hra.value) || 0,
-        special: parseFloat(fields.special.value) || 0, other: parseFloat(fields.other.value) || 0,
-        lop: parseFloat(fields.lop.value) || 0, pt: parseFloat(fields.pt.value) || 0,
-        tds: parseFloat(fields.tds.value) || 0, otherDed: parseFloat(fields.otherDed.value) || 0
+        basic: Number(fields.basic.value) || 0, hra: Number(fields.hra.value) || 0,
+        special: Number(fields.special.value) || 0, other: Number(fields.other.value) || 0,
+        lop: Number(fields.lop.value) || 0, pt: Number(fields.pt.value) || 0,
+        tds: Number(fields.tds.value) || 0, otherDed: Number(fields.otherDed.value) || 0
       }
     }));
     if (!rows.length) { toast('Nothing to save yet.', 'error'); return; }

@@ -892,13 +892,21 @@ const Api = {
       // Bank-specific identifiers, only ever relevant/required when
       // that bank is selected — see HDFC/ICICI BankFormatters.
       hdfcClientCode: d.hdfcClientCode || '',
-      iciciCorporateId: d.iciciCorporateId || ''
+      iciciCorporateId: d.iciciCorporateId || '',
+      // Optional company details — never used in any bank-file export,
+      // only printed on the Salary Slip header (address) and kept for
+      // the company's own GST/TDS compliance records.
+      address: d.address || '',
+      gstin: d.gstin || '',
+      pan: d.pan || '',
+      tan: d.tan || ''
     };
   },
-  async updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId }) {
+  async updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId, address, gstin, pan, tan }) {
     await userRef().set({
       companyName: name, accountNumber, ifsc, sysId, bankName,
       hdfcClientCode: hdfcClientCode || '', iciciCorporateId: iciciCorporateId || '',
+      address: address || '', gstin: gstin || '', pan: pan || '', tan: tan || '',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
   },
@@ -2047,7 +2055,7 @@ let employees = [];
 let editingEmployeeId = null;
 let salaryInputs = {};
 let salaryCalcInputs = {}; // Salary Calculation tab — rowData keyed by employee id
-let companyProfile = { name: '', accountNumber: '', ifsc: '', sysId: '', bankName: 'SBI', hdfcClientCode: '', iciciCorporateId: '' };
+let companyProfile = { name: '', accountNumber: '', ifsc: '', sysId: '', bankName: 'SBI', hdfcClientCode: '', iciciCorporateId: '', address: '', gstin: '', pan: '', tan: '' };
 let dashboardBooted = false;
 let currentUser = null;
 
@@ -2995,6 +3003,13 @@ function wireEmployeeForm() {
   const fType   = document.getElementById('empTransferType');
   const fMobile = document.getElementById('empMobile');
   const fEmail  = document.getElementById('empEmail');
+  const fDesignation = document.getElementById('empDesignation');
+  const fDepartment  = document.getElementById('empDepartment');
+  const fDoj    = document.getElementById('empDoj');
+  const fUan    = document.getElementById('empUan');
+  const fPan    = document.getElementById('empPan');
+  const uanErrLbl = document.getElementById('empUanError');
+  const panErrLbl = document.getElementById('empPanError');
   const fAcc    = document.getElementById('empAccount');
   const fAccC   = document.getElementById('empAccountConfirm');
   const fIfsc   = document.getElementById('empIfsc');
@@ -3043,6 +3058,34 @@ function wireEmployeeForm() {
     validateMobileEmailLive();
   });
   fEmail.addEventListener('input', validateMobileEmailLive);
+
+  // UAN: digits only, max 12, no spaces. PAN: auto-uppercase, no spaces.
+  // Both are optional — the live check only shows an error once
+  // something is actually typed, same pattern as Mobile/Email above.
+  blockSpaceKey(fUan);
+  fUan.addEventListener('input', () => {
+    fUan.value = fUan.value.replace(/[^0-9]/g, '').slice(0, 12);
+    validatePayrollFieldsLive();
+  });
+  blockSpaceKey(fPan);
+  autoUpperCaseLive(fPan);
+  fPan.addEventListener('input', validatePayrollFieldsLive);
+
+  function validatePayrollFieldsLive() {
+    const uanVal = fUan.value.trim();
+    if (!uanVal) { uanErrLbl.textContent = ''; fUan.classList.remove('input-mismatch'); }
+    else if (!/^[0-9]{12}$/.test(uanVal)) {
+      uanErrLbl.textContent = 'UAN must be exactly 12 digits';
+      fUan.classList.add('input-mismatch');
+    } else { uanErrLbl.textContent = ''; fUan.classList.remove('input-mismatch'); }
+
+    const panVal = fPan.value.trim();
+    if (!panVal) { panErrLbl.textContent = ''; fPan.classList.remove('input-mismatch'); }
+    else if (!isValidPanFormat(panVal)) {
+      panErrLbl.textContent = 'Enter a valid PAN, e.g. ABCDE1234F';
+      fPan.classList.add('input-mismatch');
+    } else { panErrLbl.textContent = ''; fPan.classList.remove('input-mismatch'); }
+  }
 
   function validateMobileEmailLive() {
     const mobileVal = fMobile.value.trim();
@@ -3149,11 +3192,13 @@ function wireEmployeeForm() {
 
   function resetForm() {
     employeeForm.reset();
-    [fAcc, fAccC, fIfsc, fIfscC, fMobile, fEmail].forEach(clearMatchStyles);
+    [fAcc, fAccC, fIfsc, fIfscC, fMobile, fEmail, fUan, fPan].forEach(clearMatchStyles);
     accMismatchLbl.textContent = '';
     ifscMismatchLbl.textContent = '';
     mobileErrLbl.textContent = '';
     emailErrLbl.textContent = '';
+    uanErrLbl.textContent = '';
+    panErrLbl.textContent = '';
     clearFieldError();
     fType.value = 'Same Bank';
     fBeneNickname.value = '';
@@ -3200,6 +3245,11 @@ function wireEmployeeForm() {
     fType.value = emp.transferType;
     fMobile.value = emp.mobile || '';
     fEmail.value = emp.email || '';
+    fDesignation.value = emp.designation || '';
+    fDepartment.value = emp.department || '';
+    fDoj.value = emp.doj || '';
+    fUan.value = emp.uan || '';
+    fPan.value = emp.pan || '';
     // Prefill bank-specific fields from the employee's own saved
     // values when present; otherwise fall back to the same defaults
     // used when generating the beneficiary file itself, so what the
@@ -3227,6 +3277,11 @@ function wireEmployeeForm() {
     const transferType = fType.value;
     const mobile = fMobile.value.trim();
     const email  = fEmail.value.trim().toLowerCase();
+    const designation = fDesignation.value.trim();
+    const department  = fDepartment.value.trim();
+    const doj    = fDoj.value; // "YYYY-MM-DD" from the native date input, or ''
+    const uan    = fUan.value.trim();
+    const pan    = fPan.value.trim().toUpperCase();
 
     // Required-field check — Middle Name is the sole optional field.
     if (!(fname && lname && acc && accC && ifsc && ifscC && empCode && mobile && email)) {
@@ -3239,6 +3294,17 @@ function wireEmployeeForm() {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       showFieldError('Please enter a valid email address.');
+      return;
+    }
+    // UAN and PAN are optional, but must match the real format if
+    // entered — same "optional but validated" rule as the Company
+    // Details form's GSTIN/PAN/TAN.
+    if (uan && !/^[0-9]{12}$/.test(uan)) {
+      showFieldError('UAN must be exactly 12 digits, or leave it blank.');
+      return;
+    }
+    if (pan && !isValidPanFormat(pan)) {
+      showFieldError('Please enter a valid PAN (e.g. ABCDE1234F), or leave it blank.');
       return;
     }
     // Employee Code and Account Number must be numeric only — the fields
@@ -3301,7 +3367,13 @@ function wireEmployeeForm() {
       return;
     }
 
-    const emp = { name: fullName, accountNumber: acc, ifsc, empCode, transferType, mobile, email };
+    const emp = {
+      name: fullName, accountNumber: acc, ifsc, empCode, transferType, mobile, email,
+      // Optional payroll/compliance fields — all fall back to '' rather
+      // than being omitted, so clearing a field in Edit actually clears
+      // it on save instead of leaving the old value untouched.
+      designation, department, doj, uan, pan
+    };
     // Only ever write the bank-specific fields that are actually
     // relevant to the CURRENT bank — never touch (and so never
     // overwrite-with-blank) the other banks' fields, so switching
@@ -3364,6 +3436,27 @@ function bankExtraCsvColumns(bankName) {
   return [];
 }
 const CORE_CSV_HEADER = 'Employee Name,Account Number,IFSC_BranchCode,Transfer Type,Emp Code,Mobile,Email';
+
+// Optional payroll/compliance columns — same fields as the Employee
+// form's "Payroll & Compliance Details" section. Unlike the
+// bank-specific extra columns below, these are NEVER required: a
+// missing or blank value here just leaves that field blank on the
+// employee record (and shows as "—" on the Salary Slip), it never
+// rejects the row. Placed right after the 7 core columns and before
+// the bank-specific ones, so existing CSVs that only had the core
+// columns (or the old bank-specific ones with no header row at all)
+// still parse exactly as before via parseCsv()'s position fallback.
+const PAYROLL_CSV_COLUMNS = [
+  { header: 'Designation', key: 'designation' },
+  { header: 'Department', key: 'department' },
+  { header: 'Date of Joining (YYYY-MM-DD)', key: 'doj' },
+  { header: 'UAN', key: 'uan' },
+  { header: 'PAN', key: 'pan' }
+];
+const PAYROLL_CSV_SAMPLE_VALUES = {
+  designation: 'SOFTWARE ENGINEER', department: 'ENGINEERING', doj: '2023-01-15', uan: '123456789012', pan: 'ABCDE1234F'
+};
+
 // Sample values for the bank-specific extra columns, shown in the
 // downloadable sample CSV so the format is obvious at a glance.
 const EXTRA_CSV_SAMPLE_VALUES = {
@@ -3377,9 +3470,10 @@ const EXTRA_CSV_SAMPLE_VALUES = {
 function downloadSampleCsv() {
   const bankName = companyProfile.bankName || 'SBI';
   const extraCols = bankExtraCsvColumns(bankName);
-  const header = [CORE_CSV_HEADER, ...extraCols.map(c => c.header)].join(',');
+  const header = [CORE_CSV_HEADER, ...PAYROLL_CSV_COLUMNS.map(c => c.header), ...extraCols.map(c => c.header)].join(',');
   const exampleRow = [
     'JOHN DOE,123456789012,SBIN0001234,Same Bank,01,9876543210,john.doe@example.com',
+    ...PAYROLL_CSV_COLUMNS.map(c => PAYROLL_CSV_SAMPLE_VALUES[c.key]),
     ...extraCols.map(c => EXTRA_CSV_SAMPLE_VALUES[c.key])
   ].join(',');
   const sample = [header, exampleRow].join('\r\n') + '\r\n';
@@ -3394,9 +3488,10 @@ function exportLedgerCsv() {
   if (!employees.length) { toast('No employees to export yet.', 'error'); return; }
   const bankName = companyProfile.bankName || 'SBI';
   const extraCols = bankExtraCsvColumns(bankName);
-  const header = [CORE_CSV_HEADER, ...extraCols.map(c => c.header)].join(',');
+  const header = [CORE_CSV_HEADER, ...PAYROLL_CSV_COLUMNS.map(c => c.header), ...extraCols.map(c => c.header)].join(',');
   const rows = employees.map(e => csvRow([
     e.name, e.accountNumber, e.ifsc, e.transferType, e.empCode, e.mobile || '', e.email || '',
+    ...PAYROLL_CSV_COLUMNS.map(c => e[c.key] ?? ''),
     ...extraCols.map(c => e[c.key] ?? '')
   ]));
   const content = [header, ...rows].join('\r\n') + '\r\n';
@@ -3577,6 +3672,13 @@ function parseCsv(text, existingAccounts, existingEmpCodes) {
   const idxMobile = headers.indexOf('mobile');
   const idxEmail  = headers.indexOf('email');
 
+  // Optional payroll/compliance columns — looked up by header name
+  // only (no position fallback, since they're optional: a CSV that
+  // doesn't have them at all should just leave every employee's
+  // designation/department/DOJ/UAN/PAN blank, not misread some other
+  // column into one of these by accident).
+  const payrollIdx = Object.fromEntries(PAYROLL_CSV_COLUMNS.map(c => [c.key, headers.indexOf(c.header.toLowerCase())]));
+
   // Bank-specific extra columns (nickname, PNB address/limits, HDFC
   // account type) — same set the Add/Edit Employee form requires for
   // the company's CURRENT payout bank, so a bulk-imported employee
@@ -3603,6 +3705,26 @@ function parseCsv(text, existingAccounts, existingEmpCodes) {
     const empCode = ((cols[idxCode >= 0 ? idxCode : 4] || '01').replace(/[^0-9]/g, '') || '01').padStart(2, '0');
     const mobile = (cols[idxMobile >= 0 ? idxMobile : 5] || '').replace(/[^0-9]/g, '');
     const email = (cols[idxEmail >= 0 ? idxEmail : 6] || '').trim().toLowerCase();
+
+    // Optional payroll fields — read if the column exists, otherwise
+    // left blank. UAN/PAN are format-checked ONLY when a value is
+    // actually present; an invalid one is a hard row error (same
+    // "optional but validated" rule as the manual Add Employee form),
+    // since silently dropping a wrong UAN/PAN would be worse than
+    // telling the uploader about it.
+    const designation = (payrollIdx.designation >= 0 ? cols[payrollIdx.designation] : '') || '';
+    const department = (payrollIdx.department >= 0 ? cols[payrollIdx.department] : '') || '';
+    const doj = (payrollIdx.doj >= 0 ? cols[payrollIdx.doj] : '') || '';
+    const uan = ((payrollIdx.uan >= 0 ? cols[payrollIdx.uan] : '') || '').replace(/[^0-9]/g, '');
+    const pan = ((payrollIdx.pan >= 0 ? cols[payrollIdx.pan] : '') || '').trim().toUpperCase();
+    if (uan && !/^[0-9]{12}$/.test(uan)) {
+      errors.push({ line: lineNo, reason: `Invalid UAN "${uan}" — must be exactly 12 digits, or leave the column blank.` });
+      continue;
+    }
+    if (pan && !isValidPanFormat(pan)) {
+      errors.push({ line: lineNo, reason: `Invalid PAN "${pan}" — must match the format ABCDE1234F, or leave the column blank.` });
+      continue;
+    }
 
     if (!accountNumber || !name) {
       errors.push({ line: lineNo, reason: 'Missing Account Number or Employee Name.' });
@@ -3663,7 +3785,7 @@ function parseCsv(text, existingAccounts, existingEmpCodes) {
 
     seenInFile.add(accountNumber);
     seenCodes.add(empCode);
-    rows.push({ accountNumber, ifsc, name, transferType, empCode, mobile, email, ...extra });
+    rows.push({ accountNumber, ifsc, name, transferType, empCode, mobile, email, designation, department, doj, uan, pan, ...extra });
   }
   return { rows, errors };
 }
@@ -4331,12 +4453,9 @@ function wireSalaryCalc() {
 // Payslips" action.
 // ---------------------------------------------------------
 
-// The company profile (see Api.getCompanyProfile / companyProfile
-// global) has no address field today — there's nowhere in Settings to
-// enter one yet. Edit this constant (or wire up a real Settings field
-// later and read it here instead) to change what prints under the
-// company name on every payslip.
-const COMPANY_ADDRESS_FOR_PAYSLIP = 'Registered Office Address — update COMPANY_ADDRESS_FOR_PAYSLIP in app.js';
+// Company profile now has a real Address field (Settings → Company
+// Details), so the payslip reads companyProfile.address directly —
+// see openSalarySlip() below. No hardcoded constant needed anymore.
 
 function wireSalarySlipModal() {
   document.getElementById('scTableBody').addEventListener('click', (e) => {
@@ -4372,18 +4491,21 @@ function openSalarySlip(empId) {
   const monthLabel = (y && m) ? new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' }) : '—';
 
   document.getElementById('slipCompanyName').textContent = companyProfile.name || 'PayFlow Pro Technologies';
-  document.getElementById('slipCompanyAddress').textContent = COMPANY_ADDRESS_FOR_PAYSLIP;
+  document.getElementById('slipCompanyAddress').textContent = companyProfile.address || 'Registered Office Address — add one in Settings → Company Details';
   document.getElementById('slipPayrollMonth').textContent = monthLabel;
 
-  // designation / department / DOJ / UAN / PAN aren't fields in the
-  // current employee record (see Employee modal / Api.addEmployee) —
-  // these fall back to "—" until/unless those fields are added to the
-  // Employee form and saved onto each employee document.
+  // designation / department / DOJ / UAN / PAN come from the Employee
+  // form's "Payroll & Compliance Details" section — all optional, so
+  // these still fall back to "—" for any employee added before that
+  // section existed, or who simply left them blank.
   document.getElementById('slipEmpName').textContent = emp.name || '—';
   document.getElementById('slipEmpCode').textContent = emp.empCode || '—';
   document.getElementById('slipDesignation').textContent = emp.designation || '—';
   document.getElementById('slipDepartment').textContent = emp.department || '—';
-  document.getElementById('slipDoj').textContent = emp.doj || '—';
+  // DOJ is stored as "YYYY-MM-DD" (native date input) — reformat to
+  // DD-MM-YYYY for the printed slip, same convention as the rest of
+  // the app's dates (see formatDateDDMMYYYY).
+  document.getElementById('slipDoj').textContent = emp.doj ? formatDateDDMMYYYY(new Date(emp.doj + 'T00:00:00')) : '—';
   document.getElementById('slipUan').textContent = emp.uan || '—';
   document.getElementById('slipPan').textContent = emp.pan || '—';
   document.getElementById('slipBankAccount').textContent = emp.accountNumber ? maskAccount(emp.accountNumber) : '—';
@@ -5402,6 +5524,10 @@ async function loadCompanyProfile() {
     document.getElementById('companyAccInput').value = p.accountNumber || '';
     document.getElementById('companyAccConfirmInput').value = p.accountNumber || '';
     document.getElementById('companyIfscInput').value = p.ifsc || '';
+    document.getElementById('companyAddressInput').value = p.address || '';
+    document.getElementById('companyGstinInput').value = p.gstin || '';
+    document.getElementById('companyPanInput').value = p.pan || '';
+    document.getElementById('companyTanInput').value = p.tan || '';
     setSelectedCompanyBank(p.bankName || 'SBI');
   } catch (err) {
     console.error(err);
@@ -5421,6 +5547,10 @@ function renderCompanySummary() {
   document.getElementById('coSummaryBank').textContent = bank.label;
   document.getElementById('coSummaryAcc').textContent = companyProfile.accountNumber ? maskAccount(companyProfile.accountNumber) : '—';
   document.getElementById('coSummaryIfsc').textContent = companyProfile.ifsc || '—';
+  document.getElementById('coSummaryAddress').textContent = companyProfile.address || '—';
+  document.getElementById('coSummaryGstin').textContent = companyProfile.gstin || '—';
+  document.getElementById('coSummaryPan').textContent = companyProfile.pan || '—';
+  document.getElementById('coSummaryTan').textContent = companyProfile.tan || '—';
 }
 
 function setCompanyEditMode(editing) {
@@ -5434,6 +5564,10 @@ function setCompanyEditMode(editing) {
     document.getElementById('companyAccConfirmInput').value = companyProfile.accountNumber || '';
     document.getElementById('companyIfscInput').value = companyProfile.ifsc || '';
     document.getElementById('companyIfscPreview').textContent = '';
+    document.getElementById('companyAddressInput').value = companyProfile.address || '';
+    document.getElementById('companyGstinInput').value = companyProfile.gstin || '';
+    document.getElementById('companyPanInput').value = companyProfile.pan || '';
+    document.getElementById('companyTanInput').value = companyProfile.tan || '';
     const hdfcInput = document.getElementById('companyHdfcClientCodeInput');
     const iciciInput = document.getElementById('companyIciciCorporateIdInput');
     if (hdfcInput) hdfcInput.value = companyProfile.hdfcClientCode || '';
@@ -5458,6 +5592,22 @@ function branchCodeFromIfsc(ifsc) {
   return String(ifsc || '').trim().toUpperCase().slice(5);
 }
 
+// PAN / GSTIN / TAN format checks — used for both the Company Details
+// form and the Employee form's optional PAN field. All three are
+// OPTIONAL everywhere they appear (never required to save), but if a
+// value IS entered, it's checked against the real Income
+// Tax/GST format so a typo doesn't silently end up on a payslip or
+// Form 16.
+function isValidPanFormat(pan) {
+  return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(String(pan || '').trim().toUpperCase());
+}
+function isValidGstinFormat(gstin) {
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(String(gstin || '').trim().toUpperCase());
+}
+function isValidTanFormat(tan) {
+  return /^[A-Z]{4}[0-9]{5}[A-Z]$/.test(String(tan || '').trim().toUpperCase());
+}
+
 function wireCompanyForm() {
   wireCompanyBankButtons();
 
@@ -5467,6 +5617,11 @@ function wireCompanyForm() {
   const ifscInput       = document.getElementById('companyIfscInput');
   const ifscPreviewEl   = document.getElementById('companyIfscPreview');
   const saveBtn         = document.getElementById('saveCompanyBtn');
+
+  // GSTIN / Company PAN / TAN — auto-uppercase as-you-type, same as
+  // IFSC, since all three are conventionally written in caps.
+  [document.getElementById('companyGstinInput'), document.getElementById('companyPanInput'), document.getElementById('companyTanInput')]
+    .forEach(el => autoUpperCaseLive(el));
 
   // Account Number: no spaces, no pasting — blocking paste is what
   // makes "type it twice" actually catch typos.
@@ -5545,6 +5700,13 @@ function wireCompanyForm() {
     const bankName = selectedCompanyBankKey;
     const hdfcClientCode = (document.getElementById('companyHdfcClientCodeInput')?.value || '').trim().toUpperCase();
     const iciciCorporateId = (document.getElementById('companyIciciCorporateIdInput')?.value || '').trim().toUpperCase();
+    const address = document.getElementById('companyAddressInput').value.trim();
+    const gstin = document.getElementById('companyGstinInput').value.trim().toUpperCase();
+    const pan = document.getElementById('companyPanInput').value.trim().toUpperCase();
+    const tan = document.getElementById('companyTanInput').value.trim().toUpperCase();
+    document.getElementById('companyGstinError').textContent = '';
+    document.getElementById('companyPanError').textContent = '';
+    document.getElementById('companyTanError').textContent = '';
     if (!name || !accountNumber || !accountNumberConfirm || !ifsc || !bankName) {
       toast('Please fill all fields.', 'error'); return;
     }
@@ -5585,13 +5747,31 @@ function wireCompanyForm() {
       toast('Please enter your ICICI Corporate Login ID — it is required on every export\'s Master Debit Record.', 'error');
       return;
     }
+    // GSTIN / Company PAN / TAN are all optional, but if entered must
+    // match the real format — a typo here would silently end up on
+    // every printed payslip.
+    if (gstin && !isValidGstinFormat(gstin)) {
+      document.getElementById('companyGstinError').textContent = 'Enter a valid 15-character GSTIN, e.g. 29ABCDE1234F1Z5.';
+      toast('Please enter a valid GSTIN, or leave it blank.', 'error');
+      return;
+    }
+    if (pan && !isValidPanFormat(pan)) {
+      document.getElementById('companyPanError').textContent = 'Enter a valid 10-character PAN, e.g. ABCDE1234F.';
+      toast('Please enter a valid Company PAN, or leave it blank.', 'error');
+      return;
+    }
+    if (tan && !isValidTanFormat(tan)) {
+      document.getElementById('companyTanError').textContent = 'Enter a valid 10-character TAN, e.g. BLRA12345B.';
+      toast('Please enter a valid TAN, or leave it blank.', 'error');
+      return;
+    }
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
     try {
       const sysId = branchCodeFromIfsc(ifsc);
       ifscPreviewEl.textContent = `Branch code for the file: ${sysId}`;
-      await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId });
-      companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId };
+      await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId, address, gstin, pan, tan });
+      companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId, address, gstin, pan, tan };
       await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Bank: ${bankName}`);
       renderCompanySummary();
       updateDisbursementModeUI();

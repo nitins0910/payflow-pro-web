@@ -956,6 +956,22 @@
             <span class="company-summary-row__label">IFSC</span>
             <span class="company-summary-row__value" id="coSummaryIfsc">—</span>
           </div>
+          <div class="company-summary-row" style="align-items:flex-start;">
+            <span class="company-summary-row__label">Address</span>
+            <span class="company-summary-row__value" id="coSummaryAddress" style="text-align:right; max-width:300px; font-weight:500; white-space:pre-line;">—</span>
+          </div>
+          <div class="company-summary-row">
+            <span class="company-summary-row__label">GSTIN</span>
+            <span class="company-summary-row__value" id="coSummaryGstin">—</span>
+          </div>
+          <div class="company-summary-row">
+            <span class="company-summary-row__label">Company PAN</span>
+            <span class="company-summary-row__value" id="coSummaryPan">—</span>
+          </div>
+          <div class="company-summary-row">
+            <span class="company-summary-row__label">TAN</span>
+            <span class="company-summary-row__value" id="coSummaryTan">—</span>
+          </div>
           <button type="button" class="btn-inline" id="editCompanyBtn" style="margin-top:18px;">Edit</button>
         </div>
 
@@ -1009,6 +1025,34 @@
             <input type="text" id="companyIciciCorporateIdInput" maxlength="20" placeholder="e.g. CORPID123" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
             <div class="field-hint">Your Corporate Login ID on ICICI's CIB portal — stamped onto the Master Debit Record of every export.</div>
           </div>
+
+          <!-- Optional company details — not required for any bank
+               export; used purely to print on the Salary Slip header
+               and for your own compliance records (GSTIN/PAN/TAN). -->
+          <p class="field-hint" style="margin:16px 0 6px;">Optional — printed on the Salary Slip &amp; for your records</p>
+          <div class="field">
+            <label>Registered Office Address</label>
+            <textarea id="companyAddressInput" rows="2" placeholder="e.g. 4th Floor, Tech Park, MG Road, Bengaluru, Karnataka - 560001" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); font-family:var(--font-body); resize:vertical;"></textarea>
+          </div>
+          <div class="field-row-2">
+            <div class="field">
+              <label>GSTIN</label>
+              <input type="text" id="companyGstinInput" maxlength="15" placeholder="e.g. 29ABCDE1234F1Z5" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
+              <div class="field-hint field-mismatch" id="companyGstinError"></div>
+            </div>
+            <div class="field">
+              <label>Company PAN</label>
+              <input type="text" id="companyPanInput" maxlength="10" placeholder="e.g. ABCDE1234F" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
+              <div class="field-hint field-mismatch" id="companyPanError"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label>TAN (Tax Deduction Account Number)</label>
+            <input type="text" id="companyTanInput" maxlength="10" placeholder="e.g. BLRA12345B" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); text-transform:uppercase;">
+            <div class="field-hint field-mismatch" id="companyTanError"></div>
+            <div class="field-hint">Required on Form 16 / TDS returns if you deduct TDS from salaries — not used anywhere in file exports.</div>
+          </div>
+
           <div class="modal-actions">
             <button type="button" class="btn-inline secondary" id="cancelCompanyEditBtn">Cancel</button>
             <button type="button" class="btn-inline" id="saveCompanyBtn" style="flex:1;">Save Company Profile</button>
@@ -1309,6 +1353,40 @@
             <label>Email Address</label>
             <input type="email" id="empEmail" placeholder="employee@example.com" required>
             <div class="field-hint field-mismatch" id="empEmailError"></div>
+          </div>
+        </div>
+
+        <!-- Payroll & compliance details — all optional, since existing
+             employees/CSVs won't have these yet. Purely used to populate
+             the Salary Slip (see openSalarySlip() in app.js); they don't
+             affect any bank-file export logic. -->
+        <p class="field-hint" style="margin:14px 0 4px;">Payroll &amp; Compliance Details (optional — shown on the Salary Slip)</p>
+        <div class="field-row-2">
+          <div class="field">
+            <label>Designation</label>
+            <input type="text" id="empDesignation" placeholder="e.g. Software Engineer">
+          </div>
+          <div class="field">
+            <label>Department</label>
+            <input type="text" id="empDepartment" placeholder="e.g. Engineering">
+          </div>
+        </div>
+        <div class="field-row-2">
+          <div class="field">
+            <label>Date of Joining</label>
+            <input type="date" id="empDoj" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); font-family:var(--font-body);">
+          </div>
+          <div class="field">
+            <label>UAN (Universal Account Number)</label>
+            <input type="text" id="empUan" inputmode="numeric" maxlength="12" placeholder="12-digit UAN">
+            <div class="field-hint field-mismatch" id="empUanError"></div>
+          </div>
+        </div>
+        <div class="field-row-2">
+          <div class="field">
+            <label>PAN</label>
+            <input type="text" id="empPan" maxlength="10" placeholder="e.g. ABCDE1234F" style="text-transform:uppercase;">
+            <div class="field-hint field-mismatch" id="empPanError"></div>
           </div>
         </div>
 

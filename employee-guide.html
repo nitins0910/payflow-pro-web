@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Page Guide — PayFlow Pro</title>
+<meta name="description" content="Everything on the Employees page explained — adding employees, required fields, bulk CSV import/export, search, bulk delete, and the beneficiary upload file.">
+<link rel="canonical" href="https://nitins0910.github.io/payflow-pro-web/employee-guide.html">
+
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="icon-16.png?v=2">
+<link rel="shortcut icon" href="favicon.ico?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png?v=2">
+
+<meta name="theme-color" content="#0A0F1E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+
+<style>
+  /* Same doc-page wrapper pattern as privacy.html / bank-file-guide.html /
+     salary-calculation-guide.html — forced light mode via
+     data-theme="light" on <html>, since this is a standalone reference
+     doc rather than a logged-in app screen. Colors resolve through the
+     same CSS variables, which style.css remaps for light mode
+     automatically. */
+  .legal-wrap{ max-width:820px; margin:0 auto; padding:48px 24px 90px; }
+  .legal-wrap h1{ font-family:var(--font-display); font-size:28px; margin-bottom:6px; }
+  .legal-wrap .legal-meta{ color:var(--text3); font-size:13px; margin-bottom:32px; }
+  .legal-wrap h2{ font-family:var(--font-display); font-size:18px; margin:34px 0 12px; color:var(--text); display:flex; align-items:center; gap:10px; }
+  .legal-wrap h2 .sec-num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:50%; flex:0 0 auto;
+    background:var(--surface2); border:1px solid var(--border-soft);
+    color:var(--blue-bright); font-family:var(--font-mono); font-weight:700; font-size:12.5px;
+  }
+  .legal-wrap h3{ font-family:var(--font-display); font-size:14.5px; margin:20px 0 8px; color:var(--text); }
+  .legal-wrap p, .legal-wrap li{ font-size:14px; line-height:1.75; color:var(--text2); }
+  .legal-wrap ul, .legal-wrap ol{ padding-left:20px; margin:8px 0 14px; }
+  .legal-wrap li{ margin-bottom:6px; }
+  .legal-wrap a{ color:var(--blue-bright); }
+  .legal-back{ display:inline-block; margin-bottom:24px; font-size:13px; }
+  .legal-notice{ background:var(--surface2); border:1px solid var(--border-soft); padding:14px 16px; border-radius:11px; font-size:12.5px; color:var(--text3); margin-bottom:28px; line-height:1.7; }
+  .legal-table{ width:100%; border-collapse:collapse; margin:10px 0 18px; font-size:13.5px; }
+  .legal-table th, .legal-table td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+  .legal-table th{ color:var(--text3); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  .legal-table td.mono, .legal-table th.mono{ font-family:var(--font-mono); }
+
+  .guide-steps{ counter-reset:guide-step; list-style:none; padding-left:0; margin:14px 0 24px; }
+  .guide-steps > li{ counter-increment:guide-step; position:relative; padding:2px 0 2px 40px; margin-bottom:16px; }
+  .guide-steps > li::before{
+    content:counter(guide-step);
+    position:absolute; left:0; top:-1px;
+    width:26px; height:26px; border-radius:50%;
+    background:var(--surface2); border:1px solid var(--border-soft);
+    color:var(--blue-bright); font-family:var(--font-mono); font-weight:700; font-size:12.5px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .guide-steps > li strong{ color:var(--text); }
+  .guide-steps > li p{ margin:4px 0 0; }
+
+  /* Table of contents — same pattern as salary-calculation-guide.html */
+  .toc{
+    background:var(--surface); border:1px solid var(--border-soft); border-radius:12px;
+    padding:16px 18px; margin-bottom:30px;
+  }
+  .toc .toc-title{ font-family:var(--font-display); font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text3); margin-bottom:10px; }
+  .toc ol{ margin:0; padding-left:18px; columns:2; column-gap:24px; }
+  .toc li{ margin-bottom:6px; font-size:13px; }
+  .toc a{ color:var(--text2); text-decoration:none; }
+  .toc a:hover{ color:var(--blue-bright); }
+  @media (max-width:560px){ .toc ol{ columns:1; } }
+
+  .callout{
+    border-radius:11px; padding:14px 16px; margin:14px 0 20px;
+    font-size:13px; line-height:1.7; border:1px solid var(--border-soft);
+  }
+  .callout .callout-title{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--font-display); font-weight:700; font-size:12.5px;
+    text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;
+  }
+  .callout.note{ background:var(--surface2); color:var(--text2); }
+  .callout.note .callout-title{ color:var(--blue-bright); }
+  .callout.warning{ background:rgba(245,158,11,0.08); border-color:rgba(245,158,11,0.35); color:var(--text2); }
+  .callout.warning .callout-title{ color:var(--warning); }
+  .callout.rule{ background:var(--success-bg); border-color:rgba(34,197,94,0.35); color:var(--text2); }
+  .callout.rule .callout-title{ color:var(--success); }
+
+  .legal-wrap code.inline-code{
+    font-family:var(--font-mono); font-size:12.5px; background:var(--surface2);
+    border:1px solid var(--border-soft); border-radius:5px; padding:1.5px 6px; color:var(--blue-bright);
+  }
+
+  .field-cards{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0 22px; }
+  @media (max-width:600px){ .field-cards{ grid-template-columns:1fr; } }
+  .field-card{
+    border:1px solid var(--border-soft); border-radius:12px; padding:16px 18px;
+    background:var(--surface);
+  }
+  .field-card h3{ margin:0 0 8px; font-size:15px; }
+  .field-card .field-card__meta{ font-family:var(--font-mono); font-size:11.5px; color:var(--text3); margin-bottom:10px; }
+  .field-card ul{ margin:0; padding-left:18px; }
+  .field-card li{ font-size:13px; margin-bottom:4px; }
+
+  .mode-pill{
+    display:inline-block; font-family:var(--font-mono); font-size:11px; font-weight:700;
+    padding:2px 8px; border-radius:20px; border:1px solid var(--border-soft);
+    background:var(--surface2); color:var(--text2); margin-right:4px;
+  }
+  .mode-pill.req{ color:var(--warning); border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.08); }
+  .mode-pill.opt{ color:var(--text3); }
+
+  .faq-item{ margin-bottom:16px; }
+  .faq-item h3{ margin:0 0 4px; }
+
+  @media (max-width:600px){
+    .legal-table{ font-size:12.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="legal-wrap">
+  <a href="index.html" class="legal-back">← Back to PayFlow Pro</a>
+  <div class="brand" style="margin-bottom:18px;">
+    <span class="mark">PF</span>
+    <h1 style="margin:0;">PayFlow Pro</h1>
+  </div>
+
+  <h1>Employee Page Guide</h1>
+  <p class="legal-meta">Everything on the Employees page — adding and editing records, required fields, search, bulk CSV import/export, and the free beneficiary upload file.</p>
+
+  <div class="legal-notice">
+    This page documents every field, button, and rule on the <strong>Employees</strong> page as it actually
+    behaves in the app — not a generic explainer. Which fields are required (and which extra fields appear at
+    all) depends on your company's currently selected <strong>payout bank</strong> under Settings → Company
+    Details, since each bank's bulk-upload format needs slightly different information.
+  </div>
+
+  <div class="toc">
+    <div class="toc-title">On this page</div>
+    <ol>
+      <li><a href="#sec-overview">Page Overview &amp; KPI Cards</a></li>
+      <li><a href="#sec-add">Adding an Employee</a></li>
+      <li><a href="#sec-bank-fields">Bank-Specific Fields</a></li>
+      <li><a href="#sec-search">Search, Edit &amp; Delete</a></li>
+      <li><a href="#sec-bulk-delete">Selecting &amp; Bulk-Deleting Rows</a></li>
+      <li><a href="#sec-csv">Bulk Import &amp; Export CSV</a></li>
+      <li><a href="#sec-beneficiary">Beneficiary Upload File (Free)</a></li>
+      <li><a href="#sec-faq">Frequently Asked Questions</a></li>
+    </ol>
+  </div>
+
+  <h2 id="sec-overview"><span class="sec-num">1</span> Page Overview &amp; KPI Cards</h2>
+  <p>
+    The Employees page is where your entire team's payout details live — it's the source list every other page
+    (Salary Calculation, Generate Transaction File, Beneficiary Upload File, Salary Slip) reads from. Four cards
+    at the top give you an at-a-glance summary:
+  </p>
+  <ul>
+    <li><strong>Total Employees</strong> — count of every record currently in your ledger.</li>
+    <li><strong>Payout Bank</strong> — your company's own bank (set under Settings → Company Details). This is
+      the bank salaries are debited <em>from</em>, and it's what decides which bank-specific fields this page
+      asks for (see Section 3).</li>
+    <li><strong>Disbursed This Month</strong> — total ₹ amount exported via Generate Transaction File so far this
+      calendar month.</li>
+    <li><strong>Last Export</strong> — the batch ID and date of your most recent export, so you can tell at a
+      glance whether this month's payroll has already gone out.</li>
+  </ul>
+
+  <h2 id="sec-add"><span class="sec-num">2</span> Adding an Employee</h2>
+  <p>Click <strong>+ Add Employee</strong> to open the form. It's organized into three groups:</p>
+
+  <h3>Core details (always required)</h3>
+  <ul>
+    <li><strong>First / Middle / Last Name</strong> — Middle Name is optional; all three auto-uppercase as you
+      type and can't contain spaces within a single box (use separate boxes instead).</li>
+    <li><strong>Emp Code</strong> — a short numeric code unique across your whole ledger. It's padded to at
+      least 2 digits automatically and is used to build each bank's own batch/transaction reference, so a
+      duplicate code is rejected outright.</li>
+    <li><strong>Transfer Type</strong> — <strong>Intrabank Transfer</strong> if the employee's account is with
+      your own company bank, or <strong>Interbank Transfer</strong> otherwise. This decides which list they show
+      up in on the Generate Transaction File page.</li>
+    <li><strong>Mobile Number</strong> — a valid 10-digit Indian mobile number (must start with 6–9).</li>
+    <li><strong>Email Address</strong> — used to send that employee's payslip directly from the Salary
+      Calculation page's "Email All Payslips" button.</li>
+    <li><strong>Account Number</strong> and <strong>Confirm Account Number</strong> — must match exactly (a
+      mismatch is flagged live, before you can save). Masked by default; use the eye icon to reveal it.</li>
+    <li><strong>IFSC Code</strong> and <strong>Confirm IFSC</strong> — same match-before-save rule as the account
+      number.</li>
+  </ul>
+  <div class="callout warning">
+    <div class="callout-title">⚠️ Account Number and Emp Code must both be unique</div>
+    Saving an employee whose Account Number or Emp Code already exists elsewhere in your ledger is rejected with
+    an error — this applies whether you're adding one employee manually or importing a whole CSV (Section 6).
+  </div>
+
+  <h3>Payroll &amp; Compliance details (optional)</h3>
+  <p>
+    These feed the <strong>Salary Slip</strong> only — they never affect bank-file export logic, and leaving any
+    of them blank is fine (they just show as "—" on the slip):
+  </p>
+  <ul>
+    <li><strong>Designation</strong> and <strong>Department</strong> — free text.</li>
+    <li><strong>Date of Joining</strong> — a date picker.</li>
+    <li><strong>UAN (Universal Account Number)</strong> — if entered, must be exactly 12 digits.</li>
+    <li><strong>PAN</strong> — if entered, must match the standard format, e.g. <code class="inline-code">ABCDE1234F</code>.</li>
+  </ul>
+
+  <h2 id="sec-bank-fields"><span class="sec-num">3</span> Bank-Specific Fields</h2>
+  <p>
+    Beyond the core details above, some bulk-beneficiary upload formats need a bit more information per employee.
+    Which section appears is decided automatically from your company's <strong>current payout bank</strong> —
+    switching banks later in Settings changes what this form asks for the next time you add or edit someone.
+  </p>
+
+  <div class="field-cards">
+    <div class="field-card">
+      <h3>State Bank of India (SBI)</h3>
+      <div class="field-card__meta">IFSC prefix: SBIN</div>
+      <ul>
+        <li><span class="mode-pill opt">No extra fields</span></li>
+        <li>Only the core details above are needed.</li>
+      </ul>
+    </div>
+    <div class="field-card">
+      <h3>ICICI Bank</h3>
+      <div class="field-card__meta">IFSC prefix: ICIC</div>
+      <ul>
+        <li><span class="mode-pill req">Beneficiary Nickname</span></li>
+        <li>Up to 32 characters — used by ICICI's own "BENE Upload" format.</li>
+      </ul>
+    </div>
+    <div class="field-card">
+      <h3>HDFC Bank</h3>
+      <div class="field-card__meta">IFSC prefix: HDFC</div>
+      <ul>
+        <li><span class="mode-pill req">Beneficiary Nickname</span></li>
+        <li><span class="mode-pill req">Beneficiary Account Type</span> — Savings, Current, CC, or OD.</li>
+        <li>Beneficiary Bank Name is worked out automatically from the employee's IFSC — no field needed.</li>
+      </ul>
+    </div>
+    <div class="field-card">
+      <h3>Punjab National Bank (PNB)</h3>
+      <div class="field-card__meta">IFSC prefix: PUNB</div>
+      <ul>
+        <li><span class="mode-pill req">Beneficiary Nickname</span></li>
+        <li><span class="mode-pill req">Address</span> — city / branch area.</li>
+        <li><span class="mode-pill req">Max Amount / Day</span> and <span class="mode-pill req">Max Transactions / Day</span> — PNB's own per-beneficiary daily fraud-safety cap, editable anytime later from PNB's Corp Admin panel.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-title">🛡️ Missing bank fields when the file is later generated</div>
+    If you skip a nickname/address/limit when adding someone, PayFlow Pro doesn't block you — a reasonable
+    default (nickname derived from the employee's name, a generous daily cap above their last paid amount) is
+    used automatically <em>at the time you generate the Beneficiary Upload File</em>. The orange ⚠ banner and
+    row markers on this page simply flag whose record is missing these bank-specific fields, so you know who
+    would get a default rather than your own values.
+  </div>
+
+  <h2 id="sec-search"><span class="sec-num">4</span> Search, Edit &amp; Delete</h2>
+  <ul>
+    <li><strong>Search box</strong> — filters the table live as you type, matching against employee name or
+      account number.</li>
+    <li><strong>Sortable columns</strong> — click any column header with an arrow (Name, Account Number,
+      IFSC/Branch Code, Transfer Type, Emp Code) to sort the table by that field; click again to reverse the
+      order.</li>
+    <li><strong>Edit a row</strong> — opens the same form as Add Employee, pre-filled, so you can correct any
+      field including bank details.</li>
+    <li><strong>Delete a row</strong> — removes that employee from the ledger. This doesn't affect any file
+      already exported in the past; those stay on the Exports page exactly as they were generated.</li>
+  </ul>
+
+  <h2 id="sec-bulk-delete"><span class="sec-num">5</span> Selecting &amp; Bulk-Deleting Rows</h2>
+  <ol class="guide-steps">
+    <li>
+      <strong>Tick individual checkboxes, or use the header checkbox to select all visible rows.</strong>
+      <p>A bulk action bar appears showing how many rows are currently selected.</p>
+    </li>
+    <li>
+      <strong>Click "Delete Selected" to remove every selected employee at once.</strong>
+      <p>Useful for cleaning up a batch of test records or removing employees who've left, without deleting one
+      by one.</p>
+    </li>
+    <li>
+      <strong>Click "Clear Selection" to deselect everyone without deleting anything.</strong>
+    </li>
+  </ol>
+
+  <h2 id="sec-csv"><span class="sec-num">6</span> Bulk Import &amp; Export CSV</h2>
+  <p>
+    For onboarding a whole team at once, or backing up/editing your ledger outside the app, the Employees page
+    supports round-tripping your data as a CSV file.
+  </p>
+
+  <h3>Download sample CSV</h3>
+  <p>
+    Click <strong>"Download sample CSV"</strong> to get a ready-to-fill template with the exact column headers
+    the importer expects, plus one example row. The columns adapt automatically to your company's current payout
+    bank — so a PNB company's sample includes the PNB-specific columns, while an SBI company's sample doesn't.
+  </p>
+  <table class="legal-table">
+    <thead><tr><th>Column</th><th>Required?</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">Employee Name</td><td>Required</td><td>Auto-uppercased.</td></tr>
+      <tr><td class="mono">Account Number</td><td>Required</td><td>Digits only; must be unique.</td></tr>
+      <tr><td class="mono">IFSC_BranchCode</td><td>Required</td><td>Auto-uppercased.</td></tr>
+      <tr><td class="mono">Transfer Type</td><td>Required</td><td>Exactly "Same Bank" or "Other Bank".</td></tr>
+      <tr><td class="mono">Emp Code</td><td>Required</td><td>Digits only; must be unique.</td></tr>
+      <tr><td class="mono">Mobile</td><td>Required</td><td>10-digit number starting 6–9.</td></tr>
+      <tr><td class="mono">Email</td><td>Required</td><td>Standard email format.</td></tr>
+      <tr><td class="mono">Designation, Department, Date of Joining, UAN, PAN</td><td>Optional</td><td>Left blank on the record if the column is missing or empty; UAN/PAN are still format-checked if a value <em>is</em> given.</td></tr>
+      <tr><td class="mono">Bank-specific columns</td><td>Depends on bank</td><td>Same fields as Section 3 (Beneficiary Nickname, PNB Address/Max Amount/Max Transactions, HDFC Account Type) — required only for banks that need them.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Import a CSV</h3>
+  <ol class="guide-steps">
+    <li>
+      <strong>Click "Bulk Import CSV" and choose your file.</strong>
+      <p>Nothing is written to your ledger yet at this point — the file is only parsed and validated.</p>
+    </li>
+    <li>
+      <strong>Review the preview.</strong>
+      <p>Every row that parsed cleanly is shown in green as "will import"; every row that failed a check is shown
+      in red with the exact reason (missing/invalid field, duplicate Account Number or Emp Code against your
+      existing ledger <em>or</em> against another row in the same file, etc.).</p>
+    </li>
+    <li>
+      <strong>Confirm to import.</strong>
+      <p>Only the valid rows are added — skipped rows are never partially imported. Very large files only list
+      the first 500 rows individually in the preview, but every row beyond that is still imported or skipped
+      using the same rules.</p>
+    </li>
+  </ol>
+
+  <h3>Export Ledger CSV</h3>
+  <p>
+    Click <strong>"Export Ledger CSV"</strong> to download your entire current employee list in the exact same
+    column layout the importer expects — handy as a backup, for bulk-editing in a spreadsheet, or for re-importing
+    after changes. Like the sample CSV, the columns match your company's current payout bank.
+  </p>
+
+  <h2 id="sec-beneficiary"><span class="sec-num">7</span> Beneficiary Upload File (Free)</h2>
+  <p>
+    Before an employee can actually <strong>receive</strong> a payroll transfer through your bank's bulk upload,
+    most banks first require them to be registered as a <strong>Beneficiary / 3rd Party Payee</strong> on your
+    bank's own net-banking or CMS portal. Click <strong>"📄 Beneficiary Upload File"</strong> on this page to
+    generate that registration file straight from your saved employee list — built entirely client-side, so it
+    never touches your wallet or credits.
+  </p>
+  <div class="legal-notice">
+    This is a separate, one-time-per-employee step from the paid payroll export on the Generate Transaction File
+    page. For the full walkthrough — including exactly what each bank's file looks like and where to upload
+    it — see the <a href="bank-file-guide.html" target="_blank" rel="noopener">How to Generate Bank Payment
+    Files</a> guide, Section 2.
+  </div>
+
+  <h2 id="sec-faq"><span class="sec-num">8</span> Frequently Asked Questions</h2>
+
+  <div class="faq-item">
+    <h3>Why can't I save an employee with an account number I already used?</h3>
+    <p>Account Number (and Emp Code) must be unique across your whole ledger — this is enforced whether you add
+    one employee manually or import a CSV, so the same person can never accidentally end up in your payroll
+    twice.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>I switched my company's payout bank — do I need to re-enter all my employees?</h3>
+    <p>No. Existing employee records stay exactly as they are. The form (and CSV columns) will simply start
+    asking for that new bank's specific fields going forward — the orange ⚠ banner on this page will flag
+    anyone missing them if you want to fill those in.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>What happens to an employee's data if I delete them?</h3>
+    <p>They're removed from the ledger and won't appear in future Salary Calculation, Generate Transaction File,
+    or Beneficiary Upload File runs. Any file already exported in the past is untouched — the Exports page keeps
+    a snapshot of every past batch exactly as it was generated.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Does deleting or bulk-importing employees cost credits?</h3>
+    <p>No — adding, editing, deleting, searching, and both CSV import and export are completely free. Credits
+    are only ever consumed when you click "Export File" on the Generate Transaction File page.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>My CSV import skipped some rows — how do I fix them?</h3>
+    <p>The preview modal shows the exact reason for every skipped row (missing field, wrong format, duplicate
+    Account Number/Emp Code, etc.). Fix those rows in your spreadsheet and re-upload — rows that already
+    imported successfully won't be duplicated as long as their Account Number and Emp Code stay unique.</p>
+  </div>
+
+  <div class="legal-notice">
+    Still have a question about something specific? Use the <strong>Help &amp; Support</strong> (❓) icon in the
+    sidebar — your message goes straight to our team and replies land in your own inbox.
+  </div>
+
+</div>
+</body>
+</html>

@@ -2231,7 +2231,8 @@ const TOUR_STEPS = [
     body: 'Amounts calculated in Salary Calculation are pre-filled here — review them, choose the transfer type, and export a bank-ready file.'
   },
   {
-    target: '.topbar__tabs .nav-item[data-page="exports"]',
+    target: '.topbar-icons .nav-item[data-page="exports"]',
+    mobileTarget: '.sidebar-icons .nav-item[data-page="exports"]',
     title: 'Exports',
     body: 'Every batch you\'ve exported before shows up here — you can re-download them anytime.'
   },
@@ -3933,7 +3934,11 @@ function computeSalaryRow(raw, opts) {
   const pfRate = (Number(opts.pfRate) || 0) / 100;
   const pfCeilingAmt = Number(opts.pfCeilingAmt) || 0;
   const pfWage = opts.pfCeiling ? Math.min(basic, pfCeilingAmt) : basic;
-  const pf = round2(pfWage * pfRate);
+  // PF, like ESI below, is fully opt-out at the company level — a
+  // company not covered under the PF Act (or below the statutory
+  // employee-count threshold) can uncheck "Company covered under PF
+  // Act" and every row's PF drops to 0, same mechanism as esiApplicable.
+  const pf = opts.pfApplicable ? round2(pfWage * pfRate) : 0;
 
   const esiRate = (Number(opts.esiRate) || 0) / 100;
   const esiLimit = Number(opts.esiLimit) || 0;
@@ -3958,6 +3963,7 @@ function computeSalaryRow(raw, opts) {
 function scGlobalOpts() {
   const daysMethod = document.getElementById('scDaysMethod')?.value || 'fixed30';
   return {
+    pfApplicable: !!document.getElementById('scPfApplicable')?.checked,
     pfCeiling: !!document.getElementById('scPfCeiling')?.checked,
     pfCeilingAmt: parseFloat(document.getElementById('scPfCeilingAmt')?.value) || PF_WAGE_CEILING_DEFAULT,
     pfRate: parseFloat(document.getElementById('scPfRate')?.value) || PF_EMPLOYEE_RATE_DEFAULT,
@@ -3970,23 +3976,26 @@ function scGlobalOpts() {
   };
 }
 
+// Builds a row for EVERY employee (never just the search-filtered
+// subset) so that Save Draft / Calculate & Send always act on the
+// whole employee list, not on whatever happened to be visible in the
+// search box at that moment. Search only ever hides/shows rows after
+// the fact (see applySalaryCalcSearchFilter) — it never rebuilds the
+// table, so it can never wipe out an unsaved edit sitting in a row
+// that a search keystroke happens to scroll out of view.
 function renderSalaryCalcTable() {
   const tbody = document.getElementById('scTableBody');
   const emptyState = document.getElementById('scEmptyState');
   if (!tbody) return;
-  const query = (document.getElementById('scSearch').value || '').trim().toLowerCase();
   const opts = scGlobalOpts();
 
   salaryCalcInputs = {};
   tbody.innerHTML = '';
 
-  const filtered = employees.filter(e =>
-    !query || e.name.toLowerCase().includes(query) || String(e.empCode).includes(query));
-
-  if (!filtered.length) { emptyState.classList.remove('hidden'); updateSalaryCalcTotals(); return; }
+  if (!employees.length) { emptyState.classList.remove('hidden'); updateSalaryCalcTotals(); return; }
   emptyState.classList.add('hidden');
 
-  filtered.forEach(emp => {
+  employees.forEach(emp => {
     const saved = emp.salaryStructure || {};
     const raw = {
       basic: saved.basic ?? '', hra: saved.hra ?? '', special: saved.special ?? '',
@@ -4029,13 +4038,43 @@ function renderSalaryCalcTable() {
       outs.pf.textContent = result.pf.toFixed(2);
       outs.esi.textContent = result.esi.toFixed(2);
       outs.netPay.textContent = result.netPay.toFixed(2);
-      salaryCalcInputs[emp.id] = { emp, fields, result, recalc: recalcRow };
+      salaryCalcInputs[emp.id] = { emp, fields, result, recalc: recalcRow, rowEl: tr };
       updateSalaryCalcTotals();
       return result;
     }
     Object.values(fields).forEach(inp => inp.addEventListener('input', recalcRow));
     recalcRow();
   });
+
+  applySalaryCalcSearchFilter();
+}
+
+// Show/hide only — never touches salaryCalcInputs or any input's
+// value, so it can safely run on every keystroke in the search box
+// without losing in-progress edits or shrinking what Save Draft /
+// Calculate & Send operate on. "No employees yet" only shows when
+// there are truly zero employees; a search with no matches gets its
+// own message so it's never confused with an empty roster.
+function applySalaryCalcSearchFilter() {
+  const emptyState = document.getElementById('scEmptyState');
+  const query = (document.getElementById('scSearch')?.value || '').trim().toLowerCase();
+  let anyVisible = false;
+
+  Object.values(salaryCalcInputs).forEach(row => {
+    const match = !query || row.emp.name.toLowerCase().includes(query) || String(row.emp.empCode).includes(query);
+    row.rowEl.classList.toggle('hidden', !match);
+    if (match) anyVisible = true;
+  });
+
+  if (!employees.length) {
+    emptyState.innerHTML = '<div class="empty-state__icon">🧮</div>No employees yet — add employees first, then come back here to calculate salary.';
+    emptyState.classList.remove('hidden');
+  } else if (!anyVisible) {
+    emptyState.innerHTML = '<div class="empty-state__icon">🔍</div>No employees match your search.';
+    emptyState.classList.remove('hidden');
+  } else {
+    emptyState.classList.add('hidden');
+  }
 }
 
 // Re-runs every visible row's calculation using its CURRENT (possibly
@@ -4110,7 +4149,8 @@ async function saveSalaryStructuresOnly(rows) {
 }
 
 function wireSalaryCalc() {
-  document.getElementById('scSearch').addEventListener('input', () => renderSalaryCalcTable());
+  document.getElementById('scSearch').addEventListener('input', () => applySalaryCalcSearchFilter());
+  document.getElementById('scPfApplicable').addEventListener('change', recalcAllSalaryCalcRows);
   document.getElementById('scPfCeiling').addEventListener('change', recalcAllSalaryCalcRows);
   document.getElementById('scPfCeilingAmt').addEventListener('input', recalcAllSalaryCalcRows);
   document.getElementById('scPfRate').addEventListener('input', recalcAllSalaryCalcRows);

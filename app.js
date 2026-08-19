@@ -4147,9 +4147,11 @@ function updateSalaryCalcTotals() {
 // Collects every row's raw inputs, validating that Basic and HRA — the
 // two components every real salary structure has — were actually
 // filled in for every single employee before anything is saved or
-// pushed, and that no allowance/LOP field has a negative value (a
-// negative Basic/HRA/Special/Other would silently shrink Gross and
-// Net Pay instead of erroring, and negative LOP days are meaningless).
+// pushed, and that no allowance/deduction/LOP field has a negative or
+// garbage value (a negative Basic/HRA/Special/Other would silently
+// shrink Gross and Net Pay instead of erroring; a typo like "500a" in
+// PT/TDS/Other Deductions would silently be treated as 0 instead of
+// erroring, quietly dropping a deduction the user actually typed in).
 // Uses Number(), not parseFloat(), for every field — matching exactly
 // what recalcRow()/computeSalaryRow() use for the LIVE on-screen
 // preview. parseFloat("5000abc") silently returns 5000 (garbage after
@@ -4167,17 +4169,26 @@ function collectSalaryCalcRows() {
     const specialRaw = fields.special.value.trim();
     const otherRaw = fields.other.value.trim();
     const lopRaw = fields.lop.value.trim();
+    const ptRaw = fields.pt.value.trim();
+    const tdsRaw = fields.tds.value.trim();
+    const otherDedRaw = fields.otherDed.value.trim();
     const basicVal = Number(basicRaw);
     const hraVal = Number(hraRaw);
     const specialVal = Number(specialRaw);
     const otherVal = Number(otherRaw);
     const lopVal = Number(lopRaw);
+    const ptVal = Number(ptRaw);
+    const tdsVal = Number(tdsRaw);
+    const otherDedVal = Number(otherDedRaw);
     const invalid =
       !basicRaw || isNaN(basicVal) || basicVal <= 0 ||
       hraRaw === '' || isNaN(hraVal) || hraVal < 0 ||
       (specialRaw !== '' && (isNaN(specialVal) || specialVal < 0)) ||
       (otherRaw !== '' && (isNaN(otherVal) || otherVal < 0)) ||
-      (lopRaw !== '' && (isNaN(lopVal) || lopVal < 0));
+      (lopRaw !== '' && (isNaN(lopVal) || lopVal < 0)) ||
+      (ptRaw !== '' && (isNaN(ptVal) || ptVal < 0)) ||
+      (tdsRaw !== '' && (isNaN(tdsVal) || tdsVal < 0)) ||
+      (otherDedRaw !== '' && (isNaN(otherDedVal) || otherDedVal < 0));
     if (invalid) {
       if (!firstInvalidEmpName) firstInvalidEmpName = emp.name;
       continue;
@@ -4185,8 +4196,8 @@ function collectSalaryCalcRows() {
     const rawStructure = {
       basic: basicVal, hra: hraVal || 0,
       special: specialVal || 0, other: otherVal || 0,
-      lop: lopVal || 0, pt: Number(fields.pt.value) || 0,
-      tds: Number(fields.tds.value) || 0, otherDed: Number(fields.otherDed.value) || 0
+      lop: lopVal || 0, pt: ptVal || 0,
+      tds: tdsVal || 0, otherDed: otherDedVal || 0
     };
     const result = computeSalaryRow(rawStructure, scGlobalOpts());
     rows.push({ emp, rawStructure, result });
@@ -4255,7 +4266,7 @@ function wireSalaryCalc() {
     if (!ok) {
       toast(
         firstInvalidEmpName
-          ? `Please check Basic, HRA, Special Allow., Other Allow. and LOP Days for every employee — starting with "${firstInvalidEmpName}" (Basic and HRA are required, and none of these can be negative).`
+          ? `Please check Basic, HRA, Special Allow., Other Allow., LOP Days, PT, TDS and Other Ded. for every employee — starting with "${firstInvalidEmpName}" (Basic and HRA are required, and none of these fields can be negative or contain non-numeric text).`
           : 'Please fill in Basic and HRA for every employee before calculating.',
         'error'
       );

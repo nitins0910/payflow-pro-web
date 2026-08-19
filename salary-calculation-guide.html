@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Net Pay Is Calculated — PayFlow Pro</title>
+<meta name="description" content="The exact, step-by-step statutory logic PayFlow Pro uses to calculate LOP proration, PF, ESI, Professional Tax, TDS and final Net Pay.">
+<link rel="canonical" href="https://nitins0910.github.io/payflow-pro-web/salary-calculation-guide.html">
+
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="icon-16.png?v=2">
+<link rel="shortcut icon" href="favicon.ico?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png?v=2">
+
+<meta name="theme-color" content="#0A0F1E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+
+<style>
+  /* Same doc-page wrapper pattern as privacy.html / bank-file-guide.html —
+     forced light mode via data-theme="light" on <html>, same as those
+     static/legal pages, since this is a standalone reference doc rather
+     than a logged-in app screen. Colors below resolve through the same
+     CSS variables, which style.css remaps for light mode automatically. */
+  .legal-wrap{ max-width:820px; margin:0 auto; padding:48px 24px 90px; }
+  .legal-wrap h1{ font-family:var(--font-display); font-size:28px; margin-bottom:6px; }
+  .legal-wrap .legal-meta{ color:var(--text3); font-size:13px; margin-bottom:32px; }
+  .legal-wrap h2{ font-family:var(--font-display); font-size:18px; margin:38px 0 12px; color:var(--text); display:flex; align-items:center; gap:10px; }
+  .legal-wrap h2 .sec-num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:50%; flex:0 0 auto;
+    background:var(--surface2); border:1px solid var(--border-soft);
+    color:var(--blue-bright); font-family:var(--font-mono); font-weight:700; font-size:12.5px;
+  }
+  .legal-wrap h3{ font-family:var(--font-display); font-size:14.5px; margin:22px 0 8px; color:var(--text); }
+  .legal-wrap p, .legal-wrap li{ font-size:14px; line-height:1.75; color:var(--text2); }
+  .legal-wrap ul, .legal-wrap ol{ padding-left:20px; margin:8px 0 14px; }
+  .legal-wrap li{ margin-bottom:6px; }
+  .legal-wrap a{ color:var(--blue-bright); }
+  .legal-back{ display:inline-block; margin-bottom:24px; font-size:13px; }
+  .legal-notice{ background:var(--surface2); border:1px solid var(--border-soft); padding:14px 16px; border-radius:11px; font-size:12.5px; color:var(--text3); margin-bottom:28px; line-height:1.7; }
+  .legal-table{ width:100%; border-collapse:collapse; margin:10px 0 18px; font-size:13.5px; }
+  .legal-table th, .legal-table td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+  .legal-table th{ color:var(--text3); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  .legal-table td.mono, .legal-table th.mono{ font-family:var(--font-mono); }
+
+  /* Statute chip — shown under each section title naming the Act. */
+  .statute-chip{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--font-mono); font-size:11.5px; font-weight:600;
+    padding:4px 10px; border-radius:20px;
+    background:var(--surface2); border:1px solid var(--border-soft); color:var(--blue-bright);
+    margin:-4px 0 16px;
+  }
+
+  /* Formula block — the core visual language of this page. */
+  .formula-block{
+    background:var(--surface); border:1px solid var(--border);
+    border-left:3px solid var(--blue); border-radius:10px;
+    padding:16px 18px; margin:14px 0 18px;
+    box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  }
+  .formula-block .formula-label{
+    font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--text3); margin-bottom:8px;
+  }
+  .formula-block code, .formula-block .formula-code{
+    display:block; font-family:var(--font-mono); font-size:14px; line-height:1.9;
+    color:var(--text); white-space:pre-wrap; word-break:break-word;
+  }
+  .formula-block .formula-code .fx-op{ color:var(--blue-bright); }
+  .formula-block .formula-code .fx-const{ color:var(--warning); }
+  .formula-block + .formula-caption{ margin-top:-10px; font-size:12.5px; color:var(--text3); margin-bottom:18px; }
+
+  /* Inline numeric/code chips within paragraphs. */
+  .legal-wrap code.inline-code{
+    font-family:var(--font-mono); font-size:12.5px; background:var(--surface2);
+    border:1px solid var(--border-soft); border-radius:5px; padding:1.5px 6px; color:var(--blue-bright);
+  }
+
+  /* Callouts */
+  .callout{
+    border-radius:11px; padding:14px 16px; margin:14px 0 20px;
+    font-size:13px; line-height:1.7; border:1px solid var(--border-soft);
+  }
+  .callout .callout-title{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--font-display); font-weight:700; font-size:12.5px;
+    text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;
+  }
+  .callout.note{ background:var(--surface2); color:var(--text2); }
+  .callout.note .callout-title{ color:var(--blue-bright); }
+  .callout.warning{ background:rgba(245,158,11,0.08); border-color:rgba(245,158,11,0.35); color:var(--text2); }
+  .callout.warning .callout-title{ color:var(--warning); }
+  .callout.rule{ background:var(--success-bg); border-color:rgba(34,197,94,0.35); color:var(--text2); }
+  .callout.rule .callout-title{ color:var(--success); }
+
+  /* Worked-example card */
+  .example-card{
+    background:var(--surface); border:1px solid var(--border-soft); border-radius:12px;
+    padding:16px 18px; margin:14px 0 20px;
+  }
+  .example-card .example-title{ font-family:var(--font-display); font-size:13px; color:var(--text); margin-bottom:10px; font-weight:700; }
+  .example-row{
+    display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+    padding:6px 0; border-bottom:1px dashed var(--border-soft); font-size:13px;
+  }
+  .example-row:last-child{ border-bottom:none; }
+  .example-row span:first-child{ color:var(--text3); }
+  .example-row span:last-child{ font-family:var(--font-mono); color:var(--text); }
+  .example-row.total span:last-child{ color:var(--success); font-weight:700; font-size:14px; }
+
+  /* Step list, same numbered pattern as bank-file-guide.html */
+  .guide-steps{ counter-reset:guide-step; list-style:none; padding-left:0; margin:14px 0 24px; }
+  .guide-steps > li{ counter-increment:guide-step; position:relative; padding:2px 0 2px 40px; margin-bottom:16px; }
+  .guide-steps > li::before{
+    content:counter(guide-step);
+    position:absolute; left:0; top:-1px;
+    width:26px; height:26px; border-radius:50%;
+    background:var(--surface2); border:1px solid var(--border-soft);
+    color:var(--blue-bright); font-family:var(--font-mono); font-weight:700; font-size:12.5px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .guide-steps > li strong{ color:var(--text); }
+  .guide-steps > li p{ margin:4px 0 0; }
+
+  /* Table of contents */
+  .toc{
+    background:var(--surface); border:1px solid var(--border-soft); border-radius:12px;
+    padding:16px 18px; margin-bottom:30px;
+  }
+  .toc .toc-title{ font-family:var(--font-display); font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text3); margin-bottom:10px; }
+  .toc ol{ margin:0; padding-left:18px; columns:2; column-gap:24px; }
+  .toc li{ margin-bottom:6px; font-size:13px; }
+  .toc a{ color:var(--text2); text-decoration:none; }
+  .toc a:hover{ color:var(--blue-bright); }
+  @media (max-width:560px){ .toc ol{ columns:1; } }
+
+  @media (max-width:600px){
+    .legal-table{ font-size:12.5px; }
+    .formula-block .formula-code{ font-size:12.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="legal-wrap">
+  <a href="index.html" class="legal-back">← Back to PayFlow Pro</a>
+  <div class="brand" style="margin-bottom:18px;">
+    <span class="mark">PF</span>
+    <h1 style="margin:0;">PayFlow Pro</h1>
+  </div>
+
+  <h1>How Net Pay Is Calculated</h1>
+  <p class="legal-meta">The exact formulas, statutory rules, and rounding conventions PayFlow Pro applies to every row on the Salary Calculation page.</p>
+
+  <div class="legal-notice">
+    This page documents the <strong>actual calculation logic built into the app</strong> — not a generic payroll
+    explainer. Every rate, ceiling, and rounding rule below is editable in <strong>Salary Calculation →
+    Settings</strong> (PF rate/ceiling, ESI rate/limit, PT state), because statutory values are revised from time
+    to time and company policies vary. Where a figure is described as a "default", please verify it against the
+    current government notification for your state before relying on it for compliance.
+  </div>
+
+  <div class="toc">
+    <div class="toc-title">On this page</div>
+    <ol>
+      <li><a href="#sec-gross">Gross Salary &amp; LOP Proration</a></li>
+      <li><a href="#sec-pf">Provident Fund (EPF)</a></li>
+      <li><a href="#sec-esi">Employee's State Insurance (ESI)</a></li>
+      <li><a href="#sec-pt">Professional Tax (PT)</a></li>
+      <li><a href="#sec-tds">TDS &amp; Other Deductions</a></li>
+      <li><a href="#sec-net">Final Net Pay</a></li>
+    </ol>
+  </div>
+
+  <h2 id="sec-gross"><span class="sec-num">1</span> Gross Salary &amp; LOP Proration</h2>
+  <p>
+    Every earning component — <strong>Basic, HRA, Special Allowance, and Other Allowances</strong> — is entered as
+    a full-month figure and then prorated for that employee's <strong>LOP (Loss of Pay) days</strong> for the
+    payroll month, using whichever <strong>Days-in-Month Method</strong> you've selected (Fixed 30-Day Month, or
+    Actual Calendar Days).
+  </p>
+
+  <div class="formula-block">
+    <div class="formula-label">Proration Factor</div>
+    <code class="formula-code">Factor = (Days in Month <span class="fx-op">−</span> LOP Days) <span class="fx-op">/</span> Days in Month</code>
+  </div>
+
+  <div class="formula-block">
+    <div class="formula-label">Prorated Gross</div>
+    <code class="formula-code">Prorated Gross = (Basic <span class="fx-op">+</span> HRA <span class="fx-op">+</span> Special Allowance <span class="fx-op">+</span> Other Allowances) <span class="fx-op">×</span> Factor</code>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-title">🛡️ Input safety</div>
+    Negative inputs — a negative salary component, or LOP days greater than the days in the month — are
+    automatically <strong>floored to 0</strong> before the formula runs, so a data-entry mistake can never produce
+    a negative proration factor or a negative earning line.
+  </div>
+
+  <div class="example-card">
+    <div class="example-title">Worked example — 30-day month, 5 LOP days</div>
+    <div class="example-row"><span>Days in Month</span><span>30</span></div>
+    <div class="example-row"><span>LOP Days</span><span>5</span></div>
+    <div class="example-row"><span>Factor</span><span>(30 − 5) / 30 = 0.8333</span></div>
+    <div class="example-row"><span>Full-month Gross (Basic+HRA+Special+Other)</span><span>₹30,000</span></div>
+    <div class="example-row total"><span>Prorated Gross</span><span>₹25,000.00</span></div>
+  </div>
+
+  <h2 id="sec-pf"><span class="sec-num">2</span> Provident Fund (EPF)</h2>
+  <span class="statute-chip">⚖️ Employees' Provident Funds &amp; Miscellaneous Provisions Act, 1952</span>
+
+  <p>
+    PF is deducted from the employee at a default rate of <code class="inline-code">12%</code>, applied to
+    <strong>Basic pay only</strong> — not the full gross — and is subject to the statutory wage ceiling of
+    <code class="inline-code">₹15,000</code>.
+  </p>
+
+  <div class="callout warning">
+    <div class="callout-title">⚠️ The ceiling is prorated too</div>
+    A detail that's easy to get wrong: PayFlow Pro doesn't apply the flat ₹15,000 ceiling as-is when there's LOP.
+    The ceiling itself is scaled by the <strong>same proration factor</strong> as Basic pay — so an employee who
+    worked exactly half the month has their PF ceiling reduced to ₹7,500 for that month, not compared against the
+    full ₹15,000.
+  </div>
+
+  <div class="formula-block">
+    <div class="formula-label">Effective PF Wage</div>
+    <code class="formula-code">Prorated Ceiling = PF Ceiling (₹15,000) <span class="fx-op">×</span> Factor
+PF Wage = <span class="fx-op">Min</span>( Prorated Basic , Prorated Ceiling )</code>
+  </div>
+
+  <div class="formula-block">
+    <div class="formula-label">PF Deduction</div>
+    <code class="formula-code">PF = <span class="fx-op">Round</span>( PF Wage <span class="fx-op">×</span> PF Rate )</code>
+  </div>
+
+  <div class="callout rule">
+    <div class="callout-title">✅ EPFO rounding rule</div>
+    Per EPFO convention, the final PF deduction is <strong>mathematically rounded to the nearest rupee</strong>
+    using <code class="inline-code">Math.round()</code> — ₹1,240.40 becomes ₹1,240, and ₹1,240.50 becomes ₹1,241.
+    This is different from ESI's rounding rule below — don't mix the two up.
+  </div>
+
+  <div class="example-card">
+    <div class="example-title">Worked example — same employee, Basic ₹18,000/month</div>
+    <div class="example-row"><span>Prorated Basic (0.8333 × ₹18,000)</span><span>₹15,000.00</span></div>
+    <div class="example-row"><span>Prorated Ceiling (0.8333 × ₹15,000)</span><span>₹12,500.00</span></div>
+    <div class="example-row"><span>PF Wage = Min(15,000, 12,500)</span><span>₹12,500.00</span></div>
+    <div class="example-row"><span>12,500 × 12%</span><span>₹1,500.00</span></div>
+    <div class="example-row total"><span>PF Deduction (rounded)</span><span>₹1,500</span></div>
+  </div>
+
+  <h2 id="sec-esi"><span class="sec-num">3</span> Employee's State Insurance (ESI)</h2>
+  <span class="statute-chip">⚖️ Employees' State Insurance Act, 1948</span>
+
+  <p>
+    ESI is deducted at a default employee rate of <code class="inline-code">0.75%</code>, and only applies to
+    employees within the statutory gross-salary coverage limit — <code class="inline-code">₹21,000</code> per
+    month (<code class="inline-code">₹25,000</code> for persons with disabilities).
+  </p>
+
+  <div class="callout warning">
+    <div class="callout-title">⚠️ Eligibility check vs. deduction base are different figures</div>
+    This is the single most misunderstood part of ESI, and PayFlow Pro handles it deliberately:
+    <ul style="margin-top:8px;">
+      <li><strong>Eligibility</strong> is checked against the employee's <strong>full, unprorated monthly
+        gross</strong> (i.e. as if there were zero LOP days). If that full gross is ≤ ₹21,000, the employee is
+        ESI-applicable for the entire contribution period — LOP in a given month does not remove them from
+        coverage.</li>
+      <li>The <strong>actual rupee deduction</strong>, however, is calculated on the employee's
+        <strong>prorated, paid gross</strong> for that specific month — so someone on LOP still gets ESI charged
+        only on what they actually earned that month.</li>
+    </ul>
+  </div>
+
+  <div class="formula-block">
+    <div class="formula-label">Eligibility (checked once, on full gross)</div>
+    <code class="formula-code">ESI Applicable = Full Monthly Gross <span class="fx-op">≤</span> ESI Limit (₹21,000)</code>
+  </div>
+
+  <div class="formula-block">
+    <div class="formula-label">ESI Deduction (if applicable)</div>
+    <code class="formula-code">ESI = <span class="fx-op">Ceil</span>( Prorated Paid Gross <span class="fx-op">×</span> ESI Rate )</code>
+  </div>
+
+  <div class="callout rule">
+    <div class="callout-title">✅ ESI Rule 51 — round UP, always</div>
+    Per <strong>ESI (General) Regulation, Rule 51, effective 1 October 2004</strong>, the ESI contribution is
+    never rounded to the nearest rupee — it is always rounded <strong>up to the next higher rupee</strong> using
+    <code class="inline-code">Math.ceil()</code>, even when the decimal portion is as small as ₹0.01. A computed
+    value of ₹187.01 is deducted as ₹188, not ₹187.
+  </div>
+
+  <div class="example-card">
+    <div class="example-title">Worked example — Full Gross ₹20,000/month, 5 LOP days this month</div>
+    <div class="example-row"><span>Full Monthly Gross</span><span>₹20,000 (≤ ₹21,000 → eligible)</span></div>
+    <div class="example-row"><span>Prorated Paid Gross this month</span><span>₹16,666.67</span></div>
+    <div class="example-row"><span>16,666.67 × 0.75%</span><span>₹125.0000</span></div>
+    <div class="example-row total"><span>ESI Deduction (ceil)</span><span>₹125</span></div>
+  </div>
+
+  <h2 id="sec-pt"><span class="sec-num">4</span> Professional Tax (PT)</h2>
+  <span class="statute-chip">⚖️ Article 276, Constitution of India + State Enactments</span>
+
+  <p>
+    Professional Tax is a <strong>state-level</strong> tax, not a central one — every state sets its own slabs,
+    and several states (e.g. Karnataka, Maharashtra, West Bengal, Telangana/Andhra Pradesh, Tamil Nadu, Gujarat,
+    Madhya Pradesh, Odisha) have different monetary thresholds and monthly amounts. PayFlow Pro applies an
+    indicative default PT slab based on the <strong>Gross Salary for that month</strong> and the state you select
+    under Salary Calculation → State (Professional Tax).
+  </p>
+  <ul>
+    <li>PT is computed automatically per row when you set the state and click "Re-apply PT to all rows".</li>
+    <li>Because slab amounts change periodically by state notification, <strong>the PT figure is only a
+      starting point</strong> — you can manually override the PT amount on any individual employee row at any
+      time, and your edit is preserved rather than being silently recalculated.</li>
+  </ul>
+
+  <h2 id="sec-tds"><span class="sec-num">5</span> TDS &amp; Other Deductions</h2>
+  <span class="statute-chip">⚖️ Income Tax Act, 1961</span>
+
+  <p>
+    TDS (Tax Deducted at Source) under the Income Tax Act, and any "Other Deductions" line (e.g. loan
+    recoveries, advances), are <strong>always entered manually</strong> per employee — PayFlow Pro does not
+    compute income-tax slabs, exemptions, or Section 80C-style declarations on your behalf. As with every other
+    numeric input on this page, negative values are not permitted and are floored to <code class="inline-code">0</code>.
+  </p>
+
+  <h2 id="sec-net"><span class="sec-num">6</span> Final Net Pay</h2>
+
+  <div class="formula-block">
+    <div class="formula-label">Net Pay</div>
+    <code class="formula-code">Net Pay = Prorated Gross <span class="fx-op">−</span> ( PF <span class="fx-op">+</span> ESI <span class="fx-op">+</span> PT <span class="fx-op">+</span> TDS <span class="fx-op">+</span> Other Deductions )</code>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-title">🛡️ Floor at zero</div>
+    If total deductions ever exceed the Prorated Gross for a row (e.g. very high LOP combined with a large manual
+    TDS/Other entry), Net Pay is floored at <code class="inline-code">₹0</code> — it is never shown or exported as
+    a negative amount.
+  </div>
+
+  <div class="example-card">
+    <div class="example-title">Putting it together — the running example above</div>
+    <div class="example-row"><span>Prorated Gross</span><span>₹25,000.00</span></div>
+    <div class="example-row"><span>Less: PF</span><span>− ₹1,500</span></div>
+    <div class="example-row"><span>Less: ESI</span><span>− ₹0 (gross exceeds ₹21,000, not applicable here)</span></div>
+    <div class="example-row"><span>Less: PT (Karnataka slab)</span><span>− ₹200</span></div>
+    <div class="example-row"><span>Less: TDS</span><span>− ₹0</span></div>
+    <div class="example-row"><span>Less: Other Deductions</span><span>− ₹0</span></div>
+    <div class="example-row total"><span>Net Pay</span><span>₹23,300.00</span></div>
+  </div>
+
+  <div class="legal-notice">
+    Still have a question about a specific row's calculation? Use the <strong>Help &amp; Support</strong> (❓)
+    icon in the sidebar — your message goes straight to our team and replies land in your own inbox.
+  </div>
+
+</div>
+</body>
+</html>

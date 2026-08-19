@@ -10,11 +10,11 @@
 //
 // Required env var (already set if Help & Support works):
 //   SUPPORT_EMAIL_APP_PASSWORD — Gmail App Password for
-//   nitins1009@gmail.com
+//   payflowprosystem@gmail.com
 const nodemailer = require('nodemailer');
 const { requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
 
-const SEND_FROM_INBOX = 'nitins1009@gmail.com';
+const SEND_FROM_INBOX = 'payflowprosystem@gmail.com';
 const MAX_EMPLOYEES_PER_REQUEST = 500; // sanity cap, not a real-world limit for this app
 
 function escapeHtml(value) {

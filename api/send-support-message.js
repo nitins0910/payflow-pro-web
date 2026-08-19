@@ -3,11 +3,11 @@
 //
 // Same logic as before. Required env var:
 //   SUPPORT_EMAIL_APP_PASSWORD — Gmail App Password for
-//   nitins1009@gmail.com (see HELP_SUPPORT_SETUP.md).
+//   payflowprosystem@gmail.com (see HELP_SUPPORT_SETUP.md).
 const nodemailer = require('nodemailer');
 const { requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
 
-const SUPPORT_INBOX = 'nitins1009@gmail.com';
+const SUPPORT_INBOX = 'payflowprosystem@gmail.com';
 const MAX_SUBJECT_LEN = 120;
 const MAX_MESSAGE_LEN = 4000;
 

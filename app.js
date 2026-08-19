@@ -3913,10 +3913,18 @@ function computeSalaryRow(raw, opts) {
   const daysInMonth = opts.daysInMonth || PAYROLL_DAYS_IN_MONTH_DEFAULT;
   const lop = Math.min(Math.max(Number(raw.lop) || 0, 0), daysInMonth);
   const factor = (daysInMonth - lop) / daysInMonth;
-  const basic = round2((Number(raw.basic) || 0) * factor);
-  const hra = round2((Number(raw.hra) || 0) * factor);
-  const special = round2((Number(raw.special) || 0) * factor);
-  const other = round2((Number(raw.other) || 0) * factor);
+  // Basic/HRA/Special/Other, like PT/TDS/Other Deductions below, can
+  // never be negative — a negative allowance would silently shrink
+  // Gross (and therefore Net Pay) instead of just being an empty/zero
+  // field, which is never a valid payroll entry.
+  const basicIn = Math.max(0, Number(raw.basic) || 0);
+  const hraIn = Math.max(0, Number(raw.hra) || 0);
+  const specialIn = Math.max(0, Number(raw.special) || 0);
+  const otherIn = Math.max(0, Number(raw.other) || 0);
+  const basic = round2(basicIn * factor);
+  const hra = round2(hraIn * factor);
+  const special = round2(specialIn * factor);
+  const other = round2(otherIn * factor);
   const gross = round2(basic + hra + special + other);
 
   // Full (non-LOP-prorated) gross — used ONLY to decide ESI eligibility,
@@ -3926,10 +3934,7 @@ function computeSalaryRow(raw, opts) {
   // heavy-LOP month could temporarily drop someone's PAID gross below
   // the wage limit and wrongly bring them into ESI for that month even
   // though their real gross is above the threshold.
-  const fullGross = round2(
-    (Number(raw.basic) || 0) + (Number(raw.hra) || 0) +
-    (Number(raw.special) || 0) + (Number(raw.other) || 0)
-  );
+  const fullGross = round2(basicIn + hraIn + specialIn + otherIn);
 
   const pfRate = (Number(opts.pfRate) || 0) / 100;
   const pfCeilingAmt = Number(opts.pfCeilingAmt) || 0;
@@ -4114,16 +4119,29 @@ function updateSalaryCalcTotals() {
 
 // Collects every row's raw inputs, validating that Basic and HRA — the
 // two components every real salary structure has — were actually
+// Collects every row's raw inputs, validating that Basic and HRA — the
+// two components every real salary structure has — were actually
 // filled in for every single employee before anything is saved or
-// pushed. Returns { ok, rows, firstInvalidEmpName }.
+// pushed, and that no allowance/LOP field has a negative value (a
+// negative Basic/HRA/Special/Other would silently shrink Gross and
+// Net Pay instead of erroring, and negative LOP days are meaningless).
+// Returns { ok, rows, firstInvalidEmpName }.
 function collectSalaryCalcRows() {
   const rows = [];
   let firstInvalidEmpName = null;
   for (const { emp, fields } of Object.values(salaryCalcInputs)) {
     const basicRaw = fields.basic.value.trim();
     const hraRaw = fields.hra.value.trim();
-    if (!basicRaw || isNaN(parseFloat(basicRaw)) || parseFloat(basicRaw) <= 0 ||
-        hraRaw === '' || isNaN(parseFloat(hraRaw))) {
+    const specialRaw = fields.special.value.trim();
+    const otherRaw = fields.other.value.trim();
+    const lopRaw = fields.lop.value.trim();
+    const invalid =
+      !basicRaw || isNaN(parseFloat(basicRaw)) || parseFloat(basicRaw) <= 0 ||
+      hraRaw === '' || isNaN(parseFloat(hraRaw)) || parseFloat(hraRaw) < 0 ||
+      (specialRaw !== '' && (isNaN(parseFloat(specialRaw)) || parseFloat(specialRaw) < 0)) ||
+      (otherRaw !== '' && (isNaN(parseFloat(otherRaw)) || parseFloat(otherRaw) < 0)) ||
+      (lopRaw !== '' && (isNaN(parseFloat(lopRaw)) || parseFloat(lopRaw) < 0));
+    if (invalid) {
       if (!firstInvalidEmpName) firstInvalidEmpName = emp.name;
       continue;
     }
@@ -4196,7 +4214,7 @@ function wireSalaryCalc() {
     if (!ok) {
       toast(
         firstInvalidEmpName
-          ? `Please fill in Basic and HRA for every employee — starting with "${firstInvalidEmpName}".`
+          ? `Please check Basic, HRA, Special Allow., Other Allow. and LOP Days for every employee — starting with "${firstInvalidEmpName}" (Basic and HRA are required, and none of these can be negative).`
           : 'Please fill in Basic and HRA for every employee before calculating.',
         'error'
       );

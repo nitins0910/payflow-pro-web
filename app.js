@@ -2143,6 +2143,7 @@ async function bootDashboard(user) {
     safeInit('wireEmployeeTableControls', wireEmployeeTableControls);
     safeInit('wireBulkImport', wireBulkImport);
     safeInit('wireSalaryCalc', wireSalaryCalc);
+    safeInit('wireSalarySlipModal', wireSalarySlipModal);
     safeInit('wireDisbursement', wireDisbursement);
     safeInit('wireAudit', wireAudit);
     safeInit('wireExportHistory', wireExportHistory);
@@ -4047,7 +4048,8 @@ function renderSalaryCalcTable() {
       <td data-label="PT (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="pt" placeholder="0.00" value="${raw.pt}" title="Recalculates automatically only when you click &quot;Re-apply PT to all rows&quot; — a highlighted border means the current Gross no longer matches this PT amount." style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
       <td data-label="TDS (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="tds" placeholder="0.00" value="${raw.tds}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
       <td data-label="Other Ded. (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="otherDed" placeholder="0.00" value="${raw.otherDed}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
-      <td data-label="Net Pay (₹)" style="text-align:right; font-weight:700; color:var(--success);"><span data-out="netPay">0.00</span></td>`;
+      <td data-label="Net Pay (₹)" style="text-align:right; font-weight:700; color:var(--success);"><span data-out="netPay">0.00</span></td>
+      <td data-label="Slip" style="text-align:center;"><button type="button" class="slip-btn" data-slip="${escapeHtml(emp.id)}" title="View salary slip">📄 View Slip</button></td>`;
     tbody.appendChild(tr);
 
     const fields = {};
@@ -4314,6 +4316,136 @@ function wireSalaryCalc() {
   });
 
   renderSalaryCalcTable();
+}
+
+// ---------------------------------------------------------
+// SALARY SLIP (PAYSLIP) MODAL
+// Renders one employee's payslip into #salarySlipModal using the
+// SAME live result already sitting in salaryCalcInputs (i.e. exactly
+// what the Salary Calculation table currently shows for that row —
+// nothing is recomputed here). Wires the row-level "📄 View Slip"
+// buttons via event delegation on #scTableBody (rows are torn down
+// and rebuilt on every renderSalaryCalcTable(), so a per-button
+// listener would be lost on each recalc — delegation survives that),
+// the in-modal Print button, and the placeholder bulk "Email All
+// Payslips" action.
+// ---------------------------------------------------------
+
+// The company profile (see Api.getCompanyProfile / companyProfile
+// global) has no address field today — there's nowhere in Settings to
+// enter one yet. Edit this constant (or wire up a real Settings field
+// later and read it here instead) to change what prints under the
+// company name on every payslip.
+const COMPANY_ADDRESS_FOR_PAYSLIP = 'Registered Office Address — update COMPANY_ADDRESS_FOR_PAYSLIP in app.js';
+
+function wireSalarySlipModal() {
+  document.getElementById('scTableBody').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-slip]');
+    if (!btn) return;
+    openSalarySlip(btn.dataset.slip);
+  });
+
+  document.getElementById('printSalarySlipBtn').addEventListener('click', () => window.print());
+
+  // Placeholder only — no backend wired up yet. When ready, swap this
+  // for a real API call (a Vercel function + Nodemailer, same pattern
+  // as send-support-message.js, looping over `employees` and emailing
+  // each one their own slip) and drive this toast off its actual result.
+  document.getElementById('scEmailAllBtn').addEventListener('click', () => {
+    const count = Object.keys(salaryCalcInputs).length;
+    if (!count) { toast('No employees to email payslips to yet.', 'error'); return; }
+    toast(`Payslips emailed successfully to ${count} employee${count === 1 ? '' : 's'}.`, 'success');
+  });
+}
+
+function openSalarySlip(empId) {
+  const row = salaryCalcInputs[empId];
+  if (!row) { toast("Could not find this employee's calculated salary — recalculate the row first.", 'error'); return; }
+  const { emp, result } = row;
+  const opts = scGlobalOpts();
+  const daysInMonth = opts.daysInMonth || PAYROLL_DAYS_IN_MONTH_DEFAULT;
+  const lop = Math.min(Math.max(Number(result.lop) || 0, 0), daysInMonth);
+  const paidDays = daysInMonth - lop;
+
+  const monthVal = document.getElementById('scPayrollMonth')?.value; // "YYYY-MM"
+  const [y, m] = (monthVal || '').split('-').map(Number);
+  const monthLabel = (y && m) ? new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' }) : '—';
+
+  document.getElementById('slipCompanyName').textContent = companyProfile.name || 'PayFlow Pro Technologies';
+  document.getElementById('slipCompanyAddress').textContent = COMPANY_ADDRESS_FOR_PAYSLIP;
+  document.getElementById('slipPayrollMonth').textContent = monthLabel;
+
+  // designation / department / DOJ / UAN / PAN aren't fields in the
+  // current employee record (see Employee modal / Api.addEmployee) —
+  // these fall back to "—" until/unless those fields are added to the
+  // Employee form and saved onto each employee document.
+  document.getElementById('slipEmpName').textContent = emp.name || '—';
+  document.getElementById('slipEmpCode').textContent = emp.empCode || '—';
+  document.getElementById('slipDesignation').textContent = emp.designation || '—';
+  document.getElementById('slipDepartment').textContent = emp.department || '—';
+  document.getElementById('slipDoj').textContent = emp.doj || '—';
+  document.getElementById('slipUan').textContent = emp.uan || '—';
+  document.getElementById('slipPan').textContent = emp.pan || '—';
+  document.getElementById('slipBankAccount').textContent = emp.accountNumber ? maskAccount(emp.accountNumber) : '—';
+
+  document.getElementById('slipDaysInMonth').textContent = daysInMonth;
+  document.getElementById('slipLopDays').textContent = lop;
+  document.getElementById('slipPaidDays').textContent = paidDays;
+
+  document.getElementById('slipBasic').textContent = result.basic.toFixed(2);
+  document.getElementById('slipHra').textContent = result.hra.toFixed(2);
+  document.getElementById('slipSpecial').textContent = result.special.toFixed(2);
+  document.getElementById('slipOther').textContent = result.other.toFixed(2);
+  document.getElementById('slipGrossTotal').textContent = result.gross.toFixed(2);
+
+  document.getElementById('slipPf').textContent = result.pf.toFixed(2);
+  document.getElementById('slipEsi').textContent = result.esi.toFixed(2);
+  document.getElementById('slipPt').textContent = result.pt.toFixed(2);
+  document.getElementById('slipTds').textContent = result.tds.toFixed(2);
+  document.getElementById('slipOtherDed').textContent = result.otherDed.toFixed(2);
+  document.getElementById('slipDeductionsTotal').textContent = result.totalDeductions.toFixed(2);
+
+  document.getElementById('slipNetPay').textContent = '₹ ' + result.netPay.toFixed(2);
+  document.getElementById('slipNetPayWords').textContent = 'Rupees ' + numberToWordsIndian(Math.round(result.netPay)) + ' Only';
+
+  document.getElementById('salarySlipModal').classList.remove('hidden');
+}
+
+// Converts a whole-rupee amount into words using the Indian numbering
+// system (Lakh/Crore — not Million/Billion), e.g. 245000 -> "Two Lakh
+// Forty Five Thousand". Paise are intentionally dropped: payslips
+// conventionally state Net Pay in words to the nearest rupee, so
+// callers pass Math.round(netPay) in, not the raw decimal amount.
+function numberToWordsIndian(num) {
+  num = Math.max(0, Math.floor(Number(num) || 0));
+  if (num === 0) return 'Zero';
+
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  function twoDigits(n) {
+    if (n < 20) return ones[n];
+    return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
+  }
+  function threeDigits(n) {
+    const h = Math.floor(n / 100);
+    const rest = n % 100;
+    return (h ? ones[h] + ' Hundred' + (rest ? ' ' : '') : '') + (rest ? twoDigits(rest) : '');
+  }
+
+  const crore = Math.floor(num / 10000000); num %= 10000000;
+  const lakh = Math.floor(num / 100000); num %= 100000;
+  const thousand = Math.floor(num / 1000); num %= 1000;
+  const hundred = num;
+
+  const parts = [];
+  if (crore) parts.push(threeDigits(crore) + ' Crore');
+  if (lakh) parts.push(twoDigits(lakh) + ' Lakh');
+  if (thousand) parts.push(twoDigits(thousand) + ' Thousand');
+  if (hundred) parts.push(threeDigits(hundred));
+
+  return parts.join(' ');
 }
 
 function wireDisbursement() {

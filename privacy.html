@@ -62,14 +62,18 @@
     </tr>
     <tr>
       <td>Company data</td>
-      <td>Company name, bank name, account number, IFSC code</td>
-      <td>Stamped onto every export file so your bank can process the transfers</td>
+      <td>Company name, bank name, account number, IFSC code, registered address, GSTIN,
+        company PAN, TAN, and Authorized Signatory name/designation</td>
+      <td>Stamped onto every export file and printed on payslips so your bank and employees
+        have accurate, official records</td>
     </tr>
     <tr>
       <td>Employee payroll data</td>
-      <td>Name, employee code, bank account number, IFSC code, salary amount, mobile,
-        email</td>
-      <td>To generate accurate bank-upload files for your payroll runs</td>
+      <td>Name, employee code, bank account number, IFSC code, mobile, email, salary
+        structure and deductions (Basic, HRA, allowances, PF, ESI, Professional Tax, TDS),
+        and optionally designation, department, date of joining, UAN, and PAN</td>
+      <td>To generate accurate bank-upload files for your payroll runs and to produce each
+        employee's payslip</td>
     </tr>
     <tr>
       <td>Billing data</td>
@@ -89,6 +93,13 @@
     </tr>
   </table>
 
+  <div class="legal-notice">
+    PAN and UAN are sensitive government-issued identifiers. Both are optional fields you may
+    choose to enter for an employee (used only to populate their Salary Slip), are never
+    required to run payroll or generate a bank export, and are stored with the same
+    account-scoped Firestore access controls as the rest of your payroll data.
+  </div>
+
   <h2>3. Where your data is stored</h2>
   <p>
     Account and payroll data is stored in <strong>Firebase Authentication and Firestore</strong>
@@ -106,9 +117,12 @@
       store your underlying payment instrument details.</li>
     <li><strong>Google / Firebase</strong> — our hosting, authentication, and database
       provider. Google processes data on our behalf under its own data-processing terms.</li>
-    <li><strong>Gmail (support inbox)</strong> — messages you send via Help &amp; Support are
-      emailed to our support inbox with your account email set as the reply-to address, so
-      replies go straight back to you. We do not use a separate ticketing system.</li>
+    <li><strong>Gmail (support inbox &amp; payslip delivery)</strong> — messages you send via
+      Help &amp; Support are emailed to our support inbox with your account email set as the
+      reply-to address, so replies go straight back to you. The same Gmail account is also
+      used, at your request, to email each employee their own payslip (name, salary breakup,
+      and other payslip fields you entered) directly to the email address you saved for
+      them. We do not use a separate ticketing or bulk-mailing system for either.</li>
   </ul>
   <p>We do not sell your personal data, and we do not share it with advertisers.</p>
 
@@ -147,7 +161,7 @@
   <h2>8. Security</h2>
   <p>
     We rely on Firebase Authentication for sign-in, Firestore security rules to restrict data
-    access to your own account, and server-side (Netlify Functions) enforcement for anything
+    access to your own account, and server-side (Vercel Serverless Functions) enforcement for anything
     that affects billing or payments — none of which can be bypassed from the browser. No
     method of storage or transmission is 100% secure, but we take reasonable technical and
     organizational measures to protect your data.

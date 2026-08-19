@@ -3471,11 +3471,15 @@ function downloadSampleCsv() {
   const bankName = companyProfile.bankName || 'SBI';
   const extraCols = bankExtraCsvColumns(bankName);
   const header = [CORE_CSV_HEADER, ...PAYROLL_CSV_COLUMNS.map(c => c.header), ...extraCols.map(c => c.header)].join(',');
-  const exampleRow = [
-    'JOHN DOE,123456789012,SBIN0001234,Same Bank,01,9876543210,john.doe@example.com',
+  // csvRow() (proper CSV quoting) instead of a plain string join — some
+  // sample values (e.g. PNB Address "MG ROAD, BENGALURU") contain a
+  // comma themselves, which would otherwise silently split into an
+  // extra column and make the sample file itself invalid.
+  const exampleRow = csvRow([
+    'JOHN DOE', '123456789012', 'SBIN0001234', 'Same Bank', '01', '9876543210', 'john.doe@example.com',
     ...PAYROLL_CSV_COLUMNS.map(c => PAYROLL_CSV_SAMPLE_VALUES[c.key]),
     ...extraCols.map(c => EXTRA_CSV_SAMPLE_VALUES[c.key])
-  ].join(',');
+  ]);
   const sample = [header, exampleRow].join('\r\n') + '\r\n';
   downloadTextFile('payflow_bulk_import_sample.csv', sample, 'text/csv;charset=utf-8');
 }
@@ -3652,12 +3656,64 @@ const VALID_TRANSFER_TYPES = ['Same Bank', 'Other Bank'];
 //   rows[]   — well-formed candidate employees, ready for the duplicate
 //              check the caller still needs to run against existingAccounts
 //   errors[] — { line, reason } for every row that failed validation
+// RFC4180-style CSV tokenizer — handles quoted fields (so a value like
+// "MG ROAD, BENGALURU" with a comma inside stays ONE field instead of
+// splitting into two), a doubled "" inside a quoted field as an
+// escaped literal quote, and a literal newline inside a quoted field
+// without breaking into a new row. Plain unquoted fields behave
+// exactly as the old naive split(',') did, so ordinary CSVs (the vast
+// majority) parse identically to before.
+//
+// csvField()/csvRow() above (used by downloadSampleCsv/exportLedgerCsv)
+// and this parser now agree on the same quoting convention, so a
+// ledger exported out of the app can always be re-imported cleanly —
+// including PNB addresses like "MG ROAD, BENGALURU" that contain a
+// comma themselves.
+//
+// Returns an array of rows, each row an array of trimmed field
+// strings. Fully-blank rows are dropped.
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  const src = String(text || '');
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(field); field = '';
+    } else if (ch === '\r') {
+      // Ignore — the paired '\n' (or end of a lone '\r' line) below
+      // is what actually closes the row.
+    } else if (ch === '\n') {
+      row.push(field); field = '';
+      rows.push(row); row = [];
+    } else {
+      field += ch;
+    }
+  }
+  // Final field/row — files may or may not end with a trailing newline.
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows
+    .map(r => r.map(c => c.trim()))
+    .filter(r => r.some(c => c !== ''));
+}
+
 function parseCsv(text, existingAccounts, existingEmpCodes) {
   const existing = new Set((existingAccounts || []).map(String));
   const existingCodes = new Set((existingEmpCodes || []).map(String));
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (!lines.length) return { rows: [], errors: [] };
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const allRows = parseCsvRows(text);
+  if (!allRows.length) return { rows: [], errors: [] };
+  const headers = allRows[0].map(h => h.toLowerCase());
   const idxAcc    = headers.indexOf('account number');
   const idxIfsc   = headers.indexOf('ifsc_branchcode');
   const idxName   = headers.indexOf('employee name');
@@ -3692,9 +3748,9 @@ function parseCsv(text, existingAccounts, existingEmpCodes) {
   const seenInFile = new Set(); // catches duplicates WITHIN the same CSV
   const seenCodes = new Set();
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = 1; i < allRows.length; i++) {
     const lineNo = i + 1; // 1-based, matches what a spreadsheet app would show
-    const cols = lines[i].split(',').map(c => c.trim());
+    const cols = allRows[i];
     // Account Number and Emp Code are numeric-only fields — strip any
     // stray letters/symbols from the CSV the same way the manual Add
     // Employee form does, so bulk import can't bypass that rule.

@@ -3427,7 +3427,15 @@ function wireBulkImport() {
     try {
       const text = await file.text();
       const existingAccounts = employees.map(e => String(e.accountNumber));
-      const { rows, errors } = parseCsv(text, existingAccounts);
+      // Emp Code, like Account Number, must be unique against the WHOLE
+      // ledger, not just within this one CSV — parseCsv previously only
+      // caught a code repeated inside the file itself (seenCodes), so a
+      // code that already belonged to an existing employee sailed
+      // through import unflagged and collided with them (SBI's batch
+      // reference is built from Emp Code, so a collision there corrupts
+      // the reference for both employees).
+      const existingEmpCodes = employees.map(e => String(e.empCode));
+      const { rows, errors } = parseCsv(text, existingAccounts, existingEmpCodes);
       pendingImportRows = rows;
       pendingImportErrors = errors;
       showImportPreviewModal(rows, errors);
@@ -3548,8 +3556,9 @@ const VALID_TRANSFER_TYPES = ['Same Bank', 'Other Bank'];
 //   rows[]   — well-formed candidate employees, ready for the duplicate
 //              check the caller still needs to run against existingAccounts
 //   errors[] — { line, reason } for every row that failed validation
-function parseCsv(text, existingAccounts) {
+function parseCsv(text, existingAccounts, existingEmpCodes) {
   const existing = new Set((existingAccounts || []).map(String));
+  const existingCodes = new Set((existingEmpCodes || []).map(String));
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (!lines.length) return { rows: [], errors: [] };
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
@@ -3619,8 +3628,8 @@ function parseCsv(text, existingAccounts) {
       errors.push({ line: lineNo, reason: `Duplicate Account Number ${accountNumber} (already in ledger or repeated in this file).` });
       continue;
     }
-    if (seenCodes.has(empCode)) {
-      errors.push({ line: lineNo, reason: `Duplicate Emp Code ${empCode} within this file.` });
+    if (seenCodes.has(empCode) || existingCodes.has(empCode)) {
+      errors.push({ line: lineNo, reason: `Duplicate Emp Code ${empCode} (already in ledger or repeated in this file).` });
       continue;
     }
 
@@ -3950,7 +3959,11 @@ function computeSalaryRow(raw, opts) {
   // company not covered under the PF Act (or below the statutory
   // employee-count threshold) can uncheck "Company covered under PF
   // Act" and every row's PF drops to 0, same mechanism as esiApplicable.
-  const pf = opts.pfApplicable ? round2(pfWage * pfRate) : 0;
+  // Per EPFO's own contribution-rate notice, the employee share (and
+  // pension/EDLI) is rounded to the NEAREST rupee, not to paise —
+  // Math.round, not round2. This differs from ESI's round-UP rule
+  // above; each follows its own scheme's stated convention.
+  const pf = opts.pfApplicable ? Math.round(pfWage * pfRate) : 0;
 
   const esiRate = (Number(opts.esiRate) || 0) / 100;
   const esiLimit = Number(opts.esiLimit) || 0;

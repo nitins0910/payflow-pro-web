@@ -4606,6 +4606,19 @@ function openSalarySlip(empId) {
   document.getElementById('slipNetPay').textContent = '₹ ' + data.netPay.toFixed(2);
   document.getElementById('slipNetPayWords').textContent = data.netPayWords;
 
+  // Authorized Signatory — "For [Company Name]" always shown above the
+  // signature line. Below the line: the saved signatory name (falls
+  // back to the plain "Authorized Signatory" label if none is set),
+  // and their designation underneath when both are present.
+  const companyNameForSlip = companyProfile.name || 'PayFlow Pro Technologies';
+  const signatoryName = (companyProfile.signatoryName || '').trim();
+  const signatoryDesignation = (companyProfile.signatoryDesignation || '').trim();
+  document.getElementById('slipSignatoryFor').textContent = `For ${companyNameForSlip}`;
+  document.getElementById('slipSignatoryName').textContent = signatoryName || 'Authorized Signatory';
+  document.getElementById('slipSignatoryTitle').textContent = signatoryName
+    ? (signatoryDesignation ? `${signatoryDesignation} — Authorized Signatory` : 'Authorized Signatory')
+    : '';
+
   document.getElementById('salarySlipModal').classList.remove('hidden');
 }
 
@@ -4641,6 +4654,8 @@ async function emailAllPayslips() {
       payrollMonth: mailable[0].payrollMonth,
       companyName: companyProfile.name || 'PayFlow Pro Technologies',
       companyAddress: companyProfile.address || '',
+      signatoryName: companyProfile.signatoryName || '',
+      signatoryDesignation: companyProfile.signatoryDesignation || '',
       employees: mailable
     });
 
@@ -5660,6 +5675,8 @@ async function loadCompanyProfile() {
     document.getElementById('companyGstinInput').value = p.gstin || '';
     document.getElementById('companyPanInput').value = p.pan || '';
     document.getElementById('companyTanInput').value = p.tan || '';
+    document.getElementById('companySignatoryNameInput').value = p.signatoryName || '';
+    document.getElementById('companySignatoryDesignationInput').value = p.signatoryDesignation || '';
     setSelectedCompanyBank(p.bankName || 'SBI');
   } catch (err) {
     console.error(err);
@@ -5683,6 +5700,11 @@ function renderCompanySummary() {
   document.getElementById('coSummaryGstin').textContent = companyProfile.gstin || '—';
   document.getElementById('coSummaryPan').textContent = companyProfile.pan || '—';
   document.getElementById('coSummaryTan').textContent = companyProfile.tan || '—';
+  const signatoryName = (companyProfile.signatoryName || '').trim();
+  const signatoryDesignation = (companyProfile.signatoryDesignation || '').trim();
+  document.getElementById('coSummarySignatory').textContent = signatoryName
+    ? (signatoryDesignation ? `${signatoryName} (${signatoryDesignation})` : signatoryName)
+    : '—';
 }
 
 function setCompanyEditMode(editing) {
@@ -5700,6 +5722,8 @@ function setCompanyEditMode(editing) {
     document.getElementById('companyGstinInput').value = companyProfile.gstin || '';
     document.getElementById('companyPanInput').value = companyProfile.pan || '';
     document.getElementById('companyTanInput').value = companyProfile.tan || '';
+    document.getElementById('companySignatoryNameInput').value = companyProfile.signatoryName || '';
+    document.getElementById('companySignatoryDesignationInput').value = companyProfile.signatoryDesignation || '';
     const hdfcInput = document.getElementById('companyHdfcClientCodeInput');
     const iciciInput = document.getElementById('companyIciciCorporateIdInput');
     if (hdfcInput) hdfcInput.value = companyProfile.hdfcClientCode || '';
@@ -5836,6 +5860,11 @@ function wireCompanyForm() {
     const gstin = document.getElementById('companyGstinInput').value.trim().toUpperCase();
     const pan = document.getElementById('companyPanInput').value.trim().toUpperCase();
     const tan = document.getElementById('companyTanInput').value.trim().toUpperCase();
+    // Authorized Signatory — purely cosmetic (printed on the payslip
+    // footer), so no format validation beyond a length cap; both are
+    // optional and independent of each other.
+    const signatoryName = document.getElementById('companySignatoryNameInput').value.trim().slice(0, 80);
+    const signatoryDesignation = document.getElementById('companySignatoryDesignationInput').value.trim().slice(0, 80);
     document.getElementById('companyGstinError').textContent = '';
     document.getElementById('companyPanError').textContent = '';
     document.getElementById('companyTanError').textContent = '';
@@ -5902,8 +5931,8 @@ function wireCompanyForm() {
     try {
       const sysId = branchCodeFromIfsc(ifsc);
       ifscPreviewEl.textContent = `Branch code for the file: ${sysId}`;
-      await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId, address, gstin, pan, tan });
-      companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId, address, gstin, pan, tan };
+      await Api.updateCompanyProfile({ name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId, address, gstin, pan, tan, signatoryName, signatoryDesignation });
+      companyProfile = { ...companyProfile, name, accountNumber, ifsc, sysId, bankName, hdfcClientCode, iciciCorporateId, address, gstin, pan, tan, signatoryName, signatoryDesignation };
       await Api.logAudit(currentUser.email, currentUser.displayName, 'UPDATE COMPANY', `${name} | Acc: ${accountNumber} | IFSC: ${ifsc} | Bank: ${bankName}`);
       renderCompanySummary();
       updateDisbursementModeUI();

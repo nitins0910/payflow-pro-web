@@ -985,6 +985,10 @@
             <span class="company-summary-row__label">TAN</span>
             <span class="company-summary-row__value" id="coSummaryTan">—</span>
           </div>
+          <div class="company-summary-row">
+            <span class="company-summary-row__label">Authorized Signatory</span>
+            <span class="company-summary-row__value" id="coSummarySignatory">—</span>
+          </div>
           <button type="button" class="btn-inline" id="editCompanyBtn" style="margin-top:18px;">Edit</button>
         </div>
 
@@ -1065,6 +1069,24 @@
             <div class="field-hint field-mismatch" id="companyTanError"></div>
             <div class="field-hint">Required on Form 16 / TDS returns if you deduct TDS from salaries — not used anywhere in file exports.</div>
           </div>
+
+          <!-- Authorized Signatory — printed at the bottom of every
+               Salary Slip / emailed payslip, above the signature line
+               ("For [Company Name]") and below it (name + designation).
+               Purely cosmetic/for-record — never used in any bank file
+               export. Optional: if left blank, the slip falls back to
+               a plain "Authorized Signatory" label like before. -->
+          <div class="field-row-2">
+            <div class="field">
+              <label>Authorized Signatory Name</label>
+              <input type="text" id="companySignatoryNameInput" placeholder="e.g. Priya Sharma" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            </div>
+            <div class="field">
+              <label>Designation</label>
+              <input type="text" id="companySignatoryDesignationInput" placeholder="e.g. HR Manager" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm);">
+            </div>
+          </div>
+          <div class="field-hint" style="margin:-8px 0 14px;">Printed under the signature line on every payslip. Leave blank to just show "Authorized Signatory" as before.</div>
 
           <div class="modal-actions">
             <button type="button" class="btn-inline secondary" id="cancelCompanyEditBtn">Cancel</button>
@@ -1938,8 +1960,10 @@
           <!-- Footer -->
           <div class="payslip-footer">
             <div class="payslip-footer__sign">
+              <div class="payslip-footer__sign-for" id="slipSignatoryFor"></div>
               <div class="payslip-footer__sign-line"></div>
-              <div>Authorized Signatory</div>
+              <div class="payslip-footer__sign-name" id="slipSignatoryName">Authorized Signatory</div>
+              <div class="payslip-footer__sign-title" id="slipSignatoryTitle"></div>
             </div>
             <div class="payslip-footer__note">This is a computer-generated payslip and does not require a physical signature.</div>
           </div>

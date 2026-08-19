@@ -6,6 +6,26 @@
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://nitins0910.github.io/payflow-pro-web/bank-file-guide.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://nitins0910.github.io/payflow-pro-web/employee-guide.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://nitins0910.github.io/payflow-pro-web/salary-calculation-guide.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://nitins0910.github.io/payflow-pro-web/add-to-home-screen.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://nitins0910.github.io/payflow-pro-web/privacy.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>

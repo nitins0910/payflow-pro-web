@@ -1877,15 +1877,17 @@ html[data-theme="light"] .bank-chip:hover{
    user hits Print.
    ============================================================ */
 
-/* Row-level "📄 View Slip" icon button — reuses the same visual
-   language as .row-actions button elsewhere in the app tables. */
-.slip-btn{
+/* Row-level "View Slip" icon button — a plain circular eye icon,
+   same hover accent language as .row-actions button elsewhere. */
+.slip-icon-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:32px; height:32px;
   background:var(--surface2); border:1px solid var(--border); color:var(--text2);
-  border-radius:var(--radius-sm);
-  padding:6px 10px; font-size:13px; cursor:pointer; font-weight:600;
+  border-radius:50%; cursor:pointer; padding:0;
   transition:color .15s var(--ease), border-color .15s var(--ease), background .15s var(--ease);
 }
-.slip-btn:hover{ color:var(--blue-bright); border-color:var(--blue); background:rgba(59,130,246,0.08); }
+.slip-icon-btn svg{ width:16px; height:16px; }
+.slip-icon-btn:hover{ color:var(--blue-bright); border-color:var(--blue); background:rgba(59,130,246,0.08); }
 
 /* ---------------- Modal chrome (screen only) ---------------- */
 .payslip-modal{ padding:20px 20px 24px; }

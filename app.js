@@ -4227,7 +4227,11 @@ function renderSalaryCalcTable() {
       <td data-label="TDS (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="tds" placeholder="0.00" value="${raw.tds}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
       <td data-label="Other Ded. (₹)" style="text-align:right;"><input type="text" inputmode="decimal" data-f="otherDed" placeholder="0.00" value="${raw.otherDed}" style="width:80px; text-align:right; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); padding:6px 8px;"></td>
       <td data-label="Net Pay (₹)" style="text-align:right; font-weight:700; color:var(--success);"><span data-out="netPay">0.00</span></td>
-      <td data-label="Slip" style="text-align:center;"><button type="button" class="slip-btn" data-slip="${escapeHtml(emp.id)}" title="View salary slip">📄 View Slip</button></td>`;
+      <td data-label="Slip" style="text-align:center;">
+        <button type="button" class="slip-icon-btn" data-slip="${escapeHtml(emp.id)}" title="View Salary Slip" aria-label="View Salary Slip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </td>`;
     tbody.appendChild(tr);
 
     const fields = {};
@@ -4498,20 +4502,17 @@ function wireSalaryCalc() {
 
 // ---------------------------------------------------------
 // SALARY SLIP (PAYSLIP) MODAL
-// Renders one employee's payslip into #salarySlipModal using the
-// SAME live result already sitting in salaryCalcInputs (i.e. exactly
-// what the Salary Calculation table currently shows for that row —
-// nothing is recomputed here). Wires the row-level "📄 View Slip"
-// buttons via event delegation on #scTableBody (rows are torn down
-// and rebuilt on every renderSalaryCalcTable(), so a per-button
-// listener would be lost on each recalc — delegation survives that),
-// the in-modal Print button, and the placeholder bulk "Email All
-// Payslips" action.
+// getPayslipData(empId) computes the one shared data object used by
+// BOTH the on-screen/print modal (openSalarySlip) and the bulk email
+// action (scEmailAllBtn) — so the two can never drift out of sync.
+// Wires the row-level "👁️ View Slip" icon buttons via event delegation
+// on #scTableBody (rows are torn down and rebuilt on every
+// renderSalaryCalcTable(), so a per-button listener would be lost on
+// each recalc — delegation survives that), the in-modal Print button,
+// and "Email All Payslips", which calls the real api/email-payslips.js
+// Vercel function (Nodemailer, same Gmail account already configured
+// for Help & Support — see HELP_SUPPORT_SETUP.md).
 // ---------------------------------------------------------
-
-// Company profile now has a real Address field (Settings → Company
-// Details), so the payslip reads companyProfile.address directly —
-// see openSalarySlip() below. No hardcoded constant needed anymore.
 
 function wireSalarySlipModal() {
   document.getElementById('scTableBody').addEventListener('click', (e) => {
@@ -4522,71 +4523,146 @@ function wireSalarySlipModal() {
 
   document.getElementById('printSalarySlipBtn').addEventListener('click', () => window.print());
 
-  // Placeholder only — no backend wired up yet. When ready, swap this
-  // for a real API call (a Vercel function + Nodemailer, same pattern
-  // as send-support-message.js, looping over `employees` and emailing
-  // each one their own slip) and drive this toast off its actual result.
-  document.getElementById('scEmailAllBtn').addEventListener('click', () => {
-    const count = Object.keys(salaryCalcInputs).length;
-    if (!count) { toast('No employees to email payslips to yet.', 'error'); return; }
-    toast(`Payslips emailed successfully to ${count} employee${count === 1 ? '' : 's'}.`, 'success');
-  });
+  document.getElementById('scEmailAllBtn').addEventListener('click', emailAllPayslips);
 }
 
-function openSalarySlip(empId) {
+// Builds the full payslip data object for one employee from their
+// live salaryCalcInputs row — everything both the modal and the bulk
+// email need, so neither one recomputes anything the other didn't.
+function getPayslipData(empId) {
   const row = salaryCalcInputs[empId];
-  if (!row) { toast("Could not find this employee's calculated salary — recalculate the row first.", 'error'); return; }
+  if (!row) return null;
   const { emp, result } = row;
   const opts = scGlobalOpts();
   const daysInMonth = opts.daysInMonth || PAYROLL_DAYS_IN_MONTH_DEFAULT;
-  const lop = Math.min(Math.max(Number(result.lop) || 0, 0), daysInMonth);
-  const paidDays = daysInMonth - lop;
+  const lopDays = Math.min(Math.max(Number(result.lop) || 0, 0), daysInMonth);
+  const paidDays = daysInMonth - lopDays;
 
   const monthVal = document.getElementById('scPayrollMonth')?.value; // "YYYY-MM"
   const [y, m] = (monthVal || '').split('-').map(Number);
-  const monthLabel = (y && m) ? new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' }) : '—';
+  const payrollMonth = (y && m) ? new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' }) : '—';
+
+  return {
+    empId,
+    name: emp.name || '—',
+    email: emp.email || '',
+    empCode: emp.empCode || '—',
+    designation: emp.designation || '',
+    department: emp.department || '',
+    // DOJ stays "DD-MM-YYYY" here (already the app's date convention —
+    // see formatDateDDMMYYYY) so both the modal and the email use the
+    // exact same formatted string.
+    doj: emp.doj ? formatDateDDMMYYYY(new Date(emp.doj + 'T00:00:00')) : '',
+    uan: emp.uan || '',
+    pan: emp.pan || '',
+    bankAccountMasked: emp.accountNumber ? maskAccount(emp.accountNumber) : '',
+    payrollMonth,
+    daysInMonth, lopDays, paidDays,
+    basic: result.basic, hra: result.hra, special: result.special, other: result.other, gross: result.gross,
+    pf: result.pf, esi: result.esi, pt: result.pt, tds: result.tds, otherDed: result.otherDed,
+    totalDeductions: result.totalDeductions, netPay: result.netPay,
+    netPayWords: 'Rupees ' + numberToWordsIndian(Math.round(result.netPay)) + ' Only'
+  };
+}
+
+function openSalarySlip(empId) {
+  const data = getPayslipData(empId);
+  if (!data) { toast("Could not find this employee's calculated salary — recalculate the row first.", 'error'); return; }
 
   document.getElementById('slipCompanyName').textContent = companyProfile.name || 'PayFlow Pro Technologies';
   document.getElementById('slipCompanyAddress').textContent = companyProfile.address || 'Registered Office Address — add one in Settings → Company Details';
-  document.getElementById('slipPayrollMonth').textContent = monthLabel;
+  document.getElementById('slipPayrollMonth').textContent = data.payrollMonth;
 
   // designation / department / DOJ / UAN / PAN come from the Employee
   // form's "Payroll & Compliance Details" section — all optional, so
   // these still fall back to "—" for any employee added before that
   // section existed, or who simply left them blank.
-  document.getElementById('slipEmpName').textContent = emp.name || '—';
-  document.getElementById('slipEmpCode').textContent = emp.empCode || '—';
-  document.getElementById('slipDesignation').textContent = emp.designation || '—';
-  document.getElementById('slipDepartment').textContent = emp.department || '—';
-  // DOJ is stored as "YYYY-MM-DD" (native date input) — reformat to
-  // DD-MM-YYYY for the printed slip, same convention as the rest of
-  // the app's dates (see formatDateDDMMYYYY).
-  document.getElementById('slipDoj').textContent = emp.doj ? formatDateDDMMYYYY(new Date(emp.doj + 'T00:00:00')) : '—';
-  document.getElementById('slipUan').textContent = emp.uan || '—';
-  document.getElementById('slipPan').textContent = emp.pan || '—';
-  document.getElementById('slipBankAccount').textContent = emp.accountNumber ? maskAccount(emp.accountNumber) : '—';
+  document.getElementById('slipEmpName').textContent = data.name;
+  document.getElementById('slipEmpCode').textContent = data.empCode;
+  document.getElementById('slipDesignation').textContent = data.designation || '—';
+  document.getElementById('slipDepartment').textContent = data.department || '—';
+  document.getElementById('slipDoj').textContent = data.doj || '—';
+  document.getElementById('slipUan').textContent = data.uan || '—';
+  document.getElementById('slipPan').textContent = data.pan || '—';
+  document.getElementById('slipBankAccount').textContent = data.bankAccountMasked || '—';
 
-  document.getElementById('slipDaysInMonth').textContent = daysInMonth;
-  document.getElementById('slipLopDays').textContent = lop;
-  document.getElementById('slipPaidDays').textContent = paidDays;
+  document.getElementById('slipDaysInMonth').textContent = data.daysInMonth;
+  document.getElementById('slipLopDays').textContent = data.lopDays;
+  document.getElementById('slipPaidDays').textContent = data.paidDays;
 
-  document.getElementById('slipBasic').textContent = result.basic.toFixed(2);
-  document.getElementById('slipHra').textContent = result.hra.toFixed(2);
-  document.getElementById('slipSpecial').textContent = result.special.toFixed(2);
-  document.getElementById('slipOther').textContent = result.other.toFixed(2);
-  document.getElementById('slipGrossTotal').textContent = result.gross.toFixed(2);
+  document.getElementById('slipBasic').textContent = data.basic.toFixed(2);
+  document.getElementById('slipHra').textContent = data.hra.toFixed(2);
+  document.getElementById('slipSpecial').textContent = data.special.toFixed(2);
+  document.getElementById('slipOther').textContent = data.other.toFixed(2);
+  document.getElementById('slipGrossTotal').textContent = data.gross.toFixed(2);
 
-  document.getElementById('slipPf').textContent = result.pf.toFixed(2);
-  document.getElementById('slipEsi').textContent = result.esi.toFixed(2);
-  document.getElementById('slipPt').textContent = result.pt.toFixed(2);
-  document.getElementById('slipTds').textContent = result.tds.toFixed(2);
-  document.getElementById('slipOtherDed').textContent = result.otherDed.toFixed(2);
-  document.getElementById('slipDeductionsTotal').textContent = result.totalDeductions.toFixed(2);
+  document.getElementById('slipPf').textContent = data.pf.toFixed(2);
+  document.getElementById('slipEsi').textContent = data.esi.toFixed(2);
+  document.getElementById('slipPt').textContent = data.pt.toFixed(2);
+  document.getElementById('slipTds').textContent = data.tds.toFixed(2);
+  document.getElementById('slipOtherDed').textContent = data.otherDed.toFixed(2);
+  document.getElementById('slipDeductionsTotal').textContent = data.totalDeductions.toFixed(2);
 
-  document.getElementById('slipNetPay').textContent = '₹ ' + result.netPay.toFixed(2);
-  document.getElementById('slipNetPayWords').textContent = 'Rupees ' + numberToWordsIndian(Math.round(result.netPay)) + ' Only';
+  document.getElementById('slipNetPay').textContent = '₹ ' + data.netPay.toFixed(2);
+  document.getElementById('slipNetPayWords').textContent = data.netPayWords;
 
   document.getElementById('salarySlipModal').classList.remove('hidden');
+}
+
+// Bulk "📧 Email All Payslips" action — builds one payload from every
+// row currently in salaryCalcInputs (same computed data the Salary
+// Calculation table is showing) and POSTs it to the real
+// api/email-payslips.js Vercel function, which sends each employee
+// their own payslip via Gmail SMTP (Nodemailer). Reports back exactly
+// how many sent vs failed, and why, instead of a blind success toast.
+async function emailAllPayslips() {
+  const empIds = Object.keys(salaryCalcInputs);
+  if (!empIds.length) { toast('No employees to email payslips to yet.', 'error'); return; }
+
+  const btn = document.getElementById('scEmailAllBtn');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  try {
+    const payslips = empIds.map(id => getPayslipData(id)).filter(Boolean);
+    // Employees without a saved email can't be mailed — the Add
+    // Employee form makes Email required, so this should only ever
+    // catch legacy/CSV-imported records saved before that rule, but
+    // it's reported explicitly rather than silently skipped.
+    const missingEmail = payslips.filter(p => !p.email);
+    const mailable = payslips.filter(p => p.email);
+    if (!mailable.length) {
+      toast('None of these employees have an email on file — add one in Edit Employee first.', 'error');
+      return;
+    }
+
+    const res = await callBillingFunction('email-payslips', {
+      payrollMonth: mailable[0].payrollMonth,
+      companyName: companyProfile.name || 'PayFlow Pro Technologies',
+      companyAddress: companyProfile.address || '',
+      employees: mailable
+    });
+
+    if (!res.ok) {
+      toast(res.data?.error || 'Could not email payslips right now. Please try again.', 'error');
+      return;
+    }
+
+    const { sent, failed, failures } = res.data;
+    if (failed > 0 || missingEmail.length > 0) {
+      const totalIssues = failed + missingEmail.length;
+      console.warn('Payslip email issues:', failures, missingEmail.map(p => p.name));
+      toast(`Emailed ${sent} payslip${sent === 1 ? '' : 's'} — ${totalIssues} employee${totalIssues === 1 ? '' : 's'} could not be reached (missing/invalid email). Check the console for details.`, 'error');
+    } else {
+      toast(`Payslips emailed successfully to ${sent} employee${sent === 1 ? '' : 's'}.`, 'success');
+    }
+  } catch (err) {
+    toast('Could not email payslips: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
 }
 
 // Converts a whole-rupee amount into words using the Indian numbering

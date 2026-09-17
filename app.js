@@ -5110,9 +5110,35 @@ async function openExportPreview() {
   };
   setBusy(false);
 
-  const finishExport = async () => {
+  // Builds the payload for /api/export-payroll: only the amounts a
+  // payroll clerk just typed in (not persisted anywhere yet) need to
+  // travel from the browser — company profile and employee records are
+  // re-read fresh from Firestore on the server, never trusted from here.
+  function buildExportPayload() {
+    const { tft } = collectBatchLines();
+    const amounts = {};
+    Object.entries(salaryInputs).forEach(([acc, md]) => {
+      const raw = md.inputEl.value.trim();
+      if (raw) amounts[acc] = raw;
+    });
+    const { monthRaw, year } = getPayrollCycle();
+    return {
+      transferType: tft,
+      payrollMonth: `${year}-${monthRaw}`,
+      transferDate: document.getElementById('disbTransferDate').value,
+      preferImps: !!document.getElementById('disbUseImps')?.checked,
+      amounts
+    };
+  }
+
+  // SECURITY: this single server call both deducts the credits AND
+  // generates the bank file — see /api/export-payroll.js. The file is
+  // never built in the browser, so there is no local function a user
+  // could call from DevTools to get a free export.
+  const finishExport = (res) => {
     document.getElementById('exportPreviewModal').classList.add('hidden');
-    await executeExport();
+    (res.data.files || []).forEach(f => downloadTextFile(f.fileName, f.content, f.mime));
+    renderEmployeeKpis();
   };
 
   // Option 1: pay straight from the wallet balance. Single check —
@@ -5123,11 +5149,11 @@ async function openExportPreview() {
     setBusy(true);
     walletBtn.textContent = 'Checking wallet...';
     try {
-      const res = await callBillingFunction('consume-credits');
-      if (res.ok && res.data.allowed) {
+      const res = await callBillingFunction('export-payroll', buildExportPayload());
+      if (res.ok && res.data.verified) {
         setWalletBalance(res.data.creditsRemaining);
         walletBtn.textContent = 'Exporting...';
-        await finishExport();
+        finishExport(res);
         return;
       }
       if (res.status === 402) {
@@ -5136,7 +5162,7 @@ async function openExportPreview() {
         if (bal) bal.textContent = res.data.creditsRemaining;
         toast(`Payment failed — insufficient wallet balance. You have ${res.data.creditsRemaining} credit${res.data.creditsRemaining === 1 ? '' : 's'}, need ${res.data.creditsNeeded} more. Try "Pay via Razorpay" to top up instead.`, 'error');
       } else {
-        toast((res.data && res.data.error) || 'Could not verify export eligibility. Please try again.', 'error');
+        toast((res.data && res.data.error) || 'Could not complete this export. Please try again.', 'error');
       }
     } catch (e) {
       toast('Something went wrong: ' + (e && e.message ? e.message : e), 'error');
@@ -5156,14 +5182,14 @@ async function openExportPreview() {
       const bought = await buyCreditPack(EXPORT_RAZORPAY_PACK, 'export');
       if (!bought) return;
 
-      const res = await callBillingFunction('consume-credits');
-      if (res.ok && res.data.allowed) {
+      const res = await callBillingFunction('export-payroll', buildExportPayload());
+      if (res.ok && res.data.verified) {
         setWalletBalance(res.data.creditsRemaining);
         razorpayBtn.textContent = 'Exporting...';
-        await finishExport();
+        finishExport(res);
         return;
       }
-      toast('Payment succeeded but the credits could not be applied. Please try exporting again — you will not be charged twice.', 'error');
+      toast('Payment succeeded but the export could not be generated: ' + ((res.data && res.data.error) || 'please try exporting again — you will not be charged twice.'), 'error');
     } catch (e) {
       toast('Something went wrong: ' + (e && e.message ? e.message : e), 'error');
     } finally {
@@ -5172,142 +5198,18 @@ async function openExportPreview() {
   };
 }
 
-// Refactored executeExport(): resolves the company's bank, delegates
-// file-content generation to that bank's BankFormatters strategy, and
-// keeps the existing batch counter / disbursement history / audit
-// logging behaviour unchanged for every bank.
-// Works out the batch-ID prefix. For SBI Same Bank / non-SBI banks
-// this is unchanged. For every other bank the SBI-only selector is
-// hidden and not meaningful, so instead we look at the actual per-row
-// modes in this batch: NEFT/RTGS/IMPS map directly (they're already 4
-// letters), a batch that's 100% Same Bank gets SBST, and a batch
-// mixing more than one mode gets MULT — so the batch ID always
-// reflects what's really inside that file.
-function getBatchPrefix(isSbi, tft, lines) {
-  if (isSbi) return tft === 'Same Bank' ? 'SBST' : 'OBST';
-  const modes = new Set(lines.map(l => l.mode));
-  if (modes.size === 1) {
-    const only = [...modes][0];
-    return only === 'Same Bank' ? 'SBST' : only.toUpperCase().padEnd(4, 'X').slice(0, 4);
-  }
-  return 'MULT';
-}
-
-// Splits collectBatchLines()'s output into one or more sub-batches to
-// actually export. Every bank except SBI's "Other Bank" case still
-// gets exactly one sub-batch (unchanged behaviour). SBI's "Other Bank"
-// batch is split into a NEFT sub-batch and an RTGS sub-batch — SBI's
-// own upload instructions say these must be fed as separate files, and
-// collectBatchLines() already tagged each line with its real RTGS/NEFT
-// mode for exactly this purpose. An empty sub-batch (e.g. every line
-// this run happens to be NEFT) is simply omitted rather than
-// downloading an empty RTGS file.
-// "Same Bank" isn't split (it's one file, same as before) but is
-// labeled 'INTRA' so its filename/audit entry clearly marks it as the
-// separate Bulk Intra Bank upload — see BankFormatters.SBI_INTRA.
-function splitIntoSubBatches(isSbi, tft, lines) {
-  if (isSbi && tft === 'Other Bank') {
-    const rtgsLines = lines.filter(l => l.mode === 'RTGS');
-    const neftLines = lines.filter(l => l.mode === 'NEFT');
-    const subBatches = [];
-    if (rtgsLines.length) subBatches.push({ prefix: 'OBRT', label: 'RTGS', lines: rtgsLines });
-    if (neftLines.length) subBatches.push({ prefix: 'OBNE', label: 'NEFT', lines: neftLines });
-    return subBatches;
-  }
-  const label = (isSbi && tft === 'Same Bank') ? 'INTRA' : null;
-  return [{ prefix: getBatchPrefix(isSbi, tft, lines), label, lines }];
-}
-
-async function executeExport() {
-  const { tft, lines } = collectBatchLines();
-  const bankKey = companyProfile.bankName || 'SBI';
-  const isSbi = bankKey === 'SBI';
-  const bank = BANK_BY_KEY[bankKey] || BANK_BY_KEY.SBI;
-  // SBI has two distinct bulk-file formats depending on transfer type —
-  // "Same Bank" uses the separate Intra Bank format (own beneficiary
-  // branch codes, trailing '#'), everything else uses the normal
-  // Inter-Bank format. See both formatters' comments above for why.
-  const formatter = (isSbi && tft === 'Same Bank')
-    ? BankFormatters.SBI_INTRA
-    : (BankFormatters[bankKey] || BankFormatters.SBI);
-
-  const { monthRaw, monthName, year } = getPayrollCycle();
-  const shortYear = year.slice(2);
-  const txnDate = getTransferDateDDMMYYYY();
-  if (!txnDate) { toast('Please select a Transfer Date before exporting.', 'error'); return; }
-
-  const subBatches = splitIntoSubBatches(isSbi, tft, lines);
-
-  // One credit charge already covers this whole export click (handled
-  // by the caller before executeExport() runs) — splitting SBI's
-  // "Other Bank" batch into two files here is purely a file-format fix,
-  // not two billable exports, so credits are not touched per sub-batch.
-  for (const sub of subBatches) {
-    const subTotal = sub.lines.reduce((s, l) => s + l.amount, 0);
-
-    let seq;
-    try {
-      seq = await Api.getAndIncrementCounter();
-    } catch (err) {
-      // Credits were already deducted (consume-credits ran before
-      // executeExport was ever called) — this failure happens after
-      // that, so the user is left short of credits with no file. There
-      // is no automatic refund path today, so at least be explicit
-      // about it here instead of a generic error, and point at Help &
-      // Support so it can be corrected manually.
-      toast('Could not generate batch number, so no file was created — your credits were already deducted for this export. Please use Help & Support so we can restore them.', 'error');
-      return;
-    }
-    const batchId = `${sub.prefix}${shortYear}${monthRaw}${seq}`;
-    // Most banks are happy with a free-text filename; HDFC's portal
-    // enforces a strict "ABCDDDMM.001" convention, so its formatter
-    // supplies its own fileName() instead of using the generic pattern.
-    // For a split SBI batch, the sub-batch label (RTGS/NEFT) is folded
-    // into the filename so the two downloads are never confused with
-    // each other.
-    const fileName = typeof formatter.fileName === 'function'
-      ? formatter.fileName({ companyProfile, txnDate, seq })
-      : `${bankKey.toLowerCase()}_salary_${monthName}_${year}${sub.label ? '_' + sub.label.toLowerCase() : ''}.${formatter.ext}`;
-
-    // Every row carries a full snapshot of the company profile and payroll
-    // cycle as they were AT THE TIME of this export — not just the
-    // employee/amount fields. Without this, re-downloading an old batch
-    // later would silently use today's company profile (which may have
-    // since changed bank, account, or IFSC) instead of what was actually
-    // used to generate that file originally.
-    const logRows = sub.lines.map(({ acc, empCode, name, ifsc, amount, mode }) => ({
-      batchId, transferDate: txnDate, empCode, employeeName: name, accountNumber: acc, ifsc,
-      amount: amount.toFixed(2), transferType: mode, bank: bankKey,
-      monthName, year, monthRaw, shortYear, fileName,
-      companySnapshot: {
-        name: companyProfile.name, accountNumber: companyProfile.accountNumber,
-        ifsc: companyProfile.ifsc, sysId: companyProfile.sysId, bankName: bankKey
-      }
-    }));
-
-    const output = formatter.generate({
-      companyProfile, lines: sub.lines, total: subTotal, batchId, txnDate, monthRaw, shortYear, monthName, year, tft
-    });
-
-    downloadTextFile(fileName, output, formatter.mime);
-
-    try {
-      await Api.addDisbursementRows(logRows);
-      await Api.logAudit(currentUser.email, currentUser.displayName, 'EXPORT FILE',
-        `Batch: ${batchId} | Bank: ${bank.label}${sub.label ? ' (' + sub.label + ')' : ''} | Total: ₹${subTotal.toFixed(2)} | Employees: ${sub.lines.length} | File: ${fileName}`);
-      // Remembers what each employee was paid in this batch, so next
-      // cycle's Disbursement page can pre-fill the same amount instead of
-      // starting blank — most salaries don't change month to month.
-      await Api.updateEmployeeLastAmounts(
-        sub.lines.map(l => ({ accountNumber: l.acc, amount: l.amount }))
-      );
-    } catch (err) {
-      toast(`${fileName} downloaded, but logging to the ledger failed: ` + err.message, 'error');
-    }
-  }
-
-  renderEmployeeKpis();
-}
+// NOTE: file generation for a NEW export (getBatchPrefix,
+// splitIntoSubBatches, executeExport) used to live here and run
+// entirely in the browser. It has moved server-side into
+// /api/export-payroll.js (see lib/bankFormatters.js for the ported
+// formatting logic) so that generating a payroll file is only ever
+// possible immediately after a successful, atomic credit deduction —
+// see wireExportPreviewModal() above for the new flow.
+//
+// BankFormatters itself is still used below, client-side, only by
+// redownloadBatch() — regenerating the *identical* file for an export
+// that was already paid for and already recorded in Export History is
+// not a new billable action, so that one still runs locally.
 
 // ---------------------------------------------------------
 // BULK BENEFICIARY (3rd PARTY / PAYEE) UPLOAD FILE — SBI, PNB, ICICI, HDFC

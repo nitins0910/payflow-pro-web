@@ -12,7 +12,7 @@
 //   SUPPORT_EMAIL_APP_PASSWORD — Gmail App Password for
 //   payflowprosystem@gmail.com
 const nodemailer = require('nodemailer');
-const { requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
+const { db, requireUser, json, handleOptions } = require('../lib/firebaseAdmin');
 
 const SEND_FROM_INBOX = 'payflowprosystem@gmail.com';
 const MAX_EMPLOYEES_PER_REQUEST = 500; // sanity cap, not a real-world limit for this app
@@ -136,23 +136,68 @@ module.exports = async (req, res) => {
   }
 
   const body = req.body || {};
-  const employees = Array.isArray(body.employees) ? body.employees : [];
-  if (!employees.length) {
+  const submitted = Array.isArray(body.employees) ? body.employees : [];
+  if (!submitted.length) {
     return json(res, 400, { error: 'No employees to email payslips to.' });
   }
-  if (employees.length > MAX_EMPLOYEES_PER_REQUEST) {
+  if (submitted.length > MAX_EMPLOYEES_PER_REQUEST) {
     return json(res, 400, { error: `Too many employees in one request (max ${MAX_EMPLOYEES_PER_REQUEST}).` });
   }
   if (!process.env.SUPPORT_EMAIL_APP_PASSWORD) {
     return json(res, 500, { error: 'Email sending is not configured yet — SUPPORT_EMAIL_APP_PASSWORD is missing. See HELP_SUPPORT_SETUP.md.' });
   }
 
+  // SECURITY: the client submits an "empId" plus a handful of freshly
+  // computed, never-persisted salary-calculation numbers (basic, hra,
+  // pf, ...) per row. Everything that identifies WHO the email actually
+  // goes to — name, email address, employee code, account number — is
+  // now re-read here from this caller's own Firestore employee records
+  // and used INSTEAD of whatever the client sent for those fields. This
+  // is what stops the endpoint being usable to mail arbitrary addresses:
+  // without this check, any logged-in user could POST here directly
+  // with a made-up "employees" array and use the app's own Gmail
+  // account as an open mail relay / phishing sender.
+  let ownEmployeesById;
+  try {
+    const empSnap = await db.collection('users').doc(decoded.uid).collection('employees').get();
+    ownEmployeesById = new Map(empSnap.docs.map(d => [d.id, d.data()]));
+  } catch (err) {
+    return json(res, 500, { error: 'Could not verify your employee records: ' + err.message });
+  }
+
+  const employees = [];
+  const rejected = [];
+  submitted.forEach((row) => {
+    const real = row && row.empId ? ownEmployeesById.get(String(row.empId)) : null;
+    if (!real) {
+      rejected.push({ name: row && row.name, reason: 'Not one of your own employee records.' });
+      return;
+    }
+    // Trusted fields come from Firestore; only the transient,
+    // per-payroll-run computed numbers are taken from the client.
+    employees.push({
+      ...row,
+      name: real.name || '—',
+      email: real.email || '',
+      empCode: real.empCode || '—',
+      bankAccountMasked: (() => {
+        const s = String(real.accountNumber || '');
+        return s.length <= 4 ? s : '•'.repeat(s.length - 4) + s.slice(-4);
+      })()
+    });
+  });
+
+  if (!employees.length) {
+    return json(res, 400, { error: 'None of the submitted employees matched your own employee records.' });
+  }
+
+  const noNewlines = (s) => String(s || '').replace(/[\r\n]+/g, ' ').trim();
   const company = {
-    companyName: String(body.companyName || '').trim().slice(0, 120),
-    companyAddress: String(body.companyAddress || '').trim().slice(0, 300),
-    payrollMonth: String(body.payrollMonth || '').trim().slice(0, 40),
-    signatoryName: String(body.signatoryName || '').trim().slice(0, 80),
-    signatoryDesignation: String(body.signatoryDesignation || '').trim().slice(0, 80)
+    companyName: noNewlines(body.companyName).slice(0, 120),
+    companyAddress: noNewlines(body.companyAddress).slice(0, 300),
+    payrollMonth: noNewlines(body.payrollMonth).slice(0, 40),
+    signatoryName: noNewlines(body.signatoryName).slice(0, 80),
+    signatoryDesignation: noNewlines(body.signatoryDesignation).slice(0, 80)
   };
 
   const transporter = nodemailer.createTransport({
@@ -183,7 +228,9 @@ module.exports = async (req, res) => {
   return json(res, 200, {
     sent: sent.length,
     failed: failures.length,
-    total: employees.length,
-    failures
+    rejectedCount: rejected.length,
+    total: submitted.length,
+    failures,
+    rejected
   });
 };
